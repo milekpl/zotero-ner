@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<dialog
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  id="ner-normalizer-dialog"
+  title="NER Author Name Normalization"
+  buttons="accept,cancel"
+  buttonlabelaccept="Normalize"
+  buttonlabelcancel="Cancel"
+  width="800"
+  height="600"
+  onload="NERNormalizerDialog.init();">
+
+  <script type="application/javascript" src="chrome://zotero/content/include.js"/>
+  <script type="application/javascript" src="normalizer-dialog.js"/>
+
+  <vbox flex="1" style="padding: 10px;">
+    <description style="font-weight: bold; margin-bottom: 10px;">
+      Review and normalize author names using NER suggestions:
+    </description>
+    
+    <groupbox>
+      <caption label="Items to Process"/>
+      <listbox id="items-list" flex="1">
+        <!-- Items will be populated dynamically -->
+      </listbox>
+    </groupbox>
+    
+    <groupbox>
+      <caption label="Normalization Options"/>
+      <hbox>
+        <checkbox id="auto-apply-learned" label="Auto-apply previously learned normalizations" checked="true"/>
+        <spacer flex="1"/>
+        <checkbox id="show-similar" label="Show similar name suggestions" checked="true"/>
+      </hbox>
+    </groupbox>
+  </vbox>
+
+  <hbox id="progress-container" style="display: none; padding: 10px;">
+    <label id="progress-label">Processing...</label>
+    <progressmeter id="progress-bar" mode="determined" value="0" flex="1"/>
+  </hbox>
+
+</dialog>

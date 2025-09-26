@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<overlay id="zotero-ner-overlay" 
+         xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+  <script type="application/javascript" src="chrome://zoteroner/content/scripts/zotero-ner.js"/>
+
+</overlay>

@@ -1,0 +1,26 @@
+{
+  "name": {
+    "message": "Zotero NER Author Name Normalizer",
+    "description": "Name of the extension"
+  },
+  "description": {
+    "message": "Normalize author names using NER to handle different formats",
+    "description": "Description of the extension"
+  },
+  "menuitem-normalize-authors": {
+    "message": "Normalize Author Names with NER...",
+    "description": "Menu item label for normalizing authors"
+  },
+  "menuitem-normalize-authors-tooltip": {
+    "message": "Normalize author names using NER to handle different formats",
+    "description": "Tooltip for normalize authors menu item"
+  },
+  "toolbar-button-label": {
+    "message": "NER Normalize",
+    "description": "Label for toolbar button"
+  },
+  "toolbar-button-tooltip": {
+    "message": "Normalize author names with NER",
+    "description": "Tooltip for toolbar button"
+  }
+}

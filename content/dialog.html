@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>NER Author Name Normalizer</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .item { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+    .creator { margin: 5px 0; }
+    button { margin: 10px 5px; }
+  </style>
+</head>
+<body>
+  <h1>NER Author Name Normalizer</h1>
+  <div id="items-container">
+    <!-- Items will be populated here -->
+  </div>
+  <button id="apply-button">Apply Selected</button>
+  <button id="cancel-button">Cancel</button>
+
+  <script src="scripts/zotero-ner-bundled.js"></script>
+  <script>
+    // Simple dialog logic
+    const itemsContainer = document.getElementById('items-container');
+    const applyButton = document.getElementById('apply-button');
+    const cancelButton = document.getElementById('cancel-button');
+
+    // Assume items are passed somehow, for now show a message
+    itemsContainer.innerHTML = '<p>Dialog loaded. Items would be processed here.</p>';
+
+    applyButton.addEventListener('click', () => {
+      alert('Applied!');
+      window.close();
+    });
+
+    cancelButton.addEventListener('click', () => {
+      window.close();
+    });
+  </script>
+</body>
+</html>
