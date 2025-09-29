@@ -2,7 +2,7 @@
 const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
-  testDir: './tests/ui',
+  testDir: './playwright-tests/ui',
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
   expect: {
@@ -27,6 +27,7 @@ module.exports = defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     // baseURL: 'http://localhost:3000',
 
+    headless: !!process.env.CI,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
   },
@@ -35,24 +36,17 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { 
-        channel: 'chrome',
-        headless: false  // Set to true for CI
-      },
+      use: {},
     },
 
     {
       name: 'firefox',
-      use: { 
-        headless: false  // Set to true for CI
-      },
+      use: {},
     },
 
     {
       name: 'webkit',
-      use: { 
-        headless: false  // Set to true for CI
-      },
+      use: {},
     },
   ],
 

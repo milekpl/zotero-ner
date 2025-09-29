@@ -11,6 +11,23 @@ const { exec } = require('child_process');
 function buildExtension() {
   console.log('Building Zotero 7 extension...');
 
+  // First, run webpack to build the bundled JavaScript
+  console.log('Running webpack...');
+  exec('npx webpack --mode production', (webpackError, webpackStdout, webpackStderr) => {
+    if (webpackError) {
+      console.error('Webpack build failed:', webpackError);
+      console.error('Webpack stderr:', webpackStderr);
+      return;
+    }
+    console.log('Webpack build completed successfully');
+
+    // Continue with the rest of the build process
+    continueBuild();
+  });
+}
+
+function continueBuild() {
+
   // Define source and output directories
   const sourceDir = __dirname;
   const outputDir = path.join(__dirname, 'dist');
@@ -33,10 +50,9 @@ function buildExtension() {
   
   console.log('Copying extension files to staging directory...');
   
-  // Copy only the necessary extension files to the temp directory
+    // Copy only the necessary extension files to the temp directory
   const extensionFiles = [
-    'install.rdf',
-    'chrome.manifest',
+    'manifest.json',
     'bootstrap.js'
   ];
   

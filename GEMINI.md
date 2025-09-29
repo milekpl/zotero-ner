@@ -67,3 +67,27 @@ npm run ui-test
 *   Unit tests are written with Jest and are located in the `tests/` directory.
 *   UI tests are written with Playwright and are located in the `playwright-tests/` directory.
 *   The extension is compatible with Zotero 7 and uses the modern WebExtension-based architecture.
+*   The extension follows Zotero JavaScript API best practices for database access and UI integration.
+*   Database operations use direct SQL queries through `Zotero.DB.query()` for efficiency.
+*   UI components properly handle different window contexts (main window vs dialog).
+*   Asynchronous operations use async/await patterns for better readability and error handling.
+*   Error handling follows Zotero conventions with `Zotero.logError()` for debugging.
+*   The extension supports multiple integration approaches:
+    *   **Zotero JavaScript API** - For UI-integrated functionality
+    *   **Direct SQLite Database Access** - For efficient batch processing
+    *   **Zotero Web API** - For web-based applications and remote access
+
+# Multiple Integration Approaches
+
+The extension is designed to support multiple approaches for integrating with Zotero:
+
+## 1. Zotero JavaScript API
+Traditional extension approach using Zotero's built-in APIs for UI integration and database access.
+
+## 2. Direct SQLite Database Access
+Efficient batch processing by connecting directly to Zotero's SQLite database for comprehensive library analysis.
+
+## 3. Zotero Web API
+Programmatic access through HTTP/HTTPS for web-based applications and remote library access.
+
+This flexibility allows the extension to be used in different contexts while maintaining core functionality.

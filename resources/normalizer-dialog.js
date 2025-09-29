@@ -42,7 +42,7 @@ var NERNormalizerDialog = {
     }
   },
   
-  async processItems: function() {
+  async processItems() {
     // Show progress
     document.getElementById('progress-container').style.display = 'block';
     

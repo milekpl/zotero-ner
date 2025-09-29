@@ -17,11 +17,5 @@
       "strict_min_version": "6.999",
       "strict_max_version": "7.*"
     }
-  },
-  "content_scripts": [
-    {
-      "matches": ["chrome://zotero/content/zoteroPane.xhtml"],
-      "js": ["content/scripts/zotero-ner.js"]
-    }
-  ]
+  }
 }

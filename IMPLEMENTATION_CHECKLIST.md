@@ -1,119 +1,119 @@
-# Zotero NER Author Name Normalizer - Implementation Checklist
+# Direct Database Connection Implementation Checklist
 
-## ✅ COMPLETED TASKS
+## Phase 1: Remove Toolbar Button and Simplify Menu
 
-### Core Architecture
-- ✅ Specifications for Zotero NER Author Name Normalization extension
-- ✅ Implementation notes and architecture plan
-- ✅ Project structure and dependencies setup
-- ✅ Unit tests for core functionality (22/22 tests passing)
-- ✅ Core NER processing functionality implemented
-- ✅ User interface for variant selection implemented
-- ✅ Learning mechanism for new variants implemented
-- ✅ Zotero integration code created
-- ✅ Tested and debugged the complete extension
-- ✅ Updated extension for Zotero 7 compatibility
-- ✅ Created proper .xpi build process
-- ✅ Fixed UI elements to appear correctly in Zotero 7
-- ✅ Connected UI to actual NER functionality (bundle and integrate)
-- ✅ Fixed toolbar button sizing issues
-- ✅ Connected UI to actual processing logic
-- ✅ Fixed Crash Reports directory error
+### Tasks:
+- [ ] Remove toolbar button creation code from `zotero-ner.js`
+- [ ] Remove toolbar button styling from CSS
+- [ ] Remove toolbar button event handlers
+- [ ] Keep only "Normalize Author Names" menu item
+- [ ] Simplify menu item handler to not check for selections
+- [ ] Remove all selection-based logic from menu integration
 
-### UI Elements
-- ✅ Toolbar button appears in items toolbar
-- ✅ Menu item appears in Tools menu
-- ✅ Toolbar button is properly sized (no longer 1.5x too large)
-- ✅ UI elements open proper XUL dialog (not placeholder alerts)
+### Files to Modify:
+- [ ] `content/scripts/zotero-ner.js`
+- [ ] `content/zotero-ner-overlay.xul`
 
-### Extension Packaging
-- ✅ Manifest.json with proper Zotero 7 WebExtension format
-- ✅ Bootstrap.js with correct lifecycle management
-- ✅ Proper .xpi build process creates installable extension
-- ✅ All core functionality bundled in single JavaScript file
-- ✅ Extension installs correctly in Zotero 7 without compatibility errors
+## Phase 2: Implement Direct Database Connection
 
-### Core NER Functionality
-- ✅ NameParser with advanced international name support
-- ✅ VariantGenerator for multiple normalized name forms
-- ✅ LearningEngine with frequency analysis and user preferences
-- ✅ CandidateFinder for library-wide name variant search
-- ✅ NERProcessor with GLINER integration (mock implementation)
-- ✅ All 13 core modules implemented and working
-- ✅ All 22 unit tests pass
+### Tasks:
+- [ ] Create `ZoteroDBAnalyzer` class with database connection methods
+- [ ] Implement `connect()` method to connect to Zotero database
+- [ ] Implement `getAllCreators()` method to query all creators
+- [ ] Implement `analyzeCreators(creators)` method to analyze for variants
+- [ ] Use existing `Zotero.DB.query()` for database access
+- [ ] Handle database errors gracefully
 
-## 🚧 PARTIALLY COMPLETED TASKS
+### Files to Create/Modify:
+- [ ] `src/zotero/zotero-db-analyzer.js` (enhance existing)
+- [ ] `content/scripts/zotero-ner-bundled.js` (update bundled code)
 
-### UI Integration  
-- ✅ UI elements appear correctly
-- ✅ Toolbar button sizing fixed
-- ✅ Proper XUL dialog opens when UI elements are clicked
-- ⚠️ Dialog shows placeholder content instead of real processing
-- ⚠️ No actual name normalization happening yet
+## Phase 3: Simplify Dialog Controller
 
-### Full Implementation
-- ✅ Core NER logic implemented and tested
-- ✅ Extension structure ready for full implementation
-- ⚠️ UI not yet connected to real NER processing
-- ⚠️ No actual normalization applied to Zotero items
+### Tasks:
+- [ ] Modify `showDialog()` to not require items parameter
+- [ ] Always fetch all creators from database
+- [ ] Remove selection-based UI elements
+- [ ] Simplify initialization to just open the dialog
+- [ ] Update dialog controller to work with database analyzer
 
-## 📋 NEXT STEPS FOR FULL IMPLEMENTATION
+### Files to Modify:
+- [ ] `content/scripts/normalization-dialog-controller.js`
+- [ ] `content/scripts/zotero-ner-bundled.js` (update bundled code)
 
-### 1. Connect UI to Real NER Processing
-- [ ] Link dialog controller to actual NER modules
-- [ ] Implement real name parsing in dialog
-- [ ] Add proper UI for variant selection
-- [ ] Connect to Zotero's item APIs for applying normalizations
+## Phase 4: Update UI Components
 
-### 2. Implement Full Dialog Workflow
-- [ ] Add creator list with selection checkboxes
-- [ ] Show variant suggestions with radio buttons
-- [ ] Implement batch processing with progress bars
-- [ ] Add undo functionality
+### Tasks:
+- [ ] Modify dialog to show all creators by default
+- [ ] Remove selection-specific UI elements
+- [ ] Keep core normalization functionality
+- [ ] Ensure dialog works with database analyzer results
+- [ ] Update UI to handle database-based data structure
 
-### 3. Complete Zotero Integration
-- [ ] Connect to actual item processing APIs
-- [ ] Implement real normalization application
-- [ ] Add proper error handling and recovery
+### Files to Modify:
+- [ ] `content/zotero-ner-normalization-dialog.xul`
+- [ ] `content/dialog.html`
+- [ ] Related UI script files
 
-### 4. Enhance User Experience
-- [ ] Add preferences system for customization
-- [ ] Implement export/import for learned mappings
-- [ ] Add comprehensive logging and debugging
+## Phase 5: Testing and Validation
 
-## 📦 DELIVERABLES
+### Tasks:
+- [ ] Create unit tests for `ZoteroDBAnalyzer`
+- [ ] Create unit tests for simplified dialog controller
+- [ ] Create unit tests for menu integration changes
+- [ ] Run existing UI tests to ensure no regression
+- [ ] Test with real Zotero libraries of different sizes
+- [ ] Verify error handling with various edge cases
 
-### Main Extension File
-- ✅ `dist/zotero-ner-author-normalizer-1.0.0.xpi` (62KB)
-- ✅ Installs correctly in Zotero 7
-- ✅ Shows proper UI elements
-- ✅ Opens proper XUL dialog when clicked
+### Files to Create/Modify:
+- [ ] `tests/zotero/zotero-db-analyzer.test.js`
+- [ ] `tests/ui/normalization-dialog-controller.test.js` (update)
+- [ ] `tests/zotero/menu-integration.test.js` (create)
 
-### Core Implementation
-- ✅ All 13 core modules in `src/core/` directory
-- ✅ All 22 unit tests in `tests/core/` directory
-- ✅ Bundled JavaScript with all core functionality
-- ✅ Proper directory structure for Zotero 7 WebExtension
+## Phase 6: Documentation Updates
 
-### Build System
-- ✅ `build.js` creates proper .xpi file
-- ✅ Automatic packaging with correct file inclusion
-- ✅ No extraneous files included in extension
+### Tasks:
+- [ ] Update `QWEN.md` with new architecture
+- [ ] Update `GEMINI.md` with new development approach
+- [ ] Update `Zotero_JS_API.md` with database access patterns
+- [ ] Update `ZOTERO_SQLITE_ACCESS.md` with implementation details
+- [ ] Update `DIRECT_DB_SPECIFICATION.md` with actual implementation
 
-## 🎯 STATUS SUMMARY
+### Files to Modify:
+- [ ] `QWEN.md`
+- [ ] `GEMINI.md`
+- [ ] `Zotero_JS_API.md`
+- [ ] `ZOTERO_SQLITE_ACCESS.md`
+- [ ] `DIRECT_DB_SPECIFICATION.md`
 
-The extension is now a **complete, production-ready foundation** that:
-- ✅ Installs correctly in Zotero 7 without errors
-- ✅ Shows properly sized UI elements in correct locations
-- ✅ Opens proper XUL dialog when UI elements are clicked
-- ✅ Includes all core NER functionality (93KB of bundled JavaScript)
-- ✅ Passes all unit tests (22/22)
-- ✅ Follows modern Zotero 7 WebExtension architecture
+## Success Criteria
 
-The remaining work is implementing the complete user workflow:
-- Connecting the UI to real processing logic
-- Implementing the actual normalization application
-- Adding batch processing and progress indicators
-- Creating proper dialogs with user interaction
+### Functional Requirements:
+- [ ] Extension loads without errors
+- [ ] Menu item "Normalize Author Names" appears in Tools menu
+- [ ] Clicking menu item opens dialog with all creators
+- [ ] Dialog shows normalization suggestions for all creators
+- [ ] User can select and apply normalizations
+- [ ] Normalizations are applied to Zotero database
+- [ ] Learned mappings are saved and reused
 
-This is now straightforward since all the building blocks are in place.
+### Performance Requirements:
+- [ ] Database queries complete efficiently
+- [ ] Dialog opens quickly with large creator lists
+- [ ] UI remains responsive during processing
+- [ ] Memory usage stays within reasonable limits
+
+### Reliability Requirements:
+- [ ] No crashes during normal operation
+- [ ] Graceful error handling for database issues
+- [ ] Proper cleanup of resources
+- [ ] No data corruption in Zotero database
+
+### Test Coverage:
+- [ ] All existing unit tests pass
+- [ ] All existing UI tests pass
+- [ ] New unit tests for database analyzer pass
+- [ ] New unit tests for dialog controller pass
+- [ ] New integration tests for menu integration pass
+
+This checklist provides a structured approach to implementing the direct database connection while ensuring all aspects are properly covered.
