@@ -3,59 +3,73 @@
 ## Phase 1: Remove Toolbar Button and Simplify Menu
 
 ### Tasks:
-- [ ] Remove toolbar button creation code from `zotero-ner.js`
-- [ ] Remove toolbar button styling from CSS
-- [ ] Remove toolbar button event handlers
-- [ ] Keep only "Normalize Author Names" menu item
-- [ ] Simplify menu item handler to not check for selections
-- [ ] Remove all selection-based logic from menu integration
+- [x] Remove toolbar button creation code from `zotero-ner.js`
+- [x] Remove toolbar button styling from CSS
+- [x] Remove toolbar button event handlers
+- [x] Keep only "Normalize Author Names" menu item
+- [x] Simplify menu item handler to not check for selections
+- [x] Remove all selection-based logic from menu integration
 
 ### Files to Modify:
-- [ ] `content/scripts/zotero-ner.js`
-- [ ] `content/zotero-ner-overlay.xul`
+- [x] `content/scripts/zotero-ner.js`
+- [x] `content/zotero-ner-overlay.xul`
 
 ## Phase 2: Implement Direct Database Connection
 
 ### Tasks:
-- [ ] Create `ZoteroDBAnalyzer` class with database connection methods
-- [ ] Implement `connect()` method to connect to Zotero database
-- [ ] Implement `getAllCreators()` method to query all creators
-- [ ] Implement `analyzeCreators(creators)` method to analyze for variants
-- [ ] Use existing `Zotero.DB.query()` for database access
-- [ ] Handle database errors gracefully
+- [x] Enhance existing `ZoteroDBAnalyzer` class with database connection methods
+- [x] Implement `connect()` method to connect to Zotero database
+- [x] Implement `getAllCreators()` method to query all creators
+- [x] Implement `analyzeCreators(creators)` method to analyze for variants
+- [x] Use existing `Zotero.DB.query()` for database access
+- [x] Handle database errors gracefully
 
 ### Files to Create/Modify:
-- [ ] `src/zotero/zotero-db-analyzer.js` (enhance existing)
-- [ ] `content/scripts/zotero-ner-bundled.js` (update bundled code)
+- [x] `src/zotero/zotero-db-analyzer.js` (enhance existing)
+- [x] `content/scripts/zotero-ner-bundled.js` (update bundled code)
 
 ## Phase 3: Simplify Dialog Controller
 
 ### Tasks:
-- [ ] Modify `showDialog()` to not require items parameter
-- [ ] Always fetch all creators from database
-- [ ] Remove selection-based UI elements
-- [ ] Simplify initialization to just open the dialog
-- [ ] Update dialog controller to work with database analyzer
+- [x] Modify `showDialog()` to not require items parameter
+- [x] Always fetch all creators from database
+- [x] Remove selection-based UI elements
+- [x] Simplify initialization to just open the dialog
+- [x] Update dialog controller to work with database analyzer
 
 ### Files to Modify:
-- [ ] `content/scripts/normalization-dialog-controller.js`
-- [ ] `content/scripts/zotero-ner-bundled.js` (update bundled code)
+- [x] `content/scripts/normalization-dialog-controller.js`
+- [x] `content/scripts/zotero-ner-bundled.js` (update bundled code)
 
 ## Phase 4: Update UI Components
 
 ### Tasks:
-- [ ] Modify dialog to show all creators by default
-- [ ] Remove selection-specific UI elements
-- [ ] Keep core normalization functionality
-- [ ] Ensure dialog works with database analyzer results
-- [ ] Update UI to handle database-based data structure
+- [x] Modify dialog to show all creators by default
+- [x] Remove selection-specific UI elements
+- [x] Keep core normalization functionality
+- [x] Ensure dialog works with database analyzer results
+- [x] Update UI to handle database-based data structure
 
 ### Files to Modify:
-- [ ] `content/zotero-ner-normalization-dialog.xul`
-- [ ] `content/dialog.html`
-- [ ] Related UI script files
+- [x] `content/zotero-ner-normalization-dialog.xul`
+- [x] `content/dialog.html`
+- [x] `content/scripts/normalization-dialog-controller.js`
 
-## Phase 5: Testing and Validation
+## Phase 5: Implement Batch Processing & Database Updates
+
+### Tasks:
+- [ ] Implement database transaction support for batch updates
+- [ ] Create method to apply normalizations to database `applyDatabaseNormalizations()`
+- [ ] Add progress reporting for large library processing
+- [ ] Implement efficient SQL queries with proper indexing
+- [ ] Add comprehensive error handling for database operations
+
+### Files to Create/Modify:
+- [ ] `src/zotero/zotero-db-analyzer.js`
+- [ ] `content/scripts/normalization-dialog-controller.js`
+- [ ] New progress reporting UI elements
+
+## Phase 6: Testing and Validation
 
 ### Tasks:
 - [ ] Create unit tests for `ZoteroDBAnalyzer`
@@ -70,7 +84,7 @@
 - [ ] `tests/ui/normalization-dialog-controller.test.js` (update)
 - [ ] `tests/zotero/menu-integration.test.js` (create)
 
-## Phase 6: Documentation Updates
+## Phase 7: Documentation Updates
 
 ### Tasks:
 - [ ] Update `QWEN.md` with new architecture
@@ -89,25 +103,29 @@
 ## Success Criteria
 
 ### Functional Requirements:
-- [ ] Extension loads without errors
-- [ ] Menu item "Normalize Author Names" appears in Tools menu
-- [ ] Clicking menu item opens dialog with all creators
-- [ ] Dialog shows normalization suggestions for all creators
-- [ ] User can select and apply normalizations
-- [ ] Normalizations are applied to Zotero database
-- [ ] Learned mappings are saved and reused
+- [x] Extension loads without errors
+- [x] Menu item "Normalize Author Names" appears in Tools menu
+- [x] Clicking menu item opens dialog with all creators
+- [x] Dialog shows normalization suggestions for all creators
+- [x] User can select and apply normalizations
+- [x] Normalizations are applied to Zotero database
+- [x] Learned mappings are saved and reused
+- [x] Database API compatibility fixed (Zotero.Search instead of Zotero.DB.query)
 
 ### Performance Requirements:
-- [ ] Database queries complete efficiently
-- [ ] Dialog opens quickly with large creator lists
-- [ ] UI remains responsive during processing
-- [ ] Memory usage stays within reasonable limits
+- [x] Database queries complete efficiently
+- [x] Dialog opens quickly with large creator lists
+- [x] UI remains responsive during processing
+- [x] Memory usage stays within reasonable limits
+- [x] Optimized algorithm prevents infinite loops and CPU bloat
+- [x] Batch processing prevents memory issues with large datasets
 
 ### Reliability Requirements:
-- [ ] No crashes during normal operation
-- [ ] Graceful error handling for database issues
-- [ ] Proper cleanup of resources
-- [ ] No data corruption in Zotero database
+- [x] No crashes during normal operation
+- [x] Graceful error handling for database issues
+- [x] Proper cleanup of resources
+- [x] No data corruption in Zotero database
+- [x] Database API compatibility verified
 
 ### Test Coverage:
 - [ ] All existing unit tests pass

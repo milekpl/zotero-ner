@@ -15,6 +15,7 @@ var NERNormalizerDialog = {
   
   loadSelectedItems: function() {
     // Get selected items from Zotero
+    const ZoteroPane = Zotero.getActiveZoteroPane();
     this.items = ZoteroPane.getSelectedItems();
     this.updateItemsList();
   },

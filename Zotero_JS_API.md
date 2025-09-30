@@ -106,6 +106,73 @@ toolbarButton.addEventListener('command', handler);
 itemsToolbar.appendChild(toolbarButton);
 ```
 
+## Zotero 7 WebExtension UI Integration Best Practices
+
+For Zotero 7 WebExtensions, the UI integration patterns have evolved from the older XUL-based methods. Here's a summary of best practices:
+
+### 1. `bootstrap.js` Structure
+-   **Asynchronous `startup`**: The `startup` function should be `async` and `await Zotero.initializationPromise` to ensure Zotero is fully initialized before proceeding.
+-   **Chrome Path Registration**: Use `aomStartup.registerChrome` to register chrome paths. It's recommended to use a simpler, short name (e.g., `'zoteroner'`) for the chrome package name instead of the full extension ID.
+    ```javascript
+    chromeHandle = aomStartup.registerChrome(manifestURI, [
+      ['content', 'your-extension-short-name', rootURI + 'content/'],
+    ]);
+    ```
+-   **Global Scope for Core Logic**: Load core extension logic (e.g., bundled JavaScript) into an `isolated scope` (`ctx` or `zoteroNERScope`) and then expose necessary objects globally (e.g., `globalThis.YourExtensionGlobalObject = ctx.YourExtensionGlobalObject;`).
+    ```javascript
+    Services.scriptloader.loadSubScript(
+      `${rootURI}content/scripts/your-bundled-script.js`,
+      ctx,
+      'UTF-8',
+    );
+    if (ctx.YourExtensionGlobalObject) {
+      globalThis.YourExtensionGlobalObject = ctx.YourExtensionGlobalObject;
+    }
+    ```
+-   **`onMainWindowLoad` and `onMainWindowUnload`**: These functions are automatically called by Zotero when the main window loads and unloads. They are the primary entry points for UI initialization and teardown.
+    ```javascript
+    async function onMainWindowLoad({ window }, reason) {
+      // Load UI-specific scripts into the window's scope
+      Services.scriptloader.loadSubScript(
+        `${registeredRootURI}content/scripts/your-ui-script.js`,
+        window,
+        'UTF-8',
+      );
+      // Initialize UI elements
+      if (window.Zotero?.YourExtension?.init) {
+        window.Zotero.YourExtension.init({ rootURI: registeredRootURI, window: window });
+      }
+    }
+
+    async function onMainWindowUnload({ window }, reason) {
+      // Teardown UI elements
+      if (window.Zotero?.YourExtension?.teardown) {
+        window.Zotero.YourExtension.teardown(window);
+      }
+      // Clean up injected properties
+      delete window.YourExtensionGlobalObject;
+      delete window.Zotero.__yourExtensionInjected;
+    }
+    ```
+-   **`shutdown` function**: Ensure proper cleanup of `chromeHandle`.
+    ```javascript
+    function shutdown(data, reason) {
+      if (chromeHandle) {
+        chromeHandle.destruct();
+        chromeHandle = null;
+      }
+    }
+    ```
+
+### 2. `install.rdf`
+-   **`em:unpack`**: Set `em:unpack` to `true` to ensure the extension is unpacked, which can resolve issues with `bootstrap.js` execution.
+
+### 3. UI Script (`zotero-ner.js` equivalent)
+-   **Window Scope**: Scripts loaded into the window's scope (e.g., `zotero-ner.js`) will have access to the `window` object.
+-   **Chrome URIs**: Use the registered chrome path (e.g., `chrome://your-extension-short-name/content/dialog.html`) for accessing resources like dialogs.
+-   **Safe `window` access**: When accessing `window` directly, ensure checks for `typeof window !== 'undefined'` if the script might be executed in a non-window context.
+
+
 ## Best Practices
 
 ### Async Operations

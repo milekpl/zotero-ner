@@ -10,12 +10,34 @@ export default [
       ecmaVersion: 2021,
       sourceType: 'module',
       globals: {
+        // Browser globals
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        alert: 'readonly',
+        setTimeout: 'readonly',
+        localStorage: 'readonly',
+        // Node.js globals
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+        // Zotero globals
         Zotero: 'readonly',
         ZoteroNER: 'readonly',
         Services: 'readonly',
         Components: 'readonly',
-        window: 'readonly',
-        document: 'readonly',
+        // Test globals
+        jest: 'readonly',
+        describe: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        global: 'readonly',
       }
     },
     rules: {

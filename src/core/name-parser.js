@@ -15,8 +15,8 @@ class NameParser {
    * @returns {Object} Parsed name components
    */
   parse(rawName) {
-    const original = rawName;
-    let parts = rawName.trim().replace(/[,\s]+$/, '').split(/\s+/); // Remove trailing commas/space
+    const original = rawName || '';
+    let parts = original.trim().replace(/[,\\s]+$/, '').split(/\s+/); // Remove trailing commas/space
     const result = {
       firstName: '',
       middleName: '',
@@ -27,7 +27,7 @@ class NameParser {
     };
 
     // Handle single word case first
-    if (parts.length === 1) {
+    if (parts.length === 1 && parts[0] !== '') {
       // If it's a known prefix, treat as prefix; otherwise treat as last name
       if (this.prefixes.includes(parts[0].toLowerCase())) {
         result.prefix = parts[0];
@@ -36,89 +36,63 @@ class NameParser {
       }
       return result;
     }
-
-    // Process from the end (potential suffix and last name)
-    const reversedParts = [...parts].reverse();
-    let suffixProcessed = false;
-
-    // Check for suffixes at the end first
-    for (let i = 0; i < reversedParts.length; i++) {
-      const part = reversedParts[i];
-      
-      if (!suffixProcessed && this.suffixes.some(s => 
-        part.toLowerCase() === s.toLowerCase() || 
-        part.toLowerCase() === s.toLowerCase() + '.')) {
-        if (!result.suffix) result.suffix = part;
-        else result.suffix = `${part} ${result.suffix}`;
-        parts = parts.filter((_, idx) => idx !== (parts.length - 1 - i));
-      } else {
-        suffixProcessed = true;
-        break;
-      }
+    
+    // Handle empty input
+    if (parts.length === 1 && parts[0] === '') {
+      return result;
     }
 
-    // Process remaining parts for prefixes, first/middle/last names
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
+    // Handle multiple word case
+    if (parts.length >= 2) {
+      // Set first name as the first part
+      result.firstName = parts[0];
       
-      // Check if it's a prefix
-      if (this.prefixes.includes(part.toLowerCase())) {
-        // Check if this is the start of a multi-part prefix like "del Carmen" or "de la Cruz"
-        // For certain prefixes, we accept the next word as part of the prefix if it's capitalized (likely a proper name)
-        if (i + 1 < parts.length && this.isNextWordForPrefix(part.toLowerCase(), parts[i + 1])) {
-          // Combine the prefix with the next word
-          const combinedPrefix = `${part} ${parts[i + 1]}`;
-          if (!result.prefix) {
-            result.prefix = combinedPrefix;
-          } else {
-            result.prefix = `${result.prefix} ${combinedPrefix}`;
-          }
-          i++; // Skip the next word since we processed it as part of the prefix
+      // Check for prefixes at the beginning (after first name)
+      let prefixEndIndex = 1;
+      while (prefixEndIndex < parts.length - 1 && 
+             this.prefixes.includes(parts[prefixEndIndex].toLowerCase())) {
+        if (result.prefix) {
+          result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
         } else {
-          // Single prefix
-          if (!result.prefix) {
-            result.prefix = part;
-          } else {
-            result.prefix = `${result.prefix} ${part}`;
-          }
+          result.prefix = parts[prefixEndIndex];
         }
-      } 
-      // Check if it's an initial or abbreviated name
-      else if (this.initialPattern.test(part) || this.initialsPattern.test(part)) {
-        // If we don't have a first name yet, treat as first name
-        if (!result.firstName) {
-          result.firstName = part;
-        } else if (!result.lastName) {
-          // Otherwise, if we don't have a last name, treat as middle name
-          result.middleName = result.middleName ? `${result.middleName} ${part}` : part;
-        } else {
-          // If we have both first and last, treat as middle name
-          result.middleName = result.middleName ? `${result.middleName} ${part}` : part;
+        prefixEndIndex++;
+      }
+      
+      // Handle special case where a prefix can take a following name part
+      // For example, "del Carmen" is a complete prefix
+      if (result.prefix && prefixEndIndex < parts.length - 1) {
+        // Check if the next word after the prefix should be part of it
+        if (this.isNextWordForPrefix(result.prefix, parts[prefixEndIndex])) {
+          result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+          prefixEndIndex++;
         }
       }
-      // Handle the case where it might be first name, middle name or last name
-      else {
-        // If we don't have a first name yet, treat as first name
-        if (!result.firstName) {
-          result.firstName = part;
-        } 
-        // If we only have a first name (for 2-part names like "John Smith"), treat this as last name
-        else if (result.firstName && !result.middleName && !result.lastName && i === parts.length - 1) {
-          result.lastName = part;
+      
+      // Check for suffixes at the end
+      let suffixStartIndex = parts.length - 1;
+      while (suffixStartIndex > prefixEndIndex && 
+             this.suffixes.some(s => 
+               parts[suffixStartIndex].toLowerCase() === s.toLowerCase() || 
+               parts[suffixStartIndex].toLowerCase() === s.toLowerCase() + '.')) {
+        if (result.suffix) {
+          result.suffix = `${parts[suffixStartIndex]} ${result.suffix}`;
+        } else {
+          result.suffix = parts[suffixStartIndex];
         }
-        // If we have first name and might have more parts, determine if middle or last name
-        else if (result.firstName) {
-          // For 3+ part names, second part is usually middle name, last part is last name
-          if (i === parts.length - 1) { // This is the last part, so it's the last name
-            result.lastName = result.lastName ? `${result.lastName} ${part}` : part;
-          } else {
-            // Middle part of a multi-part name
-            result.middleName = result.middleName ? `${result.middleName} ${part}` : part;
-          }
-        }
-        // If we already have both first and last names, add to middle name
-        else if (result.firstName && result.lastName) {
-          result.middleName = result.middleName ? `${result.middleName} ${part}` : part;
+        suffixStartIndex--;
+      }
+      
+      // Determine the last name (the part after all prefixes and before all suffixes)
+      if (suffixStartIndex >= prefixEndIndex) {
+        result.lastName = parts[suffixStartIndex];
+      }
+      
+      // Handle middle names (anything between first name and last name that's not a prefix or suffix)
+      if (prefixEndIndex < suffixStartIndex) {
+        const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
+        if (middleParts.length > 0) {
+          result.middleName = middleParts.join(' ');
         }
       }
     }

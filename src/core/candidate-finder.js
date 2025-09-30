@@ -77,18 +77,18 @@ class CandidateFinder {
     } else {
       // For testing purposes, return mock data focusing on first name variations
       return [
-        { firstName: "Jerry", lastName: "Fodor", creatorType: "author" },
-        { firstName: "J.", lastName: "Fodor", creatorType: "author" },
-        { firstName: "Jerry", lastName: "Fodor", creatorType: "author" },
-        { firstName: "Jerry A.", lastName: "Fodor", creatorType: "author" },
-        { firstName: "J.A.", lastName: "Fodor", creatorType: "author" },
-        { firstName: "Eva", lastName: "van Dijk", creatorType: "author" },
-        { firstName: "E.", lastName: "van Dijk", creatorType: "author" },
-        { firstName: "John", lastName: "Smith", creatorType: "author" },
-        { firstName: "J.", lastName: "Smith", creatorType: "author" },
-        { firstName: "Johnny", lastName: "Smith", creatorType: "author" },
-        { firstName: "J.B.", lastName: "Smith", creatorType: "author" },
-        { firstName: "John B.", lastName: "Smith", creatorType: "author" }
+        { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' },
+        { firstName: 'J.', lastName: 'Fodor', creatorType: 'author' },
+        { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' },
+        { firstName: 'Jerry A.', lastName: 'Fodor', creatorType: 'author' },
+        { firstName: 'J.A.', lastName: 'Fodor', creatorType: 'author' },
+        { firstName: 'Eva', lastName: 'van Dijk', creatorType: 'author' },
+        { firstName: 'E.', lastName: 'van Dijk', creatorType: 'author' },
+        { firstName: 'John', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'J.', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'Johnny', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'J.B.', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'John B.', lastName: 'Smith', creatorType: 'author' }
       ];
     }
   }

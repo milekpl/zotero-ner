@@ -14,22 +14,22 @@ module.exports = {
   resolve: {
     extensions: ['.js'],
     fallback: {
-      "fs": false,
-      "path": false,
-      "os": false,
-      "crypto": false,
-      "stream": false,
-      "buffer": false,
-      "util": false,
-      "assert": false,
-      "process": false,
-      "zlib": false,
-      "http": false,
-      "https": false,
-      "url": false,
-      "net": false,
-      "tls": false,
-      "child_process": false
+      'fs': false,
+      'path': false,
+      'os': false,
+      'crypto': false,
+      'stream': false,
+      'buffer': false,
+      'util': false,
+      'assert': false,
+      'process': false,
+      'zlib': false,
+      'http': false,
+      'https': false,
+      'url': false,
+      'net': false,
+      'tls': false,
+      'child_process': false
     }
   },
   externals: {
