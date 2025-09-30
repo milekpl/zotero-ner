@@ -132,8 +132,8 @@ describe('NameParser', () => {
   });
 
   test('should handle names with apostrophes', () => {
-    const result = parser.parse("O'Connor Smith");
-    expect(result.firstName).toBe("O'Connor");
+    const result = parser.parse('O\'Connor Smith');
+    expect(result.firstName).toBe('O\'Connor');
     expect(result.lastName).toBe('Smith');
   });
 

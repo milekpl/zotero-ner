@@ -25,8 +25,8 @@ jest.mock('../../src/ui/normalizer-dialog.js', () => {
   return jest.fn().mockImplementation(() => ({
     showDialog: jest.fn().mockResolvedValue([
       { creators: [{ original: { firstName: 'J.', lastName: 'Smith' }, 
-                     normalized: { firstName: 'John', lastName: 'Smith' },
-                     accepted: true }] }
+        normalized: { firstName: 'John', lastName: 'Smith' },
+        accepted: true }] }
     ])
   }));
 });
