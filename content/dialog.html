@@ -49,6 +49,37 @@
       background: #f9f9f9;
       border-radius: 3px;
     }
+    .variant-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0 4px 0;
+    }
+    .variant-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border: 1px solid #c8d1dc;
+      border-radius: 16px;
+      background: #f7f9fc;
+      font-size: 0.9em;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+    .variant-pill:hover {
+      border-color: #007acc;
+      background: #eef5ff;
+    }
+    .variant-pill.active {
+      background: #007acc;
+      border-color: #007acc;
+      color: #fff;
+    }
+    .variant-pill.recommended {
+      border-color: #2563eb;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
     .frequency { 
       color: #666; 
       font-size: 0.9em; 
@@ -79,6 +110,29 @@
     }
     button:hover:not(:disabled) {
       background: #e0e0e0;
+    }
+    .custom-normalization {
+      margin-top: 12px;
+      padding: 10px;
+      background: #f6f8fa;
+      border-radius: 4px;
+      border: 1px solid #d8dee4;
+    }
+    .custom-normalization label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .custom-normalization input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #c9d1d9;
+      border-radius: 3px;
+      font-size: 0.95em;
+    }
+    .custom-normalization input[type="text"]:disabled {
+      background: #f0f0f0;
+      color: #777;
     }
     .progress { 
       margin: 10px 0; 
@@ -138,6 +192,40 @@
       background-color: #e3f2fd;
       border-color: #2196f3;
     }
+    .variant-meta {
+      font-size: 0.85em;
+      color: #555;
+      margin-top: 4px;
+    }
+    .variant-detail {
+      margin: 16px 0;
+      padding: 12px 14px;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      background: #fff;
+      display: none;
+    }
+    .variant-detail h4 {
+      margin: 0 0 6px 0;
+      color: #005a9c;
+      font-size: 1em;
+    }
+    .variant-detail-context {
+      font-size: 0.9em;
+      color: #586069;
+      margin-bottom: 8px;
+    }
+    .variant-detail-items {
+      list-style: disc;
+      padding-left: 18px;
+      margin: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .variant-detail-items li {
+      margin: 4px 0;
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -166,17 +254,16 @@
   <div id="variant-groups" style="margin: 20px 0;">
     <h3>Creator Variant Groups</h3>
     <p id="variant-groups-description">Review variant groups discovered in your library. Each entry represents multiple creator spellings that may refer to the same person.</p>
-    <ul id="variant-group-list" style="list-style: none; padding: 0;">
+    <div id="variant-groups-container">
       <!-- Variant groups will be dynamically populated here -->
-    </ul>
+    </div>
   </div>
 
-  <!-- Normalization suggestions -->
-  <div id="suggestions-group" style="display: none; margin: 20px 0;">
-    <h3>Normalization Suggestions</h3>
-    <div id="suggestions-container">
-      <!-- Suggestions will be dynamically populated here -->
-    </div>
+  <!-- Variant detail viewer -->
+  <div id="variant-detail-panel" class="variant-detail">
+    <h4 id="variant-detail-title">Variant details</h4>
+    <div id="variant-detail-context" class="variant-detail-context"></div>
+    <ul id="variant-detail-items"></ul>
   </div>
 
   <!-- Empty state -->
@@ -236,13 +323,16 @@
     var ZoteroNER_NormalizationDialog = {
       dbAnalyzer: null,
       isProcessing: false,
-      selectedVariantGroupIndex: 0,
-  analysisResults: null,
-  items: null,
-  analysisResultsSource: null,
+      analysisResults: null,
+      items: null,
+      analysisResultsSource: null,
+      userSelections: null,
+      variantDetailState: null,
 
       init: function() {
         console.log('Dialog initialization started');
+        this.userSelections = new Map();
+        this.variantDetailState = null;
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -462,6 +552,8 @@
           }
         }
 
+
+            this.resetSelections();
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
           analysisResults = this.safeParseJSON(window.opener.ZoteroNERAnalysisResultsJSON, 'opener.ZoteroNERAnalysisResultsJSON');
         }
@@ -478,23 +570,23 @@
           analysisResults = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults direct');
         }
 
-        this.analysisResults = analysisResults;
-
-        if (!this.analysisResults) {
+        if (!analysisResults) {
           this.log('No analysis results found');
           this.showEmptyState('No analysis results were provided to the dialog.');
           this.updateProgress();
           return;
         }
 
+        this.analysisResults = analysisResults;
+        this.resetSelections();
+        this.clearVariantDetails();
+
         this.log('Analysis results source: ' + (this.analysisResultsSource || 'unknown'));
         this.log('Analysis results loaded: ' + (this.analysisResults.suggestions ? this.analysisResults.suggestions.length : 0) + ' suggestions; unique surnames: ' + (this.analysisResults.totalUniqueSurnames ?? 'unknown'));
 
         this.updateSummaryHeader();
-        const hasVariantGroups = this.populateVariantGroupList();
-        if (hasVariantGroups) {
-          this.renderCurrentVariantGroup();
-        }
+        this.populateVariantGroupList();
+        this.refreshApplyButtonState();
         this.updateProgress();
       },
 
@@ -505,12 +597,8 @@
           ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         }
 
-        ZoteroNER_HTMLUtils.clearContainer('variant-group-list');
-        const suggestionsContainer = ZoteroNER_HTMLUtils.getElement('suggestions-container');
-        if (suggestionsContainer) {
-          suggestionsContainer.innerHTML = '';
-        }
-        ZoteroNER_HTMLUtils.setHidden('suggestions-group', true);
+        ZoteroNER_HTMLUtils.clearContainer('variant-groups-container');
+        this.clearVariantDetails();
 
         this.setApplyEnabled(false);
 
@@ -557,10 +645,532 @@
         ZoteroNER_HTMLUtils.setText('summary-pending-normalizations', this.analysisResults.suggestions ? this.analysisResults.suggestions.length : '0');
       },
 
+      resetSelections: function() {
+        this.userSelections = new Map();
+        if (!this.analysisResults || !Array.isArray(this.analysisResults.suggestions)) {
+          return;
+        }
+
+        this.analysisResults.suggestions.forEach((suggestion, index) => {
+          this.ensureUserSelection(index, suggestion);
+        });
+      },
+
+      ensureUserSelection: function(index, suggestion) {
+        if (!this.userSelections) {
+          this.userSelections = new Map();
+        }
+
+        if (!this.userSelections.has(index)) {
+          const defaultValue = this.getDefaultNormalizationValue(suggestion);
+          this.userSelections.set(index, {
+            mode: 'primary',
+            value: defaultValue,
+            variantIndex: null,
+            customValue: defaultValue,
+            apply: true
+          });
+        }
+
+        return this.userSelections.get(index);
+      },
+
+      updateSelection: function(index, suggestion, updates) {
+        const current = this.ensureUserSelection(index, suggestion);
+        const next = Object.assign({}, current, updates || {});
+
+        if (updates && Object.prototype.hasOwnProperty.call(updates, 'mode')) {
+          if (updates.mode === 'keep') {
+            next.apply = false;
+            next.variantIndex = null;
+          } else {
+            next.apply = true;
+            if (updates.mode !== 'variant') {
+              next.variantIndex = null;
+            }
+          }
+        }
+
+        if (updates && Object.prototype.hasOwnProperty.call(updates, 'variantIndex') && next.mode !== 'variant') {
+          next.variantIndex = updates.variantIndex;
+        }
+
+        if (updates && Object.prototype.hasOwnProperty.call(updates, 'customValue')) {
+          next.customValue = updates.customValue;
+          if (next.mode === 'custom' && !Object.prototype.hasOwnProperty.call(updates, 'value')) {
+            next.value = updates.customValue;
+          }
+        }
+
+        if (updates && Object.prototype.hasOwnProperty.call(updates, 'value')) {
+          next.value = updates.value;
+        }
+
+        this.userSelections.set(index, next);
+        this.refreshApplyButtonState();
+        return next;
+      },
+
+      refreshApplyButtonState: function() {
+        this.setApplyEnabled(this.hasSelectedNormalizations());
+      },
+
+      hasSelectedNormalizations: function() {
+        if (!this.analysisResults || !Array.isArray(this.analysisResults.suggestions) || this.analysisResults.suggestions.length === 0) {
+          return false;
+        }
+
+        if (!this.userSelections || this.userSelections.size === 0) {
+          return true;
+        }
+
+        for (let i = 0; i < this.analysisResults.suggestions.length; i++) {
+          const selection = this.userSelections.get(i);
+          if (!selection || selection.apply !== false) {
+            return true;
+          }
+        }
+
+        return false;
+      },
+
+      getDefaultNormalizationValue: function(suggestion) {
+        if (!suggestion) {
+          return '';
+        }
+
+        if (suggestion.type === 'given-name') {
+          if (suggestion.recommendedFullName) {
+            return suggestion.recommendedFullName;
+          }
+        }
+
+        if (typeof suggestion.primary === 'string') {
+          return suggestion.primary.trim();
+        }
+
+        return this.formatNameString(suggestion.primary);
+      },
+
+      titleCase: function(value) {
+        if (!value || typeof value !== 'string') {
+          return '';
+        }
+
+        return value
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+      },
+
+      getGroupTitle: function(index, suggestion) {
+        const groupNumber = index + 1;
+        if (suggestion.type === 'given-name') {
+          const surname = this.titleCase(suggestion.surname || suggestion.primary || '');
+          return surname
+            ? `Given name variants · ${surname}`
+            : `Given name variants · Group ${groupNumber}`;
+        }
+
+        const surname = this.titleCase(suggestion.primary || '');
+        return surname
+          ? `Surname variants · ${surname}`
+          : `Variant Group ${groupNumber}`;
+      },
+
+      buildRecommendedHTML: function(suggestion, recommendedValue) {
+        const safeValue = this.escapeHTML(recommendedValue || '');
+        if (suggestion.type === 'given-name') {
+          return 'Recommended full name: <strong>' + safeValue + '</strong>';
+        }
+        return 'Recommended normalization: <strong>' + safeValue + '</strong>';
+      },
+
+      getVariantSummaryText: function(suggestion) {
+        const variantCount = Array.isArray(suggestion.variants) ? suggestion.variants.length : 0;
+
+        if (suggestion.type === 'given-name') {
+          const total = suggestion.totalFrequency || 0;
+          return `${variantCount} given-name variants · ${total} occurrences`;
+        }
+
+        const totalOccurrences = (suggestion.variants || []).reduce((sum, variant) => sum + (variant.frequency || 0), 0);
+        return `${variantCount} surname spellings · ${totalOccurrences} occurrences`;
+      },
+
+      getVariantDisplayLabel: function(suggestion, variant) {
+        if (!variant) {
+          return '';
+        }
+
+        const frequency = typeof variant.frequency === 'number' ? ` (${variant.frequency})` : '';
+
+        if (suggestion.type === 'given-name') {
+          const name = variant.firstName || variant.name || '';
+          return `${this.titleCase(name)}${frequency}`;
+        }
+
+        return `${this.formatNameString(variant.name)}${frequency}`;
+      },
+
+      getVariantSelectionLabel: function(suggestion, variant) {
+        if (!variant) {
+          return '';
+        }
+
+        const occurrences = typeof variant.frequency === 'number' ? `${variant.frequency} occurrences` : 'variant';
+
+        if (suggestion.type === 'given-name') {
+          return `Normalize to ${this.titleCase(variant.firstName || variant.name || '')} (${occurrences})`;
+        }
+
+        return `Normalize to ${this.formatNameString(variant.name)} (${occurrences})`;
+      },
+
+      buildVariantListElement: function(index, suggestion) {
+        const wrapper = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-list' });
+        const recommendedValue = (this.getDefaultNormalizationValue(suggestion) || '').trim().toLowerCase();
+
+        (suggestion.variants || []).forEach((variant, variantIndex) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'variant-pill';
+          button.dataset.suggestionIndex = String(index);
+          button.dataset.variantIndex = String(variantIndex);
+          button.textContent = this.getVariantDisplayLabel(suggestion, variant);
+          const variantValue = (typeof variant.name === 'string' && variant.name)
+            ? variant.name.trim().toLowerCase()
+            : (variant.firstName ? `${variant.firstName} ${variant.lastName || suggestion.primary || ''}`.trim().toLowerCase() : '');
+          if (recommendedValue && variantValue && variantValue === recommendedValue) {
+            button.classList.add('recommended');
+          }
+          button.addEventListener('click', () => {
+            this.showVariantDetails(index, variantIndex, suggestion, { suppressHighlight: false });
+          });
+          wrapper.appendChild(button);
+        });
+
+        return wrapper;
+      },
+
+      findRecommendedVariantIndex: function(suggestion) {
+        if (!suggestion || !Array.isArray(suggestion.variants) || suggestion.variants.length === 0) {
+          return null;
+        }
+
+        const recommendedValue = (this.getDefaultNormalizationValue(suggestion) || '').trim().toLowerCase();
+        if (!recommendedValue) {
+          return null;
+        }
+
+        for (let i = 0; i < suggestion.variants.length; i++) {
+          const variant = suggestion.variants[i];
+          const variantValue = (typeof variant.name === 'string' && variant.name)
+            ? variant.name.trim().toLowerCase()
+            : (variant.firstName ? `${variant.firstName} ${variant.lastName || suggestion.primary || ''}`.trim().toLowerCase() : '');
+
+          if (variantValue && variantValue === recommendedValue) {
+            return i;
+          }
+        }
+
+        return null;
+      },
+
+      highlightVariantPills: function(suggestionIndex, variantIndex) {
+        const pills = document.querySelectorAll('.variant-pill[data-suggestion-index]');
+        pills.forEach(pill => {
+          const matches = pill.dataset.suggestionIndex === String(suggestionIndex) && pill.dataset.variantIndex === String(variantIndex);
+          pill.classList.toggle('active', matches);
+        });
+      },
+
+      getVariantDetailTitle: function(suggestion, variant) {
+        const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+        if (suggestion.type === 'given-name') {
+          return `Occurrences for ${label}`;
+        }
+        return `Occurrences for surname variant ${label}`;
+      },
+
+      showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
+        if (!suggestion || !Array.isArray(suggestion.variants)) {
+          this.clearVariantDetails();
+          return;
+        }
+
+        const variant = suggestion.variants[variantIndex];
+        if (!variant) {
+          this.clearVariantDetails();
+          return;
+        }
+
+        this.variantDetailState = { suggestionIndex, variantIndex };
+
+        if (!options.suppressHighlight) {
+          this.highlightVariantPills(suggestionIndex, variantIndex);
+        }
+
+        const panel = ZoteroNER_HTMLUtils.getElement('variant-detail-panel');
+        if (!panel) {
+          return;
+        }
+
+        panel.style.display = 'block';
+
+        const titleEl = ZoteroNER_HTMLUtils.getElement('variant-detail-title');
+        if (titleEl) {
+          titleEl.textContent = this.getVariantDetailTitle(suggestion, variant);
+        }
+
+        const contextEl = ZoteroNER_HTMLUtils.getElement('variant-detail-context');
+        if (contextEl) {
+          const pieces = [];
+          const freq = typeof variant.frequency === 'number' ? variant.frequency : 0;
+          pieces.push(`Occurrences: ${freq}`);
+          if (suggestion.type === 'given-name') {
+            pieces.push(`Surname: ${this.titleCase(suggestion.surname || suggestion.primary || '')}`);
+          }
+          contextEl.textContent = pieces.join(' · ');
+        }
+
+        const listEl = ZoteroNER_HTMLUtils.getElement('variant-detail-items');
+        if (listEl) {
+          listEl.innerHTML = '';
+          const items = Array.isArray(variant.items) ? variant.items : [];
+
+          if (items.length === 0) {
+            const emptyLi = document.createElement('li');
+            emptyLi.textContent = 'No sample items available for this variant.';
+            listEl.appendChild(emptyLi);
+          } else {
+            items.forEach(item => {
+              const li = document.createElement('li');
+              li.textContent = this.formatItemSummary(item);
+              listEl.appendChild(li);
+            });
+
+            if ((variant.frequency || 0) > items.length) {
+              const moreLi = document.createElement('li');
+              moreLi.className = 'variant-meta';
+              moreLi.textContent = `…and ${(variant.frequency || 0) - items.length} more entries`;
+              listEl.appendChild(moreLi);
+            }
+          }
+        }
+      },
+
+      clearVariantDetails: function() {
+        this.variantDetailState = null;
+        const panel = ZoteroNER_HTMLUtils.getElement('variant-detail-panel');
+        if (panel) {
+          panel.style.display = 'none';
+        }
+
+        const contextEl = ZoteroNER_HTMLUtils.getElement('variant-detail-context');
+        if (contextEl) {
+          contextEl.textContent = '';
+        }
+
+        const listEl = ZoteroNER_HTMLUtils.getElement('variant-detail-items');
+        if (listEl) {
+          listEl.innerHTML = '';
+        }
+
+        const pills = document.querySelectorAll('.variant-pill');
+        pills.forEach(pill => pill.classList.remove('active'));
+      },
+
+      formatItemSummary: function(item) {
+        if (!item) {
+          return 'Untitled item';
+        }
+
+        const title = item.title || 'Untitled';
+        const trimmedTitle = title.length > 80 ? title.slice(0, 77) + '…' : title;
+        const year = item.year || item.date || '';
+        return year ? `${trimmedTitle} (${year})` : trimmedTitle;
+      },
+
+      buildSelectionControls: function(index, suggestion) {
+        const choiceGroup = ZoteroNER_HTMLUtils.createElement('div', { class: 'radio-group', id: 'ner-variant-group-choice-' + index });
+        const selection = this.ensureUserSelection(index, suggestion);
+        const recommendedValue = this.getDefaultNormalizationValue(suggestion);
+        const recommendedLabelText = suggestion.type === 'given-name'
+          ? (recommendedValue ? `Use recommended full name: ${recommendedValue}` : 'Use recommended full name')
+          : (recommendedValue ? `Use recommended normalization: ${recommendedValue}` : 'Use recommended normalization');
+
+        const primaryRow = this.createSelectionRadioRow(index, suggestion, {
+          mode: 'primary',
+          label: recommendedLabelText,
+          checked: selection.mode === 'primary',
+          selectionUpdate: () => ({ mode: 'primary', value: recommendedValue })
+        });
+        choiceGroup.appendChild(primaryRow);
+
+        const keepRow = this.createSelectionRadioRow(index, suggestion, {
+          mode: 'keep',
+          label: 'Keep existing forms as-is',
+          checked: selection.mode === 'keep',
+          selectionUpdate: () => ({ mode: 'keep', apply: false })
+        });
+        choiceGroup.appendChild(keepRow);
+
+        (suggestion.variants || []).forEach((variant, variantIndex) => {
+          const label = this.getVariantSelectionLabel(suggestion, variant);
+          const variantRow = this.createSelectionRadioRow(index, suggestion, {
+            mode: 'variant',
+            label,
+            checked: selection.mode === 'variant' && selection.variantIndex === variantIndex,
+            onSelect: () => {
+              this.showVariantDetails(index, variantIndex, suggestion);
+            },
+            selectionUpdate: () => {
+              const variantValue = (typeof variant.name === 'string' && variant.name)
+                ? variant.name.trim()
+                : (variant.firstName ? `${variant.firstName} ${variant.lastName || suggestion.primary || ''}`.trim() : '');
+              return {
+                mode: 'variant',
+                variantIndex,
+                value: variantValue
+              };
+            }
+          });
+          choiceGroup.appendChild(variantRow);
+        });
+
+        const customRow = this.createCustomSelectionRow(index, suggestion, selection, recommendedValue);
+        choiceGroup.appendChild(customRow);
+
+        return choiceGroup;
+      },
+
+      createSelectionRadioRow: function(index, suggestion, option) {
+        const row = ZoteroNER_HTMLUtils.createElement('div');
+        const radioId = `choice-${index}-${option.mode}-${Math.random().toString(16).slice(2, 7)}`;
+        const radio = ZoteroNER_HTMLUtils.createElement('input', {
+          type: 'radio',
+          id: radioId,
+          name: `choice-${index}`,
+          value: option.mode
+        });
+        if (option.checked) {
+          radio.checked = true;
+        }
+
+        radio.addEventListener('change', () => {
+          if (typeof option.onSelect === 'function') {
+            option.onSelect();
+          }
+          const update = typeof option.selectionUpdate === 'function'
+            ? option.selectionUpdate()
+            : { mode: option.mode };
+          this.updateSelection(index, suggestion, update);
+        });
+
+        const label = ZoteroNER_HTMLUtils.createElement('label', { for: radioId });
+        label.textContent = option.label;
+
+        row.appendChild(radio);
+        row.appendChild(label);
+        return row;
+      },
+
+      createCustomSelectionRow: function(index, suggestion, selection, defaultValue) {
+        const container = ZoteroNER_HTMLUtils.createElement('div', { class: 'custom-normalization' });
+        const radioId = `choice-${index}-custom`;
+        const radio = ZoteroNER_HTMLUtils.createElement('input', {
+          type: 'radio',
+          id: radioId,
+          name: `choice-${index}`,
+          value: 'custom'
+        });
+        radio.checked = selection.mode === 'custom';
+
+        const label = ZoteroNER_HTMLUtils.createElement('label', { for: radioId });
+        label.textContent = 'Use a custom normalization:';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = selection.customValue || defaultValue || '';
+        input.disabled = selection.mode !== 'custom';
+        input.placeholder = defaultValue || 'Enter normalized name';
+
+        radio.addEventListener('change', () => {
+          input.disabled = !radio.checked;
+          if (radio.checked) {
+            this.updateSelection(index, suggestion, {
+              mode: 'custom',
+              value: input.value,
+              customValue: input.value,
+              variantIndex: null
+            });
+          }
+        });
+
+        input.addEventListener('input', (event) => {
+          const value = event.target.value;
+          const current = this.ensureUserSelection(index, suggestion);
+          const updates = { customValue: value };
+          if (current.mode === 'custom') {
+            updates.value = value;
+          }
+          this.updateSelection(index, suggestion, updates);
+        });
+
+        input.addEventListener('focus', () => {
+          if (!radio.checked) {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change'));
+          }
+        });
+
+        container.appendChild(radio);
+        container.appendChild(label);
+        container.appendChild(input);
+
+        return container;
+      },
+
+      buildRelatedGivenNamesSection: function(suggestion) {
+        const wrapper = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-meta' });
+        const variants = suggestion.relatedGivenNameVariants || [];
+        if (!variants.length) {
+          return wrapper;
+        }
+
+        const intro = document.createElement('div');
+        intro.textContent = 'Associated given name variants:';
+        wrapper.appendChild(intro);
+
+        const list = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-list' });
+        variants.forEach(variant => {
+          const pill = document.createElement('span');
+          pill.className = 'variant-pill';
+          pill.textContent = `${this.titleCase(variant.firstName || '')} (${variant.frequency || 0})`;
+          list.appendChild(pill);
+        });
+
+        wrapper.appendChild(list);
+        return wrapper;
+      },
+
       populateVariantGroupList: function() {
-        const list = ZoteroNER_HTMLUtils.getElement('variant-group-list');
-        if (list) {
-          ZoteroNER_HTMLUtils.clearContainer('variant-group-list');
+        const container = ZoteroNER_HTMLUtils.getElement('variant-groups-container');
+        if (!container) {
+          return false;
+        }
+
+        container.innerHTML = '';
+
+        const suggestions = (this.analysisResults && Array.isArray(this.analysisResults.suggestions))
+          ? this.analysisResults.suggestions
+          : [];
+
+        if (suggestions.length === 0) {
+          this.showEmptyState('No variant groups were detected for the scanned surnames.');
+          return false;
         }
 
         const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
@@ -568,137 +1178,74 @@
           emptyMsg.style.display = 'none';
         }
 
-        if (!this.analysisResults || !Array.isArray(this.analysisResults.suggestions) || this.analysisResults.suggestions.length === 0) {
-          this.showEmptyState('No variant groups were detected for the scanned surnames.');
-          return false;
-        }
+        suggestions.forEach((suggestion, index) => {
+          if (!suggestion) {
+            return;
+          }
+          this.ensureUserSelection(index, suggestion);
+          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
 
-        if (!list) return false;
+          const header = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-header' });
+          const title = ZoteroNER_HTMLUtils.createElement('h3');
+          title.textContent = this.getGroupTitle(index, suggestion);
+          header.appendChild(title);
 
-        this.analysisResults.suggestions.forEach((suggestion, i) => {
-          const listItem = ZoteroNER_HTMLUtils.createElement('li', { 
-            class: 'zotero-ner-variant-group',
-            'data-index': i 
-          });
-          const container = ZoteroNER_HTMLUtils.createElement('div', { class: 'zotero-ner-variant-group-body' });
+          const summary = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-summary' });
+          summary.textContent = this.getVariantSummaryText(suggestion);
+          header.appendChild(summary);
 
-          const title = ZoteroNER_HTMLUtils.createElement('h4', { class: 'zotero-ner-variant-group-title' });
-          title.textContent = `Variant group ${i + 1}`;
+          const recommendedValue = this.getDefaultNormalizationValue(suggestion);
+          if (recommendedValue) {
+            const recommended = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-meta' });
+            recommended.innerHTML = this.buildRecommendedHTML(suggestion, recommendedValue);
+            header.appendChild(recommended);
+          }
 
-          const primary = ZoteroNER_HTMLUtils.createElement('div', { class: 'zotero-ner-variant-group-primary primary' });
-          const primaryName = this.escapeHTML(this.formatNameString(suggestion.primary));
-          primary.innerHTML = '<strong>Primary:</strong> ' + primaryName;
+          groupElement.appendChild(header);
 
-          const variantsDiv = ZoteroNER_HTMLUtils.createElement('div', { class: 'zotero-ner-variant-group-variants' });
-          const variantNames = suggestion.variants
-            .map(v => {
-              const variantName = this.escapeHTML(this.formatNameString(v.name));
-              return `<span class="variant">${variantName} <span class="frequency">(${v.frequency})</span></span>`;
-            })
-            .join(', ');
-          variantsDiv.innerHTML = '<strong>Variants:</strong> ' + variantNames;
+          const variantsContainer = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-variants' });
+          const variantList = this.buildVariantListElement(index, suggestion);
 
-          container.appendChild(title);
-          container.appendChild(primary);
-          container.appendChild(variantsDiv);
-          listItem.appendChild(container);
-          list.appendChild(listItem);
+          if (variantList && variantList.childElementCount > 0) {
+            variantsContainer.appendChild(variantList);
+          } else {
+            const emptyVariants = document.createElement('div');
+            emptyVariants.className = 'variant-meta';
+            emptyVariants.textContent = 'No variants detected.';
+            variantsContainer.appendChild(emptyVariants);
+          }
+
+          const controls = this.buildSelectionControls(index, suggestion);
+          variantsContainer.appendChild(controls);
+
+          if (suggestion.type === 'given-name') {
+            const relatedSection = this.buildRelatedGivenNamesSection(suggestion);
+            if (relatedSection && relatedSection.childNodes.length) {
+              variantsContainer.appendChild(relatedSection);
+            }
+          }
+
+          groupElement.appendChild(variantsContainer);
+          container.appendChild(groupElement);
         });
 
-        this.highlightVariantGroup();
+        const { variantDetailState } = this;
+        if (variantDetailState && suggestions[variantDetailState.suggestionIndex]) {
+          const { suggestionIndex, variantIndex } = variantDetailState;
+          this.showVariantDetails(suggestionIndex, variantIndex, suggestions[suggestionIndex]);
+        } else {
+          const firstSuggestion = suggestions[0];
+          if (firstSuggestion && Array.isArray(firstSuggestion.variants) && firstSuggestion.variants.length > 0) {
+            const defaultVariantIndex = this.findRecommendedVariantIndex(firstSuggestion);
+            const variantIndex = defaultVariantIndex !== null ? defaultVariantIndex : 0;
+            this.showVariantDetails(0, variantIndex, firstSuggestion);
+          } else {
+            this.clearVariantDetails();
+          }
+        }
+
+        this.refreshApplyButtonState();
         return true;
-      },
-
-      renderCurrentVariantGroup: function() {
-        if (!this.analysisResults || !this.analysisResults.suggestions || this.analysisResults.suggestions.length === 0) {
-          this.setApplyEnabled(false);
-          return;
-        }
-
-        const index = this.selectedVariantGroupIndex || 0;
-        const suggestion = this.analysisResults.suggestions[index];
-
-        const container = ZoteroNER_HTMLUtils.getElement('suggestions-container');
-        if (!container) return;
-
-        ZoteroNER_HTMLUtils.clearContainer('suggestions-container');
-        ZoteroNER_HTMLUtils.setHidden('suggestions-group', false);
-
-        const groupDiv = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group ner-creator-group' });
-        const caption = ZoteroNER_HTMLUtils.createElement('h4');
-        caption.textContent = 'Variant Group ' + (index + 1);
-        groupDiv.appendChild(caption);
-
-        const body = ZoteroNER_HTMLUtils.createElement('div', { class: 'ner-creator-body' });
-
-        // Primary
-        const primaryLabel = ZoteroNER_HTMLUtils.createElement('div', { class: 'primary ner-creator-original' });
-  const primaryName = this.escapeHTML(this.formatNameString(suggestion.primary));
-  primaryLabel.innerHTML = 'Recommended normalization: <strong>' + primaryName + '</strong>';
-        body.appendChild(primaryLabel);
-
-        // Radio group
-        const choiceGroup = ZoteroNER_HTMLUtils.createElement('div', { class: 'radio-group', id: 'ner-variant-group-choice-' + index });
-
-        // Primary radio
-        const primaryRadioDiv = ZoteroNER_HTMLUtils.createElement('div');
-        const primaryRadio = ZoteroNER_HTMLUtils.createElement('input', { type: 'radio', value: 'primary', name: 'choice-' + index, checked: 'checked' });
-        const primaryLabelEl = ZoteroNER_HTMLUtils.createElement('label');
-        primaryLabelEl.textContent = 'Use recommended normalization: ' + this.formatNameString(suggestion.primary);
-        primaryRadioDiv.appendChild(primaryRadio);
-        primaryRadioDiv.appendChild(primaryLabelEl);
-        choiceGroup.appendChild(primaryRadioDiv);
-
-        // Keep original
-        const keepDiv = ZoteroNER_HTMLUtils.createElement('div');
-        const keepRadio = ZoteroNER_HTMLUtils.createElement('input', { type: 'radio', value: 'original', name: 'choice-' + index });
-        const keepLabel = ZoteroNER_HTMLUtils.createElement('label');
-        keepLabel.textContent = 'Keep existing forms as-is';
-        keepDiv.appendChild(keepRadio);
-        keepDiv.appendChild(keepLabel);
-        choiceGroup.appendChild(keepDiv);
-
-        // Variants
-        if (suggestion.variants && suggestion.variants.length > 0) {
-          const variantsLabel = ZoteroNER_HTMLUtils.createElement('label', { class: 'ner-creator-meta' });
-          variantsLabel.textContent = 'Variants in this group:';
-          body.appendChild(variantsLabel);
-
-          suggestion.variants.forEach((v, j) => {
-            const vDiv = ZoteroNER_HTMLUtils.createElement('div');
-            const vRadio = ZoteroNER_HTMLUtils.createElement('input', { type: 'radio', value: 'variant-' + j, name: 'choice-' + index });
-            const vLabel = ZoteroNER_HTMLUtils.createElement('label');
-            vLabel.textContent = this.formatNameString(v.name) + ' • ' + v.frequency + ' occurrences';
-            vDiv.appendChild(vRadio);
-            vDiv.appendChild(vLabel);
-            choiceGroup.appendChild(vDiv);
-          });
-        }
-
-        body.appendChild(choiceGroup);
-
-        // Confidence
-        if (typeof suggestion.similarity === 'number') {
-          const confLabel = ZoteroNER_HTMLUtils.createElement('div', { class: 'ner-creator-meta confidence' });
-          confLabel.textContent = 'Group confidence: ' + Math.round(suggestion.similarity * 100) + '%';
-          body.appendChild(confLabel);
-        }
-
-        groupDiv.appendChild(body);
-        container.appendChild(groupDiv);
-
-        this.setApplyEnabled(true);
-      },
-
-      highlightVariantGroup: function() {
-        const list = ZoteroNER_HTMLUtils.getElement('variant-group-list');
-        if (!list) return;
-
-        const items = list.querySelectorAll('li[data-index]');
-        if (items[this.selectedVariantGroupIndex]) {
-          items[this.selectedVariantGroupIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          items.forEach((item, idx) => item.classList.toggle('selected', idx === this.selectedVariantGroupIndex));
-        }
       },
 
       formatNameString: function(name) {
@@ -770,30 +1317,82 @@
       },
 
       applySelected: async function() {
-        if (this.isProcessing || !this.analysisResults) return;
+        if (this.isProcessing || !this.analysisResults || !Array.isArray(this.analysisResults.suggestions)) {
+          return;
+        }
+
+        const preparedSuggestions = [];
+        this.analysisResults.suggestions.forEach((suggestion, index) => {
+          const selection = this.ensureUserSelection(index, suggestion);
+          if (!selection || selection.apply === false) {
+            return;
+          }
+
+          const normalizedValue = (selection.value || '').trim();
+          if (!normalizedValue) {
+            return;
+          }
+
+          const originalPrimary = suggestion.primary;
+          const prepared = Object.assign({}, suggestion);
+          prepared.originalPrimary = originalPrimary;
+          prepared.primary = normalizedValue;
+          prepared.variants = (suggestion.variants || []).map(variant => {
+            const variantClone = Object.assign({}, variant);
+            if (Array.isArray(variantClone.items)) {
+              variantClone.items = variantClone.items.map(item => Object.assign({}, item));
+            }
+            return variantClone;
+          });
+          prepared.userSelection = Object.assign({}, selection);
+
+          if (selection.mode === 'variant' && typeof selection.variantIndex === 'number') {
+            prepared.selectedVariant = prepared.variants[selection.variantIndex] || null;
+          }
+
+          if (selection.mode === 'custom') {
+            prepared.customNormalization = normalizedValue;
+          }
+
+          preparedSuggestions.push(prepared);
+        });
+
+        if (preparedSuggestions.length === 0) {
+          this.alert('NER Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
+          return;
+        }
 
         this.setDialogBusy(true);
+
+        let applyError = null;
 
         try {
           if (typeof ZoteroNER !== 'undefined' && ZoteroNER.ZoteroDBAnalyzer) {
             this.dbAnalyzer = new ZoteroNER.ZoteroDBAnalyzer();
           }
 
-          const results = await this.dbAnalyzer.applyNormalizationSuggestions(this.analysisResults.suggestions, false);
+          if (!this.dbAnalyzer || typeof this.dbAnalyzer.applyNormalizationSuggestions !== 'function') {
+            throw new Error('Zotero NER database analyzer is not available in this context.');
+          }
+
+          const results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false);
 
           this.alert('NER Author Name Normalizer',
-            'Normalization suggestions applied!\n\n' +
-            'Total suggestions: ' + results.totalSuggestions + '\n' +
+            'Normalization selections applied!\n\n' +
+            'Total selections: ' + results.totalSuggestions + '\n' +
             'Applied: ' + results.applied + '\n' +
             'Skipped: ' + results.skipped + '\n' +
             'Errors: ' + results.errors);
 
         } catch (error) {
+          applyError = error;
           console.error(error);
-          this.alert('Error', 'Failed to apply: ' + error.message);
+          this.alert('Error', 'Failed to apply normalization selections: ' + error.message);
         } finally {
           this.setDialogBusy(false);
-          window.close();
+          if (!applyError) {
+            window.close();
+          }
         }
       }
     };

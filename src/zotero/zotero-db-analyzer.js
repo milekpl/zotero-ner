@@ -2,6 +2,56 @@
  * Zotero DB Analyzer - Handles database-specific queries for name analysis
  * This module uses Zotero's database APIs to efficiently extract and analyze names
  */
+
+const COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
+  frederic: 'frederick',
+  frederick: 'frederick',
+  fred: 'frederick',
+  freddie: 'frederick',
+  freddy: 'frederick',
+  harry: 'harry',
+  harold: 'harold',
+  henry: 'henry',
+  hal: 'harold',
+  bob: 'robert',
+  bobby: 'robert',
+  rob: 'robert',
+  robert: 'robert',
+  robbie: 'robert',
+  william: 'william',
+  will: 'william',
+  bill: 'william',
+  billy: 'william',
+  willie: 'william',
+  elizabeth: 'elizabeth',
+  liz: 'elizabeth',
+  lizzie: 'elizabeth',
+  beth: 'elizabeth',
+  betty: 'elizabeth',
+  jon: 'jonathan',
+  jonathan: 'jonathan',
+  john: 'john',
+  jack: 'john',
+  kate: 'katherine',
+  katherine: 'katherine',
+  catherine: 'catherine',
+  cathy: 'catherine',
+  kathy: 'catherine',
+  alex: 'alexander',
+  alexander: 'alexander',
+  alexandra: 'alexandra',
+  sandy: 'alexander',
+  sasha: 'alexander',
+  maggie: 'margaret',
+  margaret: 'margaret',
+  peggy: 'margaret',
+  meg: 'margaret',
+  megan: 'margaret',
+  mike: 'michael',
+  michael: 'michael',
+  mick: 'michael',
+  mickey: 'michael'
+});
 class ZoteroDBAnalyzer {
   constructor() {
     this.candidateFinder = new (require('../core/candidate-finder.js'))();
@@ -64,6 +114,10 @@ class ZoteroDBAnalyzer {
               );
               if (validCreators.length > 0) {
                 itemsWithCreators.push(item);
+              }
+
+              for (const creator of creators) {
+                this.addCreatorOccurrence(creatorsMap, creator, item);
               }
             }
           } catch (itemError) {
@@ -140,15 +194,7 @@ class ZoteroDBAnalyzer {
           try {
             const creators = item.getCreators ? item.getCreators() : [];
             for (const creator of creators) {
-              if (creator && (creator.firstName || creator.lastName)) {
-                const key = `${creator.firstName || ''}|${creator.lastName || ''}|${creator.fieldMode || 0}`;
-                creatorsMap[key] = {
-                  firstName: creator.firstName || '',
-                  lastName: creator.lastName || '',
-                  fieldMode: creator.fieldMode || 0,
-                  count: (creatorsMap[key]?.count || 0) + 1
-                };
-              }
+              this.addCreatorOccurrence(creatorsMap, creator, item);
             }
           } catch (itemError) {
             console.warn('Error processing item creators:', itemError);
@@ -184,15 +230,7 @@ class ZoteroDBAnalyzer {
           try {
             const creators = item.getCreators ? item.getCreators() : [];
             for (const creator of creators) {
-              if (creator && (creator.firstName || creator.lastName)) {
-                const key = `${creator.firstName || ''}|${creator.lastName || ''}|${creator.fieldMode || 0}`;
-                creatorsMap[key] = {
-                  firstName: creator.firstName || '',
-                  lastName: creator.lastName || '',
-                  fieldMode: creator.fieldMode || 0,
-                  count: (creatorsMap[key]?.count || 0) + 1
-                };
-              }
+              this.addCreatorOccurrence(creatorsMap, creator, item);
             }
           } catch (itemError) {
             console.warn('Error processing item creators:', itemError);
@@ -247,6 +285,74 @@ class ZoteroDBAnalyzer {
     }
   }
 
+  addCreatorOccurrence(creatorsMap, creator, item) {
+    if (!creator || (!creator.firstName && !creator.lastName)) {
+      return;
+    }
+
+    const key = `${creator.firstName || ''}|${creator.lastName || ''}|${creator.fieldMode || 0}`;
+    if (!creatorsMap[key]) {
+      const parsed = this.parseName(`${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.lastName || '');
+      creatorsMap[key] = {
+        key,
+        firstName: creator.firstName || '',
+        lastName: creator.lastName || '',
+        fieldMode: creator.fieldMode || 0,
+        count: 0,
+        items: [],
+        parsedName: parsed
+      };
+    }
+
+    creatorsMap[key].count = (creatorsMap[key].count || 0) + 1;
+
+    if (item) {
+      const summary = this.buildItemSummary(item);
+      if (summary) {
+        const limit = 25;
+        if ((creatorsMap[key].items || []).length < limit) {
+          creatorsMap[key].items.push(summary);
+        }
+      }
+    }
+  }
+
+  buildItemSummary(item) {
+    if (!item) {
+      return null;
+    }
+
+    try {
+      const getField = typeof item.getField === 'function' ? item.getField.bind(item) : null;
+      const title = getField ? getField('title') : (item.title || '');
+      const date = getField ? getField('date') : (item.date || '');
+      const publicationYear = this.extractYear(date);
+      const creatorsCount = typeof item.getCreators === 'function' ? (item.getCreators() || []).length : undefined;
+
+      return {
+        id: item.id || null,
+        key: item.key || null,
+        title: title || 'Untitled',
+        date: date || '',
+        year: publicationYear,
+        itemType: item.itemType || (getField ? getField('itemType') : ''),
+        creatorsCount
+      };
+    } catch (summaryError) {
+      console.warn('Unable to summarize item for creator mapping:', summaryError);
+      return null;
+    }
+  }
+
+  extractYear(dateValue) {
+    if (!dateValue || typeof dateValue !== 'string') {
+      return '';
+    }
+
+    const match = dateValue.match(/(\d{4})/);
+    return match ? match[1] : '';
+  }
+
   /**
    * Analyze a list of creators for name variants
    * @param {Array} creators - Array of creator objects with occurrence counts
@@ -255,6 +361,7 @@ class ZoteroDBAnalyzer {
   async analyzeCreators(creators, progressCallback = null, shouldCancel = null) {
     Zotero.debug('ZoteroDBAnalyzer: analyzeCreators started with ' + (creators ? creators.length : 0) + ' creators');
     const surnameFrequencies = {};
+    const surnameVariantItems = {};
 
     // Process each creator to extract surname frequencies
     for (const creator of creators) {
@@ -264,6 +371,10 @@ class ZoteroDBAnalyzer {
       if (parsed.lastName) {
         const lastNameKey = parsed.lastName.toLowerCase().trim();
         surnameFrequencies[lastNameKey] = (surnameFrequencies[lastNameKey] || 0) + (creator.count || 1);
+        surnameVariantItems[lastNameKey] = this.mergeItemSummaries(
+          surnameVariantItems[lastNameKey],
+          creator.items
+        );
       }
     }
 
@@ -281,15 +392,19 @@ class ZoteroDBAnalyzer {
       return totalFreqB - totalFreqA;
     });
 
+    const creatorsBySurname = this.groupCreatorsBySurnameForVariants(creators);
+    const givenNameVariantGroups = this.findGivenNameVariantGroups(creatorsBySurname);
+
     // Generate normalization suggestions
-    const suggestions = this.generateNormalizationSuggestions(potentialVariants);
+    const suggestions = this.generateNormalizationSuggestions(potentialVariants, givenNameVariantGroups, surnameVariantItems);
 
     return {
       surnameFrequencies,
       potentialVariants,
       suggestions,
       totalUniqueSurnames: surnames.length,
-      totalVariantGroups: potentialVariants.length
+      totalVariantGroups: suggestions.length,
+      givenNameVariantGroups
     };
   }
 
@@ -369,6 +484,329 @@ class ZoteroDBAnalyzer {
     return potentialVariants;
   }
 
+  groupCreatorsBySurnameForVariants(creators) {
+    const surnameGroups = {};
+
+    for (const creator of creators) {
+      if (!creator || !creator.lastName) {
+        continue;
+      }
+
+      const lastNameKey = (creator.lastName || '').toLowerCase().trim();
+      if (!surnameGroups[lastNameKey]) {
+        surnameGroups[lastNameKey] = [];
+      }
+
+      surnameGroups[lastNameKey].push(creator);
+    }
+
+    return surnameGroups;
+  }
+
+  findGivenNameVariantGroups(creatorsBySurname) {
+    const groups = [];
+
+    for (const [surname, creators] of Object.entries(creatorsBySurname)) {
+      if (!creators || creators.length < 2) {
+        continue;
+      }
+
+      const results = this.findGivenNameVariantsForSurname(surname, creators);
+      if (results.length > 0) {
+        groups.push(...results);
+      }
+    }
+
+    return groups;
+  }
+
+  findGivenNameVariantsForSurname(surname, creators) {
+    const groups = [];
+    const normalizedBuckets = new Map();
+    const itemsByKey = new Map();
+
+    for (const creator of creators) {
+      const parsedFirst = (creator.parsedName?.firstName || creator.firstName || '').trim();
+      if (!parsedFirst) {
+        continue;
+      }
+
+      const normalized = this.normalizeGivenName(parsedFirst);
+      const key = normalized || parsedFirst.toLowerCase();
+
+      if (!normalizedBuckets.has(key)) {
+        normalizedBuckets.set(key, []);
+      }
+
+      normalizedBuckets.get(key).push(creator);
+
+      const creatorKey = `${parsedFirst}|${creator.lastName}`;
+      if (!itemsByKey.has(creatorKey)) {
+        itemsByKey.set(creatorKey, creator.items || []);
+      }
+    }
+
+    this.mergeInitialBuckets(normalizedBuckets);
+
+    for (const [normalizedKey, bucket] of normalizedBuckets.entries()) {
+      if (bucket.length < 2) {
+        continue;
+      }
+
+      const fullNames = new Map();
+      let totalCount = 0;
+
+      for (const creator of bucket) {
+        const displayFirst = this.rehydrateGivenName(creator.parsedName?.firstName || creator.firstName || '', normalizedKey);
+        const variantKey = `${displayFirst}|${creator.lastName}`.toLowerCase();
+        const existing = fullNames.get(variantKey) || {
+          firstName: displayFirst,
+          lastName: creator.lastName,
+          frequency: 0,
+          items: []
+        };
+
+        existing.frequency += creator.count || 1;
+        totalCount += creator.count || 1;
+        const nameKey = `${creator.parsedName?.firstName || creator.firstName || ''}|${creator.lastName}`;
+        if (itemsByKey.has(nameKey)) {
+          existing.items = this.mergeItemSummaries(existing.items, itemsByKey.get(nameKey));
+        }
+
+        fullNames.set(variantKey, existing);
+      }
+
+      if (fullNames.size < 2) {
+        continue;
+      }
+
+      const variantsArray = Array.from(fullNames.values());
+      const recommendation = this.buildGivenNameRecommendation(variantsArray, surname);
+
+      groups.push({
+        surname,
+        normalizedKey,
+        variants: variantsArray,
+        totalFrequency: totalCount,
+        recommendedFirstName: recommendation.firstName,
+        recommendedFullName: recommendation.fullName
+      });
+    }
+
+    return groups;
+  }
+
+  normalizeGivenName(firstName) {
+    const trimmed = firstName.trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    const tokens = trimmed.split(/[\s-]+/).filter(Boolean);
+    const cleanedTokens = tokens.map(token => token.replace(/\./g, ''));
+
+    if (cleanedTokens.length === 0) {
+      return '';
+    }
+
+    const primaryToken = cleanedTokens[0].toLowerCase();
+
+    if (cleanedTokens.every(token => token.length === 1)) {
+      return `initial:${cleanedTokens.join('')}`;
+    }
+
+    if (COMMON_GIVEN_NAME_EQUIVALENTS[primaryToken]) {
+      return COMMON_GIVEN_NAME_EQUIVALENTS[primaryToken];
+    }
+
+    return primaryToken;
+  }
+
+  rehydrateGivenName(original, normalizedKey) {
+    if (!normalizedKey) {
+      return original;
+    }
+
+    if (normalizedKey.startsWith('initial:')) {
+      const initials = normalizedKey.replace('initial:', '').toUpperCase();
+      return initials
+        .split('')
+        .map(letter => `${letter}.`)
+        .join(' ')
+        .trim();
+    }
+
+    const canonical = this.toTitleCase(normalizedKey);
+    const parsedOriginal = original || '';
+
+    if (!parsedOriginal) {
+      return canonical;
+    }
+
+    if (/^[A-Z]\.([A-Z]\.)?$/.test(parsedOriginal)) {
+      return parsedOriginal;
+    }
+
+    return canonical;
+  }
+
+  mergeItemSummaries(existing = [], incoming = []) {
+    if (!incoming || incoming.length === 0) {
+      return existing;
+    }
+
+    const byId = new Map();
+    const max = 25;
+
+    for (const summary of existing) {
+      if (!summary) continue;
+      const key = summary.key || summary.id || JSON.stringify(summary);
+      if (!byId.has(key)) {
+        byId.set(key, summary);
+      }
+      if (byId.size >= max) break;
+    }
+
+    for (const summary of incoming) {
+      if (!summary) continue;
+      const key = summary.key || summary.id || JSON.stringify(summary);
+      if (!byId.has(key) && byId.size < max) {
+        byId.set(key, summary);
+      }
+      if (byId.size >= max) break;
+    }
+
+    return Array.from(byId.values());
+  }
+
+  mergeInitialBuckets(normalizedBuckets) {
+    const canonicalKeys = Array.from(normalizedBuckets.keys()).filter(key => !key.startsWith('initial:'));
+
+    if (canonicalKeys.length === 0) {
+      return normalizedBuckets;
+    }
+
+    for (const [key, bucket] of Array.from(normalizedBuckets.entries())) {
+      if (!key.startsWith('initial:')) {
+        continue;
+      }
+
+      const initials = key.replace('initial:', '');
+      if (!initials) {
+        continue;
+      }
+
+      const firstLetter = initials.charAt(0);
+      const destinationKey = canonicalKeys.find(canonicalKey => canonicalKey.charAt(0) === firstLetter);
+
+      if (destinationKey) {
+        const destination = normalizedBuckets.get(destinationKey);
+        bucket.forEach(entry => destination.push(entry));
+        normalizedBuckets.delete(key);
+      }
+    }
+
+    return normalizedBuckets;
+  }
+
+  buildGivenNameRecommendation(variants, surname) {
+    if (!variants || variants.length === 0) {
+      return {
+        firstName: '',
+        fullName: surname || ''
+      };
+    }
+
+    const sorted = [...variants].sort((a, b) => this.scoreGivenNameVariant(b) - this.scoreGivenNameVariant(a));
+    const baseVariant = sorted[0];
+    const baseFirstName = this.toTitleCase(baseVariant?.firstName || '');
+    const baseInitial = baseFirstName ? baseFirstName.charAt(0).toUpperCase() : '';
+
+    const additionalInitials = [];
+
+    for (const variant of variants) {
+      const tokens = (variant.firstName || '').split(/[\s-]+/).filter(Boolean);
+      tokens.forEach((token, index) => {
+        const cleaned = token.replace(/\./g, '').toUpperCase();
+        if (cleaned.length === 1) {
+          if ((index === 0 && cleaned === baseInitial) || additionalInitials.includes(cleaned)) {
+            return;
+          }
+          additionalInitials.push(cleaned);
+        }
+      });
+    }
+
+    let recommendedFirst = baseFirstName;
+
+    if (!recommendedFirst) {
+      if (additionalInitials.length > 0) {
+        recommendedFirst = additionalInitials.map(letter => `${letter}.`).join(' ');
+      } else {
+        recommendedFirst = this.toTitleCase(variants[0].firstName || '');
+      }
+    } else {
+      const extraInitials = additionalInitials.filter(letter => letter !== baseInitial);
+      if (extraInitials.length > 0) {
+        const suffix = extraInitials.map(letter => `${letter}.`).join(' ');
+        if (suffix) {
+          recommendedFirst = `${recommendedFirst} ${suffix}`.trim();
+        }
+      }
+    }
+
+    const recommendedFullName = surname
+      ? `${recommendedFirst} ${surname}`.trim()
+      : recommendedFirst;
+
+    return {
+      firstName: recommendedFirst,
+      fullName: recommendedFullName
+    };
+  }
+
+  scoreGivenNameVariant(variant) {
+    if (!variant) {
+      return 0;
+    }
+
+    let score = variant.frequency || 0;
+    const name = (variant.firstName || '').trim();
+
+    if (!name) {
+      return score;
+    }
+
+    const cleaned = name.replace(/\./g, '');
+    if (/[a-z]{2,}/i.test(cleaned)) {
+      score += 1000;
+    }
+
+    if (!name.includes('.')) {
+      score += 200;
+    }
+
+    const primaryToken = cleaned.split(/[\s-]+/)[0]?.toLowerCase() || '';
+    if (COMMON_GIVEN_NAME_EQUIVALENTS[primaryToken]) {
+      score += 50;
+    }
+
+    score += Math.min(cleaned.length, 20);
+    return score;
+  }
+
+  toTitleCase(value) {
+    if (!value) {
+      return '';
+    }
+
+    return value
+      .split(/[\s-]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
   /**
    * Parse a name string into components
    * @param {string} name - Full name string
@@ -429,33 +867,133 @@ class ZoteroDBAnalyzer {
    * @param {Array} variants - Array of variant pairs
    * @returns {Array} Array of normalization suggestions
    */
-  generateNormalizationSuggestions(variants) {
-    Zotero.debug('ZoteroDBAnalyzer: generateNormalizationSuggestions called with ' + (variants ? variants.length : 0) + ' variants');
+  generateNormalizationSuggestions(variants, givenNameVariantGroups = [], surnameVariantItems = {}) {
+    Zotero.debug('ZoteroDBAnalyzer: generateNormalizationSuggestions called with ' + (variants ? variants.length : 0) + ' surname variants and ' + (givenNameVariantGroups ? givenNameVariantGroups.length : 0) + ' given-name groups');
     const suggestions = [];
     const processedSurnames = new Set();
-    
-    for (const variant of variants) {
+
+    for (const variant of variants || []) {
       const norm1 = variant.variant1.name;
       const norm2 = variant.variant2.name;
-      
-      // Avoid duplicate suggestions
+
       if (!processedSurnames.has(norm1) && !processedSurnames.has(norm2)) {
-        suggestions.push({
+        const suggestion = {
+          type: 'surname',
           primary: variant.recommendedNormalization,
           variants: [
-            { name: variant.variant1.name, frequency: variant.variant1.frequency },
-            { name: variant.variant2.name, frequency: variant.variant2.frequency }
+            {
+              name: variant.variant1.name,
+              frequency: variant.variant1.frequency,
+              items: surnameVariantItems[variant.variant1.name] || []
+            },
+            {
+              name: variant.variant2.name,
+              frequency: variant.variant2.frequency,
+              items: surnameVariantItems[variant.variant2.name] || []
+            }
           ],
           similarity: variant.similarity
-        });
-        
+        };
+
+        this.enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups);
+        suggestions.push(suggestion);
+
         processedSurnames.add(norm1);
         processedSurnames.add(norm2);
       }
     }
-    
-    Zotero.debug('ZoteroDBAnalyzer: Generated ' + suggestions.length + ' normalization suggestions');
+
+    for (const group of givenNameVariantGroups || []) {
+      if (!group || !group.surname || !Array.isArray(group.variants) || group.variants.length < 2) {
+        continue;
+      }
+
+      const existing = suggestions.find(
+        s => s.type === 'given-name' && (s.surname || '').toLowerCase() === group.surname.toLowerCase()
+      );
+      const variantDatasets = group.variants.map(variant => ({
+        name: `${variant.firstName} ${group.surname}`.trim(),
+        firstName: variant.firstName,
+        lastName: group.surname,
+        frequency: variant.frequency,
+        items: variant.items || []
+      }));
+
+      if (existing) {
+        existing.variants = this.mergeVariantLists(existing.variants, variantDatasets);
+        existing.totalFrequency = (existing.totalFrequency || 0) + (group.totalFrequency || 0);
+      } else {
+        suggestions.push({
+          type: 'given-name',
+          surname: group.surname,
+          normalizedGivenNameKey: group.normalizedKey,
+          variants: variantDatasets,
+          totalFrequency: group.totalFrequency,
+          recommendedFirstName: group.recommendedFirstName,
+          recommendedFullName: group.recommendedFullName,
+          primary: group.recommendedFullName || `${variantDatasets[0]?.name || ''}`
+        });
+      }
+    }
+
+    Zotero.debug('ZoteroDBAnalyzer: Generated ' + suggestions.length + ' normalization suggestions (combined)');
     return suggestions;
+  }
+
+  enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups) {
+    if (!suggestion || !givenNameVariantGroups || givenNameVariantGroups.length === 0) {
+      return suggestion;
+    }
+
+    const surname = (suggestion.primary || '').toLowerCase();
+    if (!surname) {
+      return suggestion;
+    }
+
+    const givenNameGroup = givenNameVariantGroups.find(group => group && (group.surname || '').toLowerCase() === surname);
+    if (!givenNameGroup) {
+      return suggestion;
+    }
+
+    suggestion.relatedGivenNameVariants = givenNameGroup.variants.map(variant => ({
+      firstName: variant.firstName,
+      frequency: variant.frequency,
+      items: variant.items || []
+    }));
+    suggestion.relatedGivenNameKey = givenNameGroup.normalizedKey;
+    suggestion.relatedGivenNameTotal = givenNameGroup.totalFrequency;
+
+    return suggestion;
+  }
+
+  mergeVariantLists(existing = [], incoming = []) {
+    if (!incoming || incoming.length === 0) {
+      return existing || [];
+    }
+
+    const byName = new Map();
+
+    for (const variant of existing || []) {
+      if (!variant) continue;
+      const key = variant.name ? variant.name.toLowerCase() : JSON.stringify(variant);
+      if (!byName.has(key)) {
+        byName.set(key, { ...variant, items: variant.items ? [...variant.items] : [] });
+      }
+    }
+
+    for (const variant of incoming) {
+      if (!variant) continue;
+      const key = variant.name ? variant.name.toLowerCase() : JSON.stringify(variant);
+      if (!byName.has(key)) {
+        byName.set(key, { ...variant, items: variant.items ? [...variant.items] : [] });
+      } else {
+        const current = byName.get(key);
+        current.frequency = (current.frequency || 0) + (variant.frequency || 0);
+        current.items = this.mergeItemSummaries(current.items, variant.items);
+      }
+    }
+
+    return Array.from(byName.values()).sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
   }
 
   /**
@@ -546,7 +1084,7 @@ class ZoteroDBAnalyzer {
    * @param {Object} suggestion - Normalization suggestion
    * @returns {Promise<boolean>} Whether to apply the normalization
    */
-  async confirmNormalization(suggestion) {
+  async confirmNormalization() {
     // In a real implementation, this would show a UI dialog
     // For now, we'll auto-confirm for testing purposes
     return true;
