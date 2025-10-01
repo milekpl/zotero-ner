@@ -9,7 +9,12 @@ const mockZoteroDB = {
 };
 
 global.Zotero = {
-  DB: mockZoteroDB
+  DB: mockZoteroDB,
+  debug: jest.fn(),
+  logError: jest.fn(),
+  getMainWindow: () => ({
+    alert: jest.fn()
+  })
 };
 
 const ZoteroDBAnalyzer = require('../../src/zotero/zotero-db-analyzer.js');

@@ -50,13 +50,31 @@ if (typeof Zotero === 'undefined') {
         if (!this.initialized) {
           try {
             if (typeof ZoteroNER !== 'undefined') {
-              Zotero.debug('NER Author Name Normalizer: Core components initialized');
+              if (!this.nerProcessor && typeof ZoteroNER.NERProcessor === 'function') {
+                this.nerProcessor = new ZoteroNER.NERProcessor();
+              }
+              if (!this.nameParser && typeof ZoteroNER.NameParser === 'function') {
+                this.nameParser = new ZoteroNER.NameParser();
+              }
+              if (!this.learningEngine && typeof ZoteroNER.LearningEngine === 'function') {
+                this.learningEngine = new ZoteroNER.LearningEngine();
+              }
+              if (!this.normalizerDialog && typeof ZoteroNER.NormalizerDialog === 'function') {
+                this.normalizerDialog = new ZoteroNER.NormalizerDialog();
+              }
+              this.log('Core components initialized');
+            } else {
+              this.log('ZoteroNER bundle not available during init');
             }
 
             this.initialized = true;
-            Zotero.debug('NER Author Name Normalizer extension initialized');
+            this.log('Extension initialization complete');
           } catch (e) {
-            Zotero.logError(e);
+            if (typeof Zotero !== 'undefined' && typeof Zotero.logError === 'function') {
+              Zotero.logError(e);
+            } else {
+              console.error(e);
+            }
           }
         }
 
@@ -66,11 +84,19 @@ if (typeof Zotero === 'undefined') {
       },
 
       log: function(message) {
-        Zotero.debug('NER Author Name Normalizer: ' + message);
+        const formatted = 'NER Author Name Normalizer: ' + message;
+        if (typeof Zotero !== 'undefined' && typeof Zotero.debug === 'function') {
+          Zotero.debug(formatted);
+        } else {
+          console.log(formatted);
+        }
       },
 
       addUIElements: function(targetWindow) {
-        this.log('addUIElements called for window: ' + (targetWindow ? targetWindow.location.href : 'unknown'));
+        const windowHref = targetWindow && targetWindow.location && targetWindow.location.href
+          ? targetWindow.location.href
+          : 'unknown';
+        this.log('addUIElements called for window: ' + windowHref);
         const win = targetWindow;
         if (!win || !win.document) {
           this.log('No window available to add UI elements');
@@ -168,20 +194,29 @@ if (typeof Zotero === 'undefined') {
             if (!menuItem) {
               if (typeof doc.createXULElement === 'function') {
                 menuItem = doc.createXULElement('menuitem');
-              } else {
+              } else if (typeof doc.createElementNS === 'function') {
                 menuItem = doc.createElementNS(
                   'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
                   'menuitem',
                 );
+              } else if (typeof doc.createElement === 'function') {
+                menuItem = doc.createElement('menuitem');
+              } else {
+                this.log('Document does not support creating menu items');
+                return;
               }
               menuItem.id = this.menuItemId;
               menuItem.setAttribute('label', 'Normalize Author Names');
               menuItem.setAttribute('tooltiptext', 'Normalize author names using NER');
               menuItem.addEventListener('command', commandHandler);
               menuItem.addEventListener('click', commandHandler);
-              toolsPopup.appendChild(menuItem);
-              state.menuElement = menuItem;
-              this.log('Added Tools menu item');
+              if (toolsPopup && typeof toolsPopup.appendChild === 'function') {
+                toolsPopup.appendChild(menuItem);
+                state.menuElement = menuItem;
+                this.log('Added Tools menu item');
+              } else {
+                this.log('Tools popup does not support appendChild');
+              }
             } else if (!state.menuElement) {
               state.menuElement = menuItem;
               this.log('Found existing menu item');
@@ -201,12 +236,14 @@ if (typeof Zotero === 'undefined') {
         addElements();
 
         // Retry after delays
-        win.setTimeout(addElements, 1000);
-        win.setTimeout(addElements, 3000);
-        win.setTimeout(addElements, 5000);
+        if (typeof win.setTimeout === 'function') {
+          win.setTimeout(addElements, 1000);
+          win.setTimeout(addElements, 3000);
+          win.setTimeout(addElements, 5000);
+        }
 
         // Retry on DOM ready
-        if (doc.readyState === 'loading') {
+        if (doc && doc.readyState === 'loading') {
           doc.addEventListener('DOMContentLoaded', addElements);
         } else {
           addElements();
@@ -262,8 +299,19 @@ if (typeof Zotero === 'undefined') {
             this.showDialog(null);
           }
         } catch (error) {
-          Zotero.logError(error);
-          Zotero.getMainWindow().alert('Error', 'Failed to perform full library analysis: ' + error.message);
+          if (typeof Zotero !== 'undefined') {
+            if (typeof Zotero.logError === 'function') {
+              Zotero.logError(error);
+            }
+            if (typeof Zotero.getMainWindow === 'function') {
+              const mainWindow = Zotero.getMainWindow();
+              if (mainWindow && typeof mainWindow.alert === 'function') {
+                mainWindow.alert('Error', 'Failed to perform full library analysis: ' + error.message);
+              }
+            }
+          } else {
+            console.error(error);
+          }
         }
       },
 
@@ -275,6 +323,31 @@ if (typeof Zotero === 'undefined') {
             analysisResults: analysisResults
           };
 
+          var serializedAnalysisResults = null;
+          try {
+            if (analysisResults) {
+              serializedAnalysisResults = JSON.stringify(analysisResults);
+              params.analysisResultsJSON = serializedAnalysisResults;
+            }
+          } catch (serializationError) {
+            this.log('Unable to serialize analysis results for dialog transfer: ' + serializationError.message);
+          }
+
+          if (mainWindow) {
+            try {
+              mainWindow.ZoteroNERDialogParams = params;
+              if (analysisResults) {
+                mainWindow.ZoteroNERAnalysisResults = analysisResults;
+              }
+              if (serializedAnalysisResults) {
+                mainWindow.ZoteroNERDialogParamsJSON = serializedAnalysisResults;
+                mainWindow.ZoteroNERAnalysisResultsJSON = serializedAnalysisResults;
+              }
+            } catch (paramError) {
+              this.log('Unable to cache dialog params on main window: ' + paramError.message);
+            }
+          }
+
           mainWindow.openDialog(
             'chrome://zoteroner/content/dialog.html',
             'zotero-ner-normalization-dialog',
@@ -283,8 +356,19 @@ if (typeof Zotero === 'undefined') {
           );
 
         } catch (e) {
-          Zotero.logError(e);
-          Zotero.getMainWindow().alert('Error', 'An error occurred: ' + e.message);
+          if (typeof Zotero !== 'undefined') {
+            if (typeof Zotero.logError === 'function') {
+              Zotero.logError(e);
+            }
+            if (typeof Zotero.getMainWindow === 'function') {
+              const mainWindow = Zotero.getMainWindow();
+              if (mainWindow && typeof mainWindow.alert === 'function') {
+                mainWindow.alert('Error', 'An error occurred: ' + e.message);
+              }
+            }
+          } else {
+            console.error(e);
+          }
         }
       }
     };

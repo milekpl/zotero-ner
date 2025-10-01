@@ -124,6 +124,18 @@ function shutdown(data, reason) {
 async function onMainWindowLoad({ window }, _reason) {
   console.log('NER Author Name Normalizer: === Entering onMainWindowLoad ===');
   console.log('NER Author Name Normalizer: onMainWindowLoad called for window: ' + (window ? window.location.href : 'unknown'));
+
+  try {
+    if (zoteroNERScope?.ZoteroNER) {
+      window.ZoteroNER = zoteroNERScope.ZoteroNER;
+      console.log('NER Author Name Normalizer: Shared ZoteroNER bundle with window.');
+    } else {
+      console.warn('NER Author Name Normalizer: ZoteroNER bundle not available during onMainWindowLoad.');
+    }
+  } catch (shareError) {
+    console.error('NER Author Name Normalizer: Failed to expose ZoteroNER to window - ' + shareError);
+  }
+
   // Load zotero-ner.js into the window's scope
   Services.scriptloader.loadSubScript(
     `${registeredRootURI}content/scripts/zotero-ner.js`,

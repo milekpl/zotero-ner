@@ -106,6 +106,26 @@
       font-style: italic;
       padding: 20px;
     }
+    .empty-message-content {
+      text-align: left;
+      color: #444;
+      font-style: normal;
+    }
+    .empty-message-content p {
+      margin: 8px 0;
+    }
+    .surname-frequency-list {
+      list-style: disc;
+      padding-left: 20px;
+      margin: 6px 0 0 0;
+    }
+    .surname-frequency-list li {
+      margin: 4px 0;
+    }
+    .surname-frequency-list .surname {
+      font-weight: 600;
+      color: #222;
+    }
     #progress-container { display: none; }
     #suggestions-container:empty::after {
       content: "No suggestions to display.";
@@ -217,7 +237,9 @@
       dbAnalyzer: null,
       isProcessing: false,
       selectedVariantGroupIndex: 0,
-      analysisResults: null,
+  analysisResults: null,
+  items: null,
+  analysisResultsSource: null,
 
       init: function() {
         console.log('Dialog initialization started');
@@ -226,6 +248,119 @@
           this.alert('Error', 'Failed to initialize: ' + error.message);
           window.close();
         });
+      },
+
+      unwrapDialogParams: function(raw) {
+        if (!raw) {
+          return raw;
+        }
+
+        try {
+          if (raw.wrappedJSObject) {
+            return raw.wrappedJSObject;
+          }
+        } catch (err) {
+          this.log('Failed to access wrappedJSObject: ' + err.message);
+        }
+
+        if (typeof raw.getProperty === 'function') {
+          try {
+            const wrapped = raw.getProperty('wrappedJSObject');
+            if (wrapped) {
+              return wrapped;
+            }
+          } catch (err) {
+            this.log('No wrappedJSObject property in param bag: ' + err.message);
+          }
+
+          let items;
+          let analysisResults;
+          let analysisResultsJSON;
+
+          try {
+            items = raw.getProperty('items');
+          } catch (err) {
+            this.log('Unable to read items from param bag: ' + err.message);
+          }
+
+          try {
+            analysisResults = raw.getProperty('analysisResults');
+          } catch (err) {
+            this.log('Unable to read analysisResults from param bag: ' + err.message);
+          }
+
+          try {
+            analysisResultsJSON = raw.getProperty('analysisResultsJSON');
+          } catch (err) {
+            this.log('Unable to read analysisResultsJSON from param bag: ' + err.message);
+          }
+
+          if (analysisResultsJSON || analysisResults || items) {
+            return {
+              items,
+              analysisResults,
+              analysisResultsJSON
+            };
+          }
+        }
+
+        return raw;
+      },
+
+      sanitizeAnalysisResults: function(value, contextLabel = 'analysis results') {
+        if (!value || typeof value !== 'object') {
+          return null;
+        }
+
+        try {
+          const plain = JSON.parse(JSON.stringify(value));
+          this.log('Sanitized ' + contextLabel + ' (suggestions: ' + ((plain && Array.isArray(plain.suggestions)) ? plain.suggestions.length : 'unknown') + ')');
+          return plain;
+        } catch (err) {
+          this.log('Failed to sanitize ' + contextLabel + ': ' + err.message);
+        }
+
+        return null;
+      },
+
+      safeParseJSON: function(jsonString, contextLabel = 'analysisResultsJSON') {
+        if (!jsonString || typeof jsonString !== 'string') {
+          return null;
+        }
+
+        try {
+          const parsed = JSON.parse(jsonString);
+          this.log('Parsed ' + contextLabel + ' (suggestions: ' + ((parsed && Array.isArray(parsed.suggestions)) ? parsed.suggestions.length : 'unknown') + ')');
+          return parsed;
+        } catch (err) {
+          this.log('Failed to parse ' + contextLabel + ': ' + err.message);
+        }
+
+        return null;
+      },
+
+      resolveAnalysisResults: function(params, contextLabel = 'dialog params') {
+        if (!params) {
+          return null;
+        }
+
+        if (params.analysisResults && typeof params.analysisResults === 'object') {
+          const sanitized = this.sanitizeAnalysisResults(params.analysisResults, contextLabel + '.analysisResults');
+          if (sanitized) {
+            this.analysisResultsSource = contextLabel + '.analysisResults';
+            return sanitized;
+          }
+        }
+
+        if (params.analysisResultsJSON) {
+          const parsed = this.safeParseJSON(params.analysisResultsJSON, contextLabel + '.analysisResultsJSON');
+          if (parsed) {
+            this.analysisResultsSource = contextLabel + '.analysisResultsJSON';
+            return parsed;
+          }
+        }
+
+        return null;
       },
 
       log: function(message) {
@@ -248,32 +383,169 @@
           window.alert(title + ': ' + message);
         }
       },
-
+      
       initialize: async function() {
         this.log('Dialog initialize started');
 
-        // Get analysis results from opener global
-        if (window.opener && window.opener.ZoteroNERAnalysisResults) {
-          this.analysisResults = window.opener.ZoteroNERAnalysisResults;
-          this.log('Loaded analysis results from opener: ' + (this.analysisResults.suggestions ? this.analysisResults.suggestions.length : 0) + ' suggestions');
-        } else {
-          this.log('No analysis results from opener');
-          this.showEmptyState();
+        let params = null;
+
+        try {
+          if (typeof window.arguments !== 'undefined' && window.arguments.length > 0) {
+            params = window.arguments[0];
+          }
+        } catch (err) {
+          this.log('Unable to read window arguments: ' + err.message);
+        }
+
+        if (params) {
+          params = this.unwrapDialogParams(params);
+        }
+
+        if (!params && window.ZoteroNERDialogParams) {
+          params = this.unwrapDialogParams(window.ZoteroNERDialogParams);
+        }
+
+        if (!params && window.ZoteroNERDialogParamsJSON) {
+          params = { analysisResultsJSON: window.ZoteroNERDialogParamsJSON };
+        }
+
+        if (!params && window.opener) {
+          try {
+            if (window.opener.ZoteroNERDialogParams) {
+              params = this.unwrapDialogParams(window.opener.ZoteroNERDialogParams);
+            }
+          } catch (err) {
+            this.log('Unable to read ZoteroNERDialogParams from opener: ' + err.message);
+          }
+        }
+
+        if (!params && window.opener && window.opener.ZoteroNERDialogParamsJSON) {
+          params = { analysisResultsJSON: window.opener.ZoteroNERDialogParamsJSON };
+        }
+
+        if (!params && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
+          params = { analysisResultsJSON: window.opener.ZoteroNERAnalysisResultsJSON };
+        }
+
+        if (!params && window.opener && window.opener.ZoteroNERAnalysisResults) {
+          const sanitized = this.sanitizeAnalysisResults(window.opener.ZoteroNERAnalysisResults, 'opener.ZoteroNERAnalysisResults');
+          if (sanitized) {
+            params = { analysisResults: sanitized };
+          }
+        }
+
+        if (!params && window.ZoteroNERAnalysisResultsJSON) {
+          params = { analysisResultsJSON: window.ZoteroNERAnalysisResultsJSON };
+        }
+
+        if (!params && window.ZoteroNERAnalysisResults) {
+          const sanitizedCurrent = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults');
+          if (sanitizedCurrent) {
+            params = { analysisResults: sanitizedCurrent };
+          }
+        }
+
+        let analysisResults = null;
+        if (params) {
+          analysisResults = this.resolveAnalysisResults(params, 'dialog params');
+
+          if (!analysisResults && !params.analysisResults && !params.analysisResultsJSON) {
+            const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
+            if (direct) {
+              analysisResults = direct;
+              this.analysisResultsSource = 'dialog params direct';
+            }
+          }
+
+          if (params.items) {
+            this.items = params.items;
+          }
+        }
+
+        if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
+          analysisResults = this.safeParseJSON(window.opener.ZoteroNERAnalysisResultsJSON, 'opener.ZoteroNERAnalysisResultsJSON');
+        }
+
+        if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResults) {
+          analysisResults = this.sanitizeAnalysisResults(window.opener.ZoteroNERAnalysisResults, 'opener.ZoteroNERAnalysisResults direct');
+        }
+
+        if (!analysisResults && window.ZoteroNERAnalysisResultsJSON) {
+          analysisResults = this.safeParseJSON(window.ZoteroNERAnalysisResultsJSON, 'window.ZoteroNERAnalysisResultsJSON');
+        }
+
+        if (!analysisResults && window.ZoteroNERAnalysisResults) {
+          analysisResults = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults direct');
+        }
+
+        this.analysisResults = analysisResults;
+
+        if (!this.analysisResults) {
+          this.log('No analysis results found');
+          this.showEmptyState('No analysis results were provided to the dialog.');
+          this.updateProgress();
           return;
         }
 
+        this.log('Analysis results source: ' + (this.analysisResultsSource || 'unknown'));
+        this.log('Analysis results loaded: ' + (this.analysisResults.suggestions ? this.analysisResults.suggestions.length : 0) + ' suggestions; unique surnames: ' + (this.analysisResults.totalUniqueSurnames ?? 'unknown'));
+
         this.updateSummaryHeader();
-        this.populateVariantGroupList();
-        this.renderCurrentVariantGroup();
+        const hasVariantGroups = this.populateVariantGroupList();
+        if (hasVariantGroups) {
+          this.renderCurrentVariantGroup();
+        }
         this.updateProgress();
       },
 
-      showEmptyState: function() {
-        ZoteroNER_HTMLUtils.setHidden('summary-group', true);
+      showEmptyState: function(message) {
+        if (this.analysisResults) {
+          this.updateSummaryHeader();
+        } else {
+          ZoteroNER_HTMLUtils.setHidden('summary-group', true);
+        }
+
         ZoteroNER_HTMLUtils.clearContainer('variant-group-list');
-        const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
-        if (emptyMsg) emptyMsg.style.display = 'block';
+        const suggestionsContainer = ZoteroNER_HTMLUtils.getElement('suggestions-container');
+        if (suggestionsContainer) {
+          suggestionsContainer.innerHTML = '';
+        }
+        ZoteroNER_HTMLUtils.setHidden('suggestions-group', true);
+
         this.setApplyEnabled(false);
+
+        const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
+        if (emptyMsg) {
+          const frequencies = this.analysisResults && this.analysisResults.surnameFrequencies
+            ? Object.entries(this.analysisResults.surnameFrequencies)
+            : [];
+          const totalUnique = this.analysisResults && typeof this.analysisResults.totalUniqueSurnames === 'number'
+            ? this.analysisResults.totalUniqueSurnames
+            : 0;
+          const topFrequencies = frequencies
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+          let html = '<div class="empty-message-content">';
+          html += `<p>${message || 'No variant groups found. All creator names appear to be consistent.'}</p>`;
+
+          if (totalUnique) {
+            html += `<p><strong>Total unique surnames scanned:</strong> ${totalUnique}</p>`;
+          }
+
+          if (topFrequencies.length > 0) {
+            html += '<p><strong>Top surnames by frequency:</strong></p>';
+            html += '<ul class="surname-frequency-list">';
+            topFrequencies.forEach(([name, count]) => {
+              html += `<li><span class="surname">${this.formatSurnameKey(name)}</span> <span class="frequency">(${count})</span></li>`;
+            });
+            html += '</ul>';
+          }
+
+          html += '</div>';
+          emptyMsg.innerHTML = html;
+          emptyMsg.style.display = 'block';
+        }
       },
 
       updateSummaryHeader: function() {
@@ -286,15 +558,22 @@
       },
 
       populateVariantGroupList: function() {
-        if (!this.analysisResults || !this.analysisResults.suggestions || this.analysisResults.suggestions.length === 0) {
-          this.showEmptyState();
-          return;
+        const list = ZoteroNER_HTMLUtils.getElement('variant-group-list');
+        if (list) {
+          ZoteroNER_HTMLUtils.clearContainer('variant-group-list');
         }
 
-        const list = ZoteroNER_HTMLUtils.getElement('variant-group-list');
-        if (!list) return;
+        const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
+        if (emptyMsg) {
+          emptyMsg.style.display = 'none';
+        }
 
-        ZoteroNER_HTMLUtils.clearContainer('variant-group-list');
+        if (!this.analysisResults || !Array.isArray(this.analysisResults.suggestions) || this.analysisResults.suggestions.length === 0) {
+          this.showEmptyState('No variant groups were detected for the scanned surnames.');
+          return false;
+        }
+
+        if (!list) return false;
 
         this.analysisResults.suggestions.forEach((suggestion, i) => {
           const listItem = ZoteroNER_HTMLUtils.createElement('li', { 
@@ -307,10 +586,16 @@
           title.textContent = `Variant group ${i + 1}`;
 
           const primary = ZoteroNER_HTMLUtils.createElement('div', { class: 'zotero-ner-variant-group-primary primary' });
-          primary.innerHTML = '<strong>Primary:</strong> ' + this.formatNameString(suggestion.primary);
+          const primaryName = this.escapeHTML(this.formatNameString(suggestion.primary));
+          primary.innerHTML = '<strong>Primary:</strong> ' + primaryName;
 
           const variantsDiv = ZoteroNER_HTMLUtils.createElement('div', { class: 'zotero-ner-variant-group-variants' });
-          const variantNames = suggestion.variants.map(v => `<span class="variant">${this.formatNameString(v.name)} <span class="frequency">(${v.frequency})</span></span>`).join(', ');
+          const variantNames = suggestion.variants
+            .map(v => {
+              const variantName = this.escapeHTML(this.formatNameString(v.name));
+              return `<span class="variant">${variantName} <span class="frequency">(${v.frequency})</span></span>`;
+            })
+            .join(', ');
           variantsDiv.innerHTML = '<strong>Variants:</strong> ' + variantNames;
 
           container.appendChild(title);
@@ -321,6 +606,7 @@
         });
 
         this.highlightVariantGroup();
+        return true;
       },
 
       renderCurrentVariantGroup: function() {
@@ -347,7 +633,8 @@
 
         // Primary
         const primaryLabel = ZoteroNER_HTMLUtils.createElement('div', { class: 'primary ner-creator-original' });
-        primaryLabel.innerHTML = 'Recommended normalization: <strong>' + this.formatNameString(suggestion.primary) + '</strong>';
+  const primaryName = this.escapeHTML(this.formatNameString(suggestion.primary));
+  primaryLabel.innerHTML = 'Recommended normalization: <strong>' + primaryName + '</strong>';
         body.appendChild(primaryLabel);
 
         // Radio group
@@ -420,6 +707,32 @@
           return `${name.firstName || ''} ${name.lastName || ''}`.trim();
         }
         return '';
+      },
+
+      escapeHTML: function(value) {
+        if (typeof value !== 'string') {
+          return '';
+        }
+        const map = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        };
+        return value.replace(/[&<>"']/g, (char) => map[char]);
+      },
+
+      formatSurnameKey: function(value) {
+        if (!value || typeof value !== 'string') {
+          return '';
+        }
+        const titleCased = value
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+        return this.escapeHTML(titleCased);
       },
 
       setApplyEnabled: function(enabled) {
