@@ -1,8 +1,7 @@
 /**
  * Legacy placeholder retained for backwards compatibility.
  *
- * The real dialog logic is implemented in `normalization-dialog-controller.js`,
- * which defines the global `ZoteroNER_NormalizationDialog` consumed by the XUL
- * dialog. This file intentionally contains no behavior so the new controller
- * always runs.
+ * The interactive logic now lives in the HTML dialog (`content/dialog.html`).
+ * This legacy shell is retained only so the historic XUL entry point keeps
+ * loading without errors if it happens to be opened.
  */

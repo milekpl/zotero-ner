@@ -197,34 +197,78 @@
       color: #555;
       margin-top: 4px;
     }
+    #variant-section {
+      margin: 20px 0;
+    }
+    #variant-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    #variant-groups-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
     .variant-detail {
-      margin: 16px 0;
-      padding: 12px 14px;
+      padding: 16px;
       border: 1px solid #d0d7de;
-      border-radius: 4px;
+      border-radius: 6px;
       background: #fff;
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+      position: sticky;
+      top: 0;
+      max-height: calc(100vh - 220px);
+      overflow: hidden;
+      display: block;
+      transition: box-shadow 0.2s ease;
+    }
+    .variant-detail.hidden {
       display: none;
     }
     .variant-detail h4 {
       margin: 0 0 6px 0;
       color: #005a9c;
-      font-size: 1em;
+      font-size: 1.05em;
     }
     .variant-detail-context {
       font-size: 0.9em;
       color: #586069;
       margin-bottom: 8px;
     }
+    .variant-detail-empty {
+      font-size: 0.9em;
+      color: #69737d;
+      line-height: 1.4;
+      padding: 12px 0;
+    }
+    .variant-detail.empty #variant-detail-items,
+    .variant-detail.empty .variant-detail-context {
+      display: none;
+    }
+    .variant-detail:not(.empty) .variant-detail-empty {
+      display: none;
+    }
     .variant-detail-items {
       list-style: disc;
       padding-left: 18px;
       margin: 0;
-      max-height: 200px;
+      max-height: calc(100vh - 320px);
       overflow-y: auto;
     }
     .variant-detail-items li {
       margin: 4px 0;
       line-height: 1.35;
+    }
+    @media (max-width: 960px) {
+      #variant-layout {
+        grid-template-columns: 1fr;
+      }
+      .variant-detail {
+        position: static;
+        max-height: none;
+      }
     }
   </style>
 </head>
@@ -250,20 +294,23 @@
     <span id="progress-label">Processing...</span>
   </div>
 
-  <!-- Variant groups list -->
-  <div id="variant-groups" style="margin: 20px 0;">
+  <!-- Variant groups + detail layout -->
+  <div id="variant-section">
     <h3>Creator Variant Groups</h3>
     <p id="variant-groups-description">Review variant groups discovered in your library. Each entry represents multiple creator spellings that may refer to the same person.</p>
-    <div id="variant-groups-container">
-      <!-- Variant groups will be dynamically populated here -->
+    <div id="variant-layout">
+      <div id="variant-groups-column">
+        <div id="variant-groups-container">
+          <!-- Variant groups will be dynamically populated here -->
+        </div>
+      </div>
+      <aside id="variant-detail-panel" class="variant-detail empty hidden">
+        <h4 id="variant-detail-title">Variant details</h4>
+        <div id="variant-detail-context" class="variant-detail-context"></div>
+        <div id="variant-detail-empty" class="variant-detail-empty">Select a variant pill to review sample items and occurrences.</div>
+        <ul id="variant-detail-items"></ul>
+      </aside>
     </div>
-  </div>
-
-  <!-- Variant detail viewer -->
-  <div id="variant-detail-panel" class="variant-detail">
-    <h4 id="variant-detail-title">Variant details</h4>
-    <div id="variant-detail-context" class="variant-detail-context"></div>
-    <ul id="variant-detail-items"></ul>
   </div>
 
   <!-- Empty state -->

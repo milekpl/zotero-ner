@@ -503,6 +503,201 @@ class ZoteroDBAnalyzer {
     return surnameGroups;
   }
 
+  parseGivenNameTokens(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const tokens = trimmed.split(/[\s-]+/).filter(Boolean);
+    const parsed = [];
+
+    for (const token of tokens) {
+      const cleaned = token.replace(/[^A-Za-z]/g, '');
+      if (!cleaned) {
+        continue;
+      }
+
+      if (this.isLikelyInitialSequence(cleaned, token)) {
+        cleaned.toUpperCase().split('').forEach(letter => {
+          parsed.push({ type: 'initial', value: letter });
+        });
+        continue;
+      }
+
+      if (cleaned.length === 1) {
+        parsed.push({ type: 'initial', value: cleaned.toUpperCase() });
+      } else {
+        parsed.push({ type: 'word', value: this.toTitleCase(cleaned) });
+      }
+    }
+
+    return parsed;
+  }
+
+  isLikelyInitialSequence(cleanedValue, originalToken = '') {
+    if (!cleanedValue) {
+      return false;
+    }
+
+    const upper = cleanedValue.toUpperCase();
+    if (upper.length < 2 || upper.length > 4) {
+      return false;
+    }
+
+    if (/[^A-Z]/.test(upper)) {
+      return false;
+    }
+
+    if (/\./.test(originalToken)) {
+      return true;
+    }
+
+    const vowelPattern = /[AEIOUY]/;
+    if (!vowelPattern.test(upper)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  selectCanonicalGivenNameData(bucket, normalizedKey) {
+    const fallbackBase = normalizedKey && !normalizedKey.startsWith('initial:')
+      ? this.toTitleCase(normalizedKey)
+      : '';
+
+    let bestTokens = [];
+    let bestWeight = -Infinity;
+
+    for (const creator of bucket || []) {
+      const rawFirst = (creator.parsedName?.firstName || creator.firstName || '').trim();
+      if (!rawFirst) {
+        continue;
+      }
+
+      const tokens = this.parseGivenNameTokens(rawFirst);
+      if (tokens.length === 0) {
+        continue;
+      }
+
+      const hasWord = tokens.some(token => token.type === 'word');
+      let weight = (creator.count || 1) + tokens.length;
+      if (hasWord) {
+        weight += 1000;
+      }
+
+      if (weight > bestWeight) {
+        bestTokens = tokens;
+        bestWeight = weight;
+      }
+    }
+
+    const baseWordToken = bestTokens.find(token => token.type === 'word');
+    const baseWord = baseWordToken ? baseWordToken.value : fallbackBase;
+
+    const extraWords = [];
+    const initials = [];
+    let encounteredBase = false;
+
+    for (const token of bestTokens) {
+      if (token.type === 'word') {
+        if (!encounteredBase && (!baseWordToken || token.value === baseWordToken.value)) {
+          encounteredBase = true;
+          continue;
+        }
+        if (!extraWords.includes(token.value)) {
+          extraWords.push(token.value);
+        }
+      } else if (token.type === 'initial') {
+        const upper = token.value.toUpperCase();
+        if (!initials.includes(upper)) {
+          initials.push(upper);
+        }
+      }
+    }
+
+    return {
+      baseWord,
+      extraWords,
+      initials
+    };
+  }
+
+  composeGivenNameFromTokens(tokens, canonicalData = {}) {
+    const baseWordDefault = canonicalData.baseWord || '';
+    const canonicalExtraWords = canonicalData.extraWords || [];
+    const canonicalInitials = canonicalData.initials || [];
+
+    let basePart = '';
+    const additionalWords = [];
+    const orderedInitials = [];
+
+    for (const token of tokens || []) {
+      if (token.type === 'word') {
+        if (!basePart) {
+          basePart = token.value;
+        } else if (!additionalWords.includes(token.value)) {
+          additionalWords.push(token.value);
+        }
+      } else if (token.type === 'initial') {
+        const upper = token.value.toUpperCase();
+        if (!orderedInitials.includes(upper)) {
+          orderedInitials.push(upper);
+        }
+      }
+    }
+
+    if (!basePart && baseWordDefault) {
+      basePart = baseWordDefault;
+    }
+
+    const baseInitial = basePart ? basePart.charAt(0).toUpperCase() : '';
+
+    if (!basePart && orderedInitials.length > 0) {
+      basePart = `${orderedInitials[0]}.`;
+      orderedInitials.shift();
+    }
+
+    canonicalExtraWords.forEach(word => {
+      if (!word) {
+        return;
+      }
+      if (!additionalWords.includes(word) && word !== basePart) {
+        additionalWords.push(word);
+      }
+    });
+
+    const combinedInitials = [];
+    const seenInitials = new Set();
+
+    const appendInitial = (letter) => {
+      if (!letter) {
+        return;
+      }
+      const upper = letter.toUpperCase();
+      if (upper === baseInitial && !seenInitials.has(upper)) {
+        seenInitials.add(upper);
+        return;
+      }
+      if (!seenInitials.has(upper)) {
+        combinedInitials.push(`${upper}.`);
+        seenInitials.add(upper);
+      }
+    };
+
+    orderedInitials.forEach(letter => appendInitial(letter));
+    canonicalInitials.forEach(letter => appendInitial(letter));
+
+    const parts = [];
+    if (basePart) {
+      parts.push(basePart);
+    }
+    parts.push(...additionalWords);
+    parts.push(...combinedInitials);
+
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
   findGivenNameVariantGroups(creatorsBySurname) {
     const groups = [];
 
@@ -553,11 +748,17 @@ class ZoteroDBAnalyzer {
         continue;
       }
 
+      const canonicalData = this.selectCanonicalGivenNameData(bucket, normalizedKey);
       const fullNames = new Map();
       let totalCount = 0;
 
       for (const creator of bucket) {
-        const displayFirst = this.rehydrateGivenName(creator.parsedName?.firstName || creator.firstName || '', normalizedKey);
+        const rawFirst = (creator.parsedName?.firstName || creator.firstName || '').trim();
+        const tokens = this.parseGivenNameTokens(rawFirst);
+        const displayFirst = this.composeGivenNameFromTokens(tokens, canonicalData)
+          || canonicalData.baseWord
+          || rawFirst;
+
         const variantKey = `${displayFirst}|${creator.lastName}`.toLowerCase();
         const existing = fullNames.get(variantKey) || {
           firstName: displayFirst,
@@ -568,7 +769,8 @@ class ZoteroDBAnalyzer {
 
         existing.frequency += creator.count || 1;
         totalCount += creator.count || 1;
-        const nameKey = `${creator.parsedName?.firstName || creator.firstName || ''}|${creator.lastName}`;
+
+        const nameKey = `${rawFirst}|${creator.lastName}`;
         if (itemsByKey.has(nameKey)) {
           existing.items = this.mergeItemSummaries(existing.items, itemsByKey.get(nameKey));
         }
@@ -581,7 +783,7 @@ class ZoteroDBAnalyzer {
       }
 
       const variantsArray = Array.from(fullNames.values());
-      const recommendation = this.buildGivenNameRecommendation(variantsArray, surname);
+      const recommendation = this.buildGivenNameRecommendation(variantsArray, surname, canonicalData);
 
       groups.push({
         surname,
@@ -615,39 +817,15 @@ class ZoteroDBAnalyzer {
       return `initial:${cleanedTokens.join('')}`;
     }
 
+    if (cleanedTokens.length === 1 && this.isLikelyInitialSequence(cleanedTokens[0], tokens[0])) {
+      return `initial:${cleanedTokens[0].toUpperCase()}`;
+    }
+
     if (COMMON_GIVEN_NAME_EQUIVALENTS[primaryToken]) {
       return COMMON_GIVEN_NAME_EQUIVALENTS[primaryToken];
     }
 
     return primaryToken;
-  }
-
-  rehydrateGivenName(original, normalizedKey) {
-    if (!normalizedKey) {
-      return original;
-    }
-
-    if (normalizedKey.startsWith('initial:')) {
-      const initials = normalizedKey.replace('initial:', '').toUpperCase();
-      return initials
-        .split('')
-        .map(letter => `${letter}.`)
-        .join(' ')
-        .trim();
-    }
-
-    const canonical = this.toTitleCase(normalizedKey);
-    const parsedOriginal = original || '';
-
-    if (!parsedOriginal) {
-      return canonical;
-    }
-
-    if (/^[A-Z]\.([A-Z]\.)?$/.test(parsedOriginal)) {
-      return parsedOriginal;
-    }
-
-    return canonical;
   }
 
   mergeItemSummaries(existing = [], incoming = []) {
@@ -696,8 +874,10 @@ class ZoteroDBAnalyzer {
         continue;
       }
 
-      const firstLetter = initials.charAt(0);
-      const destinationKey = canonicalKeys.find(canonicalKey => canonicalKey.charAt(0) === firstLetter);
+      const firstLetter = initials.charAt(0).toLowerCase();
+      const destinationKey = canonicalKeys.find(
+        canonicalKey => canonicalKey.charAt(0).toLowerCase() === firstLetter
+      );
 
       if (destinationKey) {
         const destination = normalizedBuckets.get(destinationKey);
@@ -709,7 +889,7 @@ class ZoteroDBAnalyzer {
     return normalizedBuckets;
   }
 
-  buildGivenNameRecommendation(variants, surname) {
+  buildGivenNameRecommendation(variants, surname, canonicalData = {}) {
     if (!variants || variants.length === 0) {
       return {
         firstName: '',
@@ -717,47 +897,77 @@ class ZoteroDBAnalyzer {
       };
     }
 
-    const sorted = [...variants].sort((a, b) => this.scoreGivenNameVariant(b) - this.scoreGivenNameVariant(a));
-    const baseVariant = sorted[0];
-    const baseFirstName = this.toTitleCase(baseVariant?.firstName || '');
-    const baseInitial = baseFirstName ? baseFirstName.charAt(0).toUpperCase() : '';
+    const pushUnique = (collection, value) => {
+      if (!value) {
+        return;
+      }
+      if (!collection.includes(value)) {
+        collection.push(value);
+      }
+    };
 
-    const additionalInitials = [];
+    let baseWord = canonicalData.baseWord ? this.toTitleCase(canonicalData.baseWord) : '';
+    const extraWords = [];
+    const initials = [];
 
     for (const variant of variants) {
-      const tokens = (variant.firstName || '').split(/[\s-]+/).filter(Boolean);
-      tokens.forEach((token, index) => {
-        const cleaned = token.replace(/\./g, '').toUpperCase();
-        if (cleaned.length === 1) {
-          if ((index === 0 && cleaned === baseInitial) || additionalInitials.includes(cleaned)) {
-            return;
+      const tokens = this.parseGivenNameTokens(variant.firstName || '');
+      let encounteredWord = false;
+
+      for (const token of tokens) {
+        if (token.type === 'word') {
+          if (!encounteredWord) {
+            encounteredWord = true;
+            if (!baseWord) {
+              baseWord = token.value;
+            }
+          } else {
+            pushUnique(extraWords, token.value);
           }
-          additionalInitials.push(cleaned);
+        } else if (token.type === 'initial') {
+          pushUnique(initials, token.value.toUpperCase());
         }
-      });
+      }
     }
 
-    let recommendedFirst = baseFirstName;
+    (canonicalData.extraWords || []).forEach(word => pushUnique(extraWords, word));
+    (canonicalData.initials || []).forEach(letter => pushUnique(initials, letter.toUpperCase()));
 
-    if (!recommendedFirst) {
-      if (additionalInitials.length > 0) {
-        recommendedFirst = additionalInitials.map(letter => `${letter}.`).join(' ');
+    if (!baseWord) {
+      const fallbackTokens = this.parseGivenNameTokens(variants[0].firstName || '');
+      const fallbackWord = fallbackTokens.find(token => token.type === 'word');
+      if (fallbackWord) {
+        baseWord = fallbackWord.value;
       } else {
-        recommendedFirst = this.toTitleCase(variants[0].firstName || '');
-      }
-    } else {
-      const extraInitials = additionalInitials.filter(letter => letter !== baseInitial);
-      if (extraInitials.length > 0) {
-        const suffix = extraInitials.map(letter => `${letter}.`).join(' ');
-        if (suffix) {
-          recommendedFirst = `${recommendedFirst} ${suffix}`.trim();
+        const fallbackInitial = fallbackTokens.find(token => token.type === 'initial');
+        if (fallbackInitial) {
+          const fallbackLetter = fallbackInitial.value.toUpperCase();
+          baseWord = `${fallbackLetter}.`;
+          const idx = initials.indexOf(fallbackLetter);
+          if (idx !== -1) {
+            initials.splice(idx, 1);
+          }
         }
       }
     }
 
-    const recommendedFullName = surname
-      ? `${recommendedFirst} ${surname}`.trim()
-      : recommendedFirst;
+    const baseInitial = baseWord ? baseWord.charAt(0).toUpperCase() : '';
+    if (baseInitial) {
+      const index = initials.indexOf(baseInitial);
+      if (index !== -1) {
+        initials.splice(index, 1);
+      }
+    }
+
+    const recommendedParts = [];
+    if (baseWord) {
+      recommendedParts.push(baseWord);
+    }
+    recommendedParts.push(...extraWords);
+    initials.forEach(letter => recommendedParts.push(`${letter}.`));
+
+    const recommendedFirst = recommendedParts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    const recommendedFullName = surname ? `${recommendedFirst} ${surname}`.trim() : recommendedFirst;
 
     return {
       firstName: recommendedFirst,
