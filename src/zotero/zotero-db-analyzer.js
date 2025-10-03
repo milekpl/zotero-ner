@@ -51,6 +51,13 @@ const COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
   michael: 'michael',
   mick: 'michael',
   mickey: 'michael'
+  ,
+  // Added high-value nickname mappings
+  paco: 'francisco',
+  pepe: 'jose',
+  che: 'ernesto',
+  manu: 'manuel',
+  toni: 'antonio'
 });
 class ZoteroDBAnalyzer {
   constructor() {
@@ -1010,10 +1017,16 @@ class ZoteroDBAnalyzer {
       return '';
     }
 
+    // Title-case each word, and also uppercase letters after apostrophes or hyphens
     return value
-      .split(/[\s-]+/)
+      .split(/\s+/)
       .filter(Boolean)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .map(part => {
+        const lowered = part.toLowerCase();
+        // Capitalize first letter and letters after apostrophes or hyphens (supports accented letters)
+        // Use Unicode property escapes to match letters
+        return lowered.replace(/(^|['`-])(\p{L})/gu, (m, p, c) => p + c.toUpperCase());
+      })
       .join(' ');
   }
 

@@ -348,10 +348,11 @@ if (typeof Zotero === 'undefined') {
             }
           }
 
+          // Open the dialog slightly wider so the variant detail panel is visible
           mainWindow.openDialog(
             'chrome://zoteroner/content/dialog.html',
             'zotero-ner-normalization-dialog',
-            'chrome,modal,resizable=yes,dialog=yes,width=800,height=600',
+            'chrome,modal,resizable=yes,dialog=yes,width=1200,height=700',
             params
           );
 

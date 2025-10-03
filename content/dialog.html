@@ -584,9 +584,13 @@
 
         let analysisResults = null;
         if (params) {
+          // First try resolving known analysisResults properties
           analysisResults = this.resolveAnalysisResults(params, 'dialog params');
 
-          if (!analysisResults && !params.analysisResults && !params.analysisResultsJSON) {
+          // If resolution failed, but the params object itself looks like the analysis results,
+          // attempt to sanitize it directly. This covers callers that passed the plain object
+          // as the params bag instead of under the analysisResults key.
+          if (!analysisResults) {
             const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
             if (direct) {
               analysisResults = direct;
@@ -793,7 +797,10 @@
         }
 
         if (typeof suggestion.primary === 'string') {
-          return suggestion.primary.trim();
+          // For surname suggestions, return a title-cased display value
+          return suggestion.type === 'surname'
+            ? this.formatSurnameKey(suggestion.primary.trim())
+            : suggestion.primary.trim();
         }
 
         return this.formatNameString(suggestion.primary);
@@ -827,11 +834,14 @@
       },
 
       buildRecommendedHTML: function(suggestion, recommendedValue) {
-        const safeValue = this.escapeHTML(recommendedValue || '');
+        const rawValue = recommendedValue || '';
+        const safeValue = this.escapeHTML(rawValue);
         if (suggestion.type === 'given-name') {
           return 'Recommended full name: <strong>' + safeValue + '</strong>';
         }
-        return 'Recommended normalization: <strong>' + safeValue + '</strong>';
+        // For surname recommendations, display a title-cased, escaped version
+        const display = this.formatSurnameKey(rawValue);
+        return 'Recommended normalization: <strong>' + display + '</strong>';
       },
 
       getVariantSummaryText: function(suggestion) {
@@ -856,6 +866,17 @@
         if (suggestion.type === 'given-name') {
           const name = variant.firstName || variant.name || '';
           return `${this.titleCase(name)}${frequency}`;
+        }
+
+        // For surname variants, prefer a title-cased surname display when the variant looks like a last name
+        if (typeof variant.name === 'string') {
+          const nameCandidate = variant.name.trim();
+          if (nameCandidate) {
+            if (/^[a-z\s'\-]+$/i.test(nameCandidate)) {
+              return `${this.formatSurnameKey(nameCandidate)}${frequency}`;
+            }
+            return `${this.formatNameString(nameCandidate)}${frequency}`;
+          }
         }
 
         return `${this.formatNameString(variant.name)}${frequency}`;
@@ -964,6 +985,9 @@
           return;
         }
 
+        // Remove placeholder classes so the detail view replaces the empty message
+        panel.classList.remove('empty');
+        panel.classList.remove('hidden');
         panel.style.display = 'block';
 
         const titleEl = ZoteroNER_HTMLUtils.getElement('variant-detail-title');
@@ -1013,6 +1037,8 @@
         const panel = ZoteroNER_HTMLUtils.getElement('variant-detail-panel');
         if (panel) {
           panel.style.display = 'none';
+          panel.classList.add('empty');
+          panel.classList.add('hidden');
         }
 
         const contextEl = ZoteroNER_HTMLUtils.getElement('variant-detail-context');
