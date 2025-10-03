@@ -4,60 +4,121 @@
  */
 
 const COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
+  alex: 'alexander',
+  alexander: 'alexander',
+  alexandra: 'alexandra',
+  alexis: 'alexander',
+  ally: 'allison',
+  ann: 'anne',
+  anna: 'anne',
+  annie: 'anne',
+  anthony: 'anthony',
+  antonio: 'antonio',
+  beth: 'elizabeth',
+  betsy: 'elizabeth',
+  betty: 'elizabeth',
+  bill: 'william',
+  billy: 'william',
+  bob: 'robert',
+  bobby: 'robert',
+  charles: 'charles',
+  charlie: 'charles',
+  charlotte: 'charlotte',
+  chaz: 'charles',
+  che: 'ernesto',
+  chuck: 'charles',
+  cathy: 'catherine',
+  catherine: 'catherine',
+  cathie: 'catherine',
+  cathryn: 'catherine',
+  frank: 'francis',
+  francis: 'francis',
+  francisco: 'francisco',
+  fran: 'francis',
   frederic: 'frederick',
   frederick: 'frederick',
   fred: 'frederick',
   freddie: 'frederick',
   freddy: 'frederick',
-  harry: 'harry',
   harold: 'harold',
-  henry: 'henry',
+  harry: 'harry',
   hal: 'harold',
-  bob: 'robert',
-  bobby: 'robert',
-  rob: 'robert',
-  robert: 'robert',
-  robbie: 'robert',
-  william: 'william',
-  will: 'william',
-  bill: 'william',
-  billy: 'william',
-  willie: 'william',
-  elizabeth: 'elizabeth',
-  liz: 'elizabeth',
-  lizzie: 'elizabeth',
-  beth: 'elizabeth',
-  betty: 'elizabeth',
+  hank: 'henry',
+  henry: 'henry',
+  jack: 'john',
+  jacob: 'jacob',
+  jake: 'jacob',
+  james: 'james',
+  jamie: 'james',
+  jen: 'jennifer',
+  jenn: 'jennifer',
+  jenny: 'jennifer',
+  jennifer: 'jennifer',
+  jesse: 'jessica',
+  jess: 'jessica',
+  jessica: 'jessica',
+  jim: 'james',
+  jimmy: 'james',
+  joe: 'joseph',
+  joey: 'joseph',
+  john: 'john',
   jon: 'jonathan',
   jonathan: 'jonathan',
-  john: 'john',
-  jack: 'john',
+  jose: 'jose',
+  joseph: 'joseph',
+  joyce: 'joyce',
   kate: 'katherine',
   katherine: 'katherine',
-  catherine: 'catherine',
-  cathy: 'catherine',
   kathy: 'catherine',
-  alex: 'alexander',
-  alexander: 'alexander',
-  alexandra: 'alexandra',
-  sandy: 'alexander',
-  sasha: 'alexander',
+  katy: 'katherine',
+  katie: 'katherine',
+  liz: 'elizabeth',
+  lizzie: 'elizabeth',
+  lou: 'louis',
+  louis: 'louis',
   maggie: 'margaret',
   margaret: 'margaret',
-  peggy: 'margaret',
-  meg: 'margaret',
+  marie: 'mary',
+  mary: 'mary',
   megan: 'margaret',
-  mike: 'michael',
+  meg: 'margaret',
   michael: 'michael',
   mick: 'michael',
-  mickey: 'michael'
-  ,
-  // Added high-value nickname mappings
-  paco: 'francisco',
-  pepe: 'jose',
-  che: 'ernesto',
+  mickey: 'michael',
+  mike: 'michael',
+  manuel: 'manuel',
   manu: 'manuel',
-  toni: 'antonio'
+  nancy: 'anne',
+  nick: 'nicholas',
+  nicholas: 'nicholas',
+  nico: 'nicholas',
+  paco: 'francisco',
+  patricia: 'patricia',
+  patty: 'patricia',
+  peggy: 'margaret',
+  pepe: 'jose',
+  rick: 'richard',
+  rich: 'richard',
+  richard: 'richard',
+  ricky: 'richard',
+  rob: 'robert',
+  robbie: 'robert',
+  robert: 'robert',
+  ron: 'ronald',
+  ronnie: 'ronald',
+  ronald: 'ronald',
+  rose: 'rose',
+  rosie: 'rose',
+  sasha: 'alexander',
+  sandy: 'alexander',
+  ted: 'theodore',
+  teddy: 'theodore',
+  theodore: 'theodore',
+  toni: 'antonio',
+  tonya: 'antonia',
+  will: 'william',
+  willie: 'william',
+  william: 'william'
 });
 class ZoteroDBAnalyzer {
   constructor() {
@@ -542,6 +603,151 @@ class ZoteroDBAnalyzer {
     return parsed;
   }
 
+  extractTokenSignature(tokens = []) {
+    const initials = new Set();
+    const extraWords = new Set();
+    let baseConsumed = false;
+
+    for (const token of tokens) {
+      if (!token) {
+        continue;
+      }
+      if (token.type === 'word') {
+        if (!baseConsumed) {
+          baseConsumed = true;
+          continue;
+        }
+        extraWords.add(token.value.toLowerCase());
+      } else if (token.type === 'initial') {
+        initials.add(token.value.toUpperCase());
+      }
+    }
+
+    return {
+      initials: Array.from(initials),
+      extraWords: Array.from(extraWords)
+    };
+  }
+
+  mergeTokenSignatures(signatures = []) {
+    const initials = new Set();
+    const extraWords = new Set();
+
+    for (const sig of signatures) {
+      if (!sig) {
+        continue;
+      }
+      (sig.initials || []).forEach(letter => initials.add(letter.toUpperCase()));
+      (sig.extraWords || []).forEach(word => extraWords.add(word.toLowerCase()));
+    }
+
+    return {
+      initials: Array.from(initials),
+      extraWords: Array.from(extraWords)
+    };
+  }
+
+  signaturesOverlap(signatureA, signatureB) {
+    if (!signatureA || !signatureB) {
+      return false;
+    }
+
+    const initialsA = new Set((signatureA.initials || []).map(letter => letter.toUpperCase()));
+    for (const letter of signatureB.initials || []) {
+      if (initialsA.has(letter.toUpperCase())) {
+        return true;
+      }
+    }
+
+    const wordsA = new Set((signatureA.extraWords || []).map(word => word.toLowerCase()));
+    for (const word of signatureB.extraWords || []) {
+      if (wordsA.has(word.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  clusterVariantsBySignature(variants = []) {
+    if (!variants || variants.length <= 1) {
+      return [variants.map((_, index) => index)];
+    }
+
+    const hasConnectors = (index) => {
+      const signature = variants[index]?.tokenSignature;
+      return !!(signature && ((signature.initials && signature.initials.length) || (signature.extraWords && signature.extraWords.length)));
+    };
+
+    const parent = variants.map((_, index) => index);
+    const find = (index) => {
+      if (parent[index] !== index) {
+        parent[index] = find(parent[index]);
+      }
+      return parent[index];
+    };
+    const union = (a, b) => {
+      const rootA = find(a);
+      const rootB = find(b);
+      if (rootA !== rootB) {
+        parent[rootB] = rootA;
+      }
+    };
+
+    for (let i = 0; i < variants.length; i++) {
+      if (!hasConnectors(i)) {
+        continue;
+      }
+      for (let j = i + 1; j < variants.length; j++) {
+        if (!hasConnectors(j)) {
+          continue;
+        }
+        if (this.signaturesOverlap(variants[i].tokenSignature, variants[j].tokenSignature)) {
+          union(i, j);
+        }
+      }
+    }
+
+    const clustersMap = new Map();
+    const connectorless = [];
+
+    for (let index = 0; index < variants.length; index++) {
+      if (!hasConnectors(index)) {
+        connectorless.push(index);
+        continue;
+      }
+      const root = find(index);
+      if (!clustersMap.has(root)) {
+        clustersMap.set(root, []);
+      }
+      clustersMap.get(root).push(index);
+    }
+
+    const clusters = Array.from(clustersMap.values());
+
+    if (clusters.length === 0) {
+      // No connectors at all, keep everything together
+      return [variants.map((_, index) => index)];
+    }
+
+    if (connectorless.length > 0) {
+      const clusterFrequencies = clusters.map(indexes =>
+        indexes.reduce((sum, idx) => sum + (variants[idx].frequency || 0), 0)
+      );
+      let maxIndex = 0;
+      let maxValue = clusterFrequencies[0] || 0;
+      for (let i = 1; i < clusterFrequencies.length; i++) {
+        if (clusterFrequencies[i] > maxValue) {
+          maxValue = clusterFrequencies[i];
+          maxIndex = i;
+        }
+      }
+      connectorless.forEach(idx => clusters[maxIndex].push(idx));
+    }
+
+    return clusters;
+  }
+
   isLikelyInitialSequence(cleanedValue, originalToken = '') {
     if (!cleanedValue) {
       return false;
@@ -635,11 +841,18 @@ class ZoteroDBAnalyzer {
     const canonicalExtraWords = canonicalData.extraWords || [];
     const canonicalInitials = canonicalData.initials || [];
 
+    const safeTokens = Array.isArray(tokens) ? tokens : [];
+    const wordTokens = safeTokens.filter(token => token && token.type === 'word');
+    const initialTokens = safeTokens.filter(token => token && token.type === 'initial');
+    const variantHasWord = wordTokens.length > 0;
+    const variantHasInitial = initialTokens.length > 0;
+    const variantIsInitialOnly = !variantHasWord && variantHasInitial;
+
     let basePart = '';
     const additionalWords = [];
     const orderedInitials = [];
 
-    for (const token of tokens || []) {
+    for (const token of safeTokens) {
       if (token.type === 'word') {
         if (!basePart) {
           basePart = token.value;
@@ -665,14 +878,16 @@ class ZoteroDBAnalyzer {
       orderedInitials.shift();
     }
 
-    canonicalExtraWords.forEach(word => {
-      if (!word) {
-        return;
-      }
-      if (!additionalWords.includes(word) && word !== basePart) {
-        additionalWords.push(word);
-      }
-    });
+    if (variantIsInitialOnly) {
+      canonicalExtraWords.forEach(word => {
+        if (!word) {
+          return;
+        }
+        if (!additionalWords.includes(word) && word !== basePart) {
+          additionalWords.push(word);
+        }
+      });
+    }
 
     const combinedInitials = [];
     const seenInitials = new Set();
@@ -693,7 +908,9 @@ class ZoteroDBAnalyzer {
     };
 
     orderedInitials.forEach(letter => appendInitial(letter));
-    canonicalInitials.forEach(letter => appendInitial(letter));
+    if (variantIsInitialOnly) {
+      canonicalInitials.forEach(letter => appendInitial(letter));
+    }
 
     const parts = [];
     if (basePart) {
@@ -726,15 +943,26 @@ class ZoteroDBAnalyzer {
     const groups = [];
     const normalizedBuckets = new Map();
     const itemsByKey = new Map();
+    const surnameKey = (surname || '').trim();
+    const surnameLower = surnameKey.toLowerCase();
+    const displaySurname = this.toTitleCase(surnameKey);
 
     for (const creator of creators) {
-      const parsedFirst = (creator.parsedName?.firstName || creator.firstName || '').trim();
-      if (!parsedFirst) {
+      const parsedFirstParts = [
+        creator.parsedName?.firstName,
+        creator.parsedName?.middleName
+      ].filter(part => part && typeof part === 'string' && part.trim().length > 0);
+
+      const parsedFirst = parsedFirstParts.join(' ').trim();
+      const fallbackFirst = (creator.firstName || '').trim();
+      const effectiveFirst = parsedFirst || fallbackFirst;
+
+      if (!effectiveFirst) {
         continue;
       }
 
-      const normalized = this.normalizeGivenName(parsedFirst);
-      const key = normalized || parsedFirst.toLowerCase();
+      const normalized = this.normalizeGivenName(effectiveFirst);
+      const key = normalized || effectiveFirst.toLowerCase();
 
       if (!normalizedBuckets.has(key)) {
         normalizedBuckets.set(key, []);
@@ -742,7 +970,7 @@ class ZoteroDBAnalyzer {
 
       normalizedBuckets.get(key).push(creator);
 
-      const creatorKey = `${parsedFirst}|${creator.lastName}`;
+      const creatorKey = `${effectiveFirst}|${creator.lastName}`;
       if (!itemsByKey.has(creatorKey)) {
         itemsByKey.set(creatorKey, creator.items || []);
       }
@@ -755,27 +983,41 @@ class ZoteroDBAnalyzer {
         continue;
       }
 
-      const canonicalData = this.selectCanonicalGivenNameData(bucket, normalizedKey);
+      const bucketCanonical = this.selectCanonicalGivenNameData(bucket, normalizedKey);
       const fullNames = new Map();
-      let totalCount = 0;
 
       for (const creator of bucket) {
-        const rawFirst = (creator.parsedName?.firstName || creator.firstName || '').trim();
+        const rawFirstParts = [
+          creator.parsedName?.firstName,
+          creator.parsedName?.middleName
+        ].filter(part => part && typeof part === 'string' && part.trim().length > 0);
+
+        const rawFirst = (rawFirstParts.join(' ').trim()) || (creator.firstName || '').trim();
         const tokens = this.parseGivenNameTokens(rawFirst);
-        const displayFirst = this.composeGivenNameFromTokens(tokens, canonicalData)
-          || canonicalData.baseWord
+        const signature = this.extractTokenSignature(tokens);
+        const displayFirst = this.composeGivenNameFromTokens(tokens, bucketCanonical)
+          || bucketCanonical.baseWord
           || rawFirst;
 
-        const variantKey = `${displayFirst}|${creator.lastName}`.toLowerCase();
+        const rawLast = (creator.parsedName?.lastName || creator.lastName || surnameKey).trim();
+        const displayLast = this.toTitleCase(rawLast);
+
+        const variantKey = `${displayFirst}|${displayLast}`.toLowerCase();
         const existing = fullNames.get(variantKey) || {
           firstName: displayFirst,
-          lastName: creator.lastName,
+          lastName: displayLast,
           frequency: 0,
-          items: []
+          items: [],
+          name: `${displayFirst} ${displayLast}`.trim(),
+          tokenSignatures: [],
+          creatorRefs: []
         };
 
         existing.frequency += creator.count || 1;
-        totalCount += creator.count || 1;
+        existing.lastName = displayLast;
+        existing.name = `${existing.firstName} ${displayLast}`.trim();
+        existing.tokenSignatures.push(signature);
+        existing.creatorRefs.push({ creator, tokens, signature });
 
         const nameKey = `${rawFirst}|${creator.lastName}`;
         if (itemsByKey.has(nameKey)) {
@@ -789,17 +1031,60 @@ class ZoteroDBAnalyzer {
         continue;
       }
 
-      const variantsArray = Array.from(fullNames.values());
-      const recommendation = this.buildGivenNameRecommendation(variantsArray, surname, canonicalData);
-
-      groups.push({
-        surname,
-        normalizedKey,
-        variants: variantsArray,
-        totalFrequency: totalCount,
-        recommendedFirstName: recommendation.firstName,
-        recommendedFullName: recommendation.fullName
+      const variantsArray = Array.from(fullNames.values()).map(variant => {
+        const lastNameDisplay = this.toTitleCase(variant.lastName || displaySurname);
+        const combinedSignature = this.mergeTokenSignatures(variant.tokenSignatures || []);
+        return Object.assign({}, variant, {
+          lastName: lastNameDisplay,
+          name: `${variant.firstName} ${lastNameDisplay}`.trim(),
+          tokenSignature: combinedSignature,
+          creatorRefs: (variant.creatorRefs || []).slice()
+        });
       });
+
+      const clusters = this.clusterVariantsBySignature(variantsArray);
+
+      for (const indexSet of clusters) {
+        if (!indexSet || indexSet.length < 2) {
+          continue;
+        }
+
+        const clusterVariants = indexSet.map(idx => Object.assign({}, variantsArray[idx]));
+        const clusterCreators = [];
+
+        clusterVariants.forEach(variant => {
+          (variant.creatorRefs || []).forEach(ref => {
+            if (ref && ref.creator) {
+              clusterCreators.push(ref.creator);
+            }
+          });
+        });
+
+        if (clusterCreators.length === 0) {
+          continue;
+        }
+
+        const clusterCanonical = this.selectCanonicalGivenNameData(clusterCreators, normalizedKey);
+        const sanitizedVariants = clusterVariants.map(variant => {
+          const clone = Object.assign({}, variant);
+          delete clone.tokenSignature;
+          delete clone.creatorRefs;
+          return clone;
+        });
+
+        const recommendation = this.buildGivenNameRecommendation(sanitizedVariants, displaySurname, clusterCanonical);
+        const clusterTotalFrequency = sanitizedVariants.reduce((sum, variant) => sum + (variant.frequency || 0), 0);
+
+        groups.push({
+          surname: displaySurname,
+          surnameKey: surnameLower,
+          normalizedKey,
+          variants: sanitizedVariants,
+          totalFrequency: clusterTotalFrequency,
+          recommendedFirstName: recommendation.firstName,
+          recommendedFullName: recommendation.fullName
+        });
+      }
     }
 
     return groups;
@@ -916,9 +1201,15 @@ class ZoteroDBAnalyzer {
     let baseWord = canonicalData.baseWord ? this.toTitleCase(canonicalData.baseWord) : '';
     const extraWords = [];
     const initials = [];
+    let hasPlainWordVariant = false;
 
     for (const variant of variants) {
       const tokens = this.parseGivenNameTokens(variant.firstName || '');
+      const variantHasWord = tokens.some(token => token.type === 'word');
+      const variantHasInitial = tokens.some(token => token.type === 'initial');
+      if (variantHasWord && !variantHasInitial) {
+        hasPlainWordVariant = true;
+      }
       let encounteredWord = false;
 
       for (const token of tokens) {
@@ -938,7 +1229,10 @@ class ZoteroDBAnalyzer {
     }
 
     (canonicalData.extraWords || []).forEach(word => pushUnique(extraWords, word));
-    (canonicalData.initials || []).forEach(letter => pushUnique(initials, letter.toUpperCase()));
+
+    if (!hasPlainWordVariant) {
+      (canonicalData.initials || []).forEach(letter => pushUnique(initials, letter.toUpperCase()));
+    }
 
     if (!baseWord) {
       const fallbackTokens = this.parseGivenNameTokens(variants[0].firstName || '');
@@ -966,6 +1260,10 @@ class ZoteroDBAnalyzer {
       }
     }
 
+    if (hasPlainWordVariant) {
+      initials.length = 0;
+    }
+
     const recommendedParts = [];
     if (baseWord) {
       recommendedParts.push(baseWord);
@@ -974,7 +1272,10 @@ class ZoteroDBAnalyzer {
     initials.forEach(letter => recommendedParts.push(`${letter}.`));
 
     const recommendedFirst = recommendedParts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-    const recommendedFullName = surname ? `${recommendedFirst} ${surname}`.trim() : recommendedFirst;
+    const surnameDisplay = this.toTitleCase(surname || '');
+    const recommendedFullName = surnameDisplay
+      ? `${recommendedFirst} ${surnameDisplay}`.trim()
+      : recommendedFirst;
 
     return {
       firstName: recommendedFirst,
@@ -1115,7 +1416,8 @@ class ZoteroDBAnalyzer {
               items: surnameVariantItems[variant.variant2.name] || []
             }
           ],
-          similarity: variant.similarity
+          similarity: variant.similarity,
+          surnameKey: (variant.recommendedNormalization || '').toLowerCase()
         };
 
         this.enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups);
@@ -1131,24 +1433,37 @@ class ZoteroDBAnalyzer {
         continue;
       }
 
+      const groupSurnameKey = group.surnameKey || group.surname.toLowerCase();
       const existing = suggestions.find(
-        s => s.type === 'given-name' && (s.surname || '').toLowerCase() === group.surname.toLowerCase()
+        s => s.type === 'given-name'
+          && (s.surnameKey || (s.surname || '').toLowerCase()) === groupSurnameKey
+          && s.normalizedGivenNameKey === group.normalizedKey
       );
-      const variantDatasets = group.variants.map(variant => ({
-        name: `${variant.firstName} ${group.surname}`.trim(),
-        firstName: variant.firstName,
-        lastName: group.surname,
-        frequency: variant.frequency,
-        items: variant.items || []
-      }));
+      const variantDatasets = group.variants.map(variant => {
+        const lastNameDisplay = this.toTitleCase(variant.lastName || group.surname);
+        return {
+          name: `${variant.firstName} ${lastNameDisplay}`.trim(),
+          firstName: variant.firstName,
+          lastName: lastNameDisplay,
+          frequency: variant.frequency,
+          items: variant.items || []
+        };
+      });
 
       if (existing) {
         existing.variants = this.mergeVariantLists(existing.variants, variantDatasets);
         existing.totalFrequency = (existing.totalFrequency || 0) + (group.totalFrequency || 0);
+        existing.surname = group.surname;
+        existing.surnameKey = groupSurnameKey;
+        existing.normalizedGivenNameKey = group.normalizedKey;
+        if (!existing.recommendedFullName && group.recommendedFullName) {
+          existing.recommendedFullName = group.recommendedFullName;
+        }
       } else {
         suggestions.push({
           type: 'given-name',
           surname: group.surname,
+          surnameKey: groupSurnameKey,
           normalizedGivenNameKey: group.normalizedKey,
           variants: variantDatasets,
           totalFrequency: group.totalFrequency,
@@ -1168,12 +1483,14 @@ class ZoteroDBAnalyzer {
       return suggestion;
     }
 
-    const surname = (suggestion.primary || '').toLowerCase();
-    if (!surname) {
+    const surnameKey = (suggestion.surnameKey || suggestion.primary || '').toLowerCase();
+    if (!surnameKey) {
       return suggestion;
     }
 
-    const givenNameGroup = givenNameVariantGroups.find(group => group && (group.surname || '').toLowerCase() === surname);
+    const givenNameGroup = givenNameVariantGroups.find(
+      group => group && (group.surnameKey || (group.surname || '').toLowerCase()) === surnameKey
+    );
     if (!givenNameGroup) {
       return suggestion;
     }

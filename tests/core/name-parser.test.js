@@ -112,6 +112,24 @@ describe('NameParser', () => {
     expect(result.lastName).toBe('Smith');
   });
 
+  test('should parse inverted name with trailing period after comma', () => {
+    const result = parser.parse('Boogerd, Fred.');
+    expect(result.firstName).toBe('Fred');
+    expect(result.lastName).toBe('Boogerd');
+  });
+
+  test('should strip trailing period from standalone given name', () => {
+    const result = parser.parse('Fred. Smith');
+    expect(result.firstName).toBe('Fred');
+    expect(result.lastName).toBe('Smith');
+  });
+
+  test('should parse inverted initials with comma', () => {
+    const result = parser.parse('Hooker, C.A.');
+    expect(result.firstName).toBe('C.A.');
+    expect(result.lastName).toBe('Hooker');
+  });
+
   test('should handle names with multiple spaces', () => {
     const result = parser.parse('John   Smith');
     expect(result.firstName).toBe('John');

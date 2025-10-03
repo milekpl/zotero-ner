@@ -197,6 +197,33 @@
       color: #555;
       margin-top: 4px;
     }
+    #variant-filter-bar {
+      margin: 12px 0 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #variant-filter-input {
+      flex: 1 1 260px;
+      max-width: 420px;
+      padding: 6px 10px;
+      border: 1px solid #c9d1d9;
+      border-radius: 4px;
+      font-size: 0.95em;
+      background: #fff;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    #variant-filter-input:focus {
+      outline: none;
+      border-color: #007acc;
+      box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.15);
+    }
+    #variant-filter-summary {
+      font-size: 0.9em;
+      color: #4b5563;
+      white-space: nowrap;
+    }
     #variant-section {
       margin: 20px 0;
     }
@@ -298,6 +325,10 @@
   <div id="variant-section">
     <h3>Creator Variant Groups</h3>
     <p id="variant-groups-description">Review variant groups discovered in your library. Each entry represents multiple creator spellings that may refer to the same person.</p>
+    <div id="variant-filter-bar">
+      <input type="search" id="variant-filter-input" placeholder="Filter variant groups…" aria-label="Filter variant groups">
+      <span id="variant-filter-summary">Showing all groups</span>
+    </div>
     <div id="variant-layout">
       <div id="variant-groups-column">
         <div id="variant-groups-container">
@@ -374,12 +405,15 @@
       items: null,
       analysisResultsSource: null,
       userSelections: null,
-      variantDetailState: null,
+  variantDetailState: null,
+  filterText: '',
 
       init: function() {
         console.log('Dialog initialization started');
         this.userSelections = new Map();
         this.variantDetailState = null;
+        this.filterText = '';
+        this.setupFilterInput();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -520,6 +554,73 @@
           window.alert(title + ': ' + message);
         }
       },
+
+      setupFilterInput: function() {
+        const input = ZoteroNER_HTMLUtils.getElement('variant-filter-input');
+        if (!input) {
+          return;
+        }
+
+        input.value = this.filterText || '';
+        input.addEventListener('input', (event) => {
+          this.handleFilterInput(event.target.value);
+        });
+      },
+
+      handleFilterInput: function(rawValue) {
+        this.filterText = (rawValue || '').trim();
+        this.populateVariantGroupList();
+      },
+
+      matchesFilter: function(suggestion) {
+        const query = (this.filterText || '').toLowerCase();
+        if (!query) {
+          return true;
+        }
+
+        const terms = [];
+        const capture = (value) => {
+          if (!value) {
+            return;
+          }
+          if (typeof value === 'string') {
+            terms.push(value.toLowerCase());
+          }
+        };
+
+        capture(suggestion.type);
+        capture(suggestion.surname);
+        capture(typeof suggestion.primary === 'string' ? suggestion.primary : this.formatNameString(suggestion.primary));
+        capture(suggestion.recommendedFullName);
+        capture(suggestion.recommendedFirstName);
+
+        (suggestion.variants || []).forEach(variant => {
+          capture(variant.name);
+          capture(variant.firstName);
+          capture(variant.lastName);
+        });
+
+        return terms.some(term => term.includes(query));
+      },
+
+      updateFilterSummary: function(visibleCount, totalCount) {
+        const summaryEl = ZoteroNER_HTMLUtils.getElement('variant-filter-summary');
+        if (!summaryEl) {
+          return;
+        }
+
+        if (!totalCount) {
+          summaryEl.textContent = 'No variant groups available';
+          return;
+        }
+
+        if (!this.filterText) {
+          summaryEl.textContent = `Showing all ${totalCount} variant groups`;
+          return;
+        }
+
+        summaryEl.textContent = `Showing ${visibleCount} of ${totalCount} groups`;
+      },
       
       initialize: async function() {
         this.log('Dialog initialize started');
@@ -647,6 +748,11 @@
         } else {
           ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         }
+
+        const totalSuggestions = (this.analysisResults && Array.isArray(this.analysisResults.suggestions))
+          ? this.analysisResults.suggestions.length
+          : 0;
+        this.updateFilterSummary(0, totalSuggestions);
 
         ZoteroNER_HTMLUtils.clearContainer('variant-groups-container');
         this.clearVariantDetails();
@@ -811,10 +917,11 @@
           return '';
         }
 
-        return value
+        const cleaned = value.normalize('NFC').replace(/[\u200B-\u200D\uFEFF]/g, '');
+        return cleaned
           .split(/\s+/)
           .filter(Boolean)
-          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .map(part => part.toLowerCase().replace(/(^|['`-])(\p{L})/gu, (match, prefix, letter) => prefix + letter.toUpperCase()))
           .join(' ');
       },
 
@@ -868,18 +975,10 @@
           return `${this.titleCase(name)}${frequency}`;
         }
 
-        // For surname variants, prefer a title-cased surname display when the variant looks like a last name
-        if (typeof variant.name === 'string') {
-          const nameCandidate = variant.name.trim();
-          if (nameCandidate) {
-            if (/^[a-z\s'\-]+$/i.test(nameCandidate)) {
-              return `${this.formatSurnameKey(nameCandidate)}${frequency}`;
-            }
-            return `${this.formatNameString(nameCandidate)}${frequency}`;
-          }
-        }
-
-        return `${this.formatNameString(variant.name)}${frequency}`;
+        const surnameDisplay = typeof variant.name === 'string'
+          ? this.titleCase(variant.name)
+          : this.titleCase(this.formatNameString(variant.name));
+        return `${surnameDisplay}${frequency}`;
       },
 
       getVariantSelectionLabel: function(suggestion, variant) {
@@ -893,7 +992,10 @@
           return `Normalize to ${this.titleCase(variant.firstName || variant.name || '')} (${occurrences})`;
         }
 
-        return `Normalize to ${this.formatNameString(variant.name)} (${occurrences})`;
+        const variantSurname = typeof variant.name === 'string'
+          ? this.titleCase(variant.name)
+          : this.titleCase(this.formatNameString(variant.name));
+        return `Normalize to ${variantSurname} (${occurrences})`;
       },
 
       buildVariantListElement: function(index, suggestion) {
@@ -955,7 +1057,7 @@
       },
 
       getVariantDetailTitle: function(suggestion, variant) {
-        const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+  const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
         if (suggestion.type === 'given-name') {
           return `Occurrences for ${label}`;
         }
@@ -1240,8 +1342,9 @@
         const suggestions = (this.analysisResults && Array.isArray(this.analysisResults.suggestions))
           ? this.analysisResults.suggestions
           : [];
+        const totalSuggestions = suggestions.length;
 
-        if (suggestions.length === 0) {
+        if (totalSuggestions === 0) {
           this.showEmptyState('No variant groups were detected for the scanned surnames.');
           return false;
         }
@@ -1251,10 +1354,19 @@
           emptyMsg.style.display = 'none';
         }
 
+        const renderedIndexes = [];
+        let visibleCount = 0;
+
         suggestions.forEach((suggestion, index) => {
           if (!suggestion) {
             return;
           }
+          if (!this.matchesFilter(suggestion)) {
+            return;
+          }
+
+          visibleCount++;
+          renderedIndexes.push(index);
           this.ensureUserSelection(index, suggestion);
           const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
 
@@ -1302,19 +1414,46 @@
           container.appendChild(groupElement);
         });
 
+        this.updateFilterSummary(visibleCount, totalSuggestions);
+
+        if (visibleCount === 0) {
+          const noMatches = document.createElement('div');
+          noMatches.className = 'empty-message';
+          noMatches.textContent = this.filterText
+            ? 'No variant groups match your filter. Adjust your search to see results.'
+            : 'No variant groups were detected for the scanned surnames.';
+          container.appendChild(noMatches);
+          this.clearVariantDetails();
+          this.refreshApplyButtonState();
+          return false;
+        }
+
         const { variantDetailState } = this;
-        if (variantDetailState && suggestions[variantDetailState.suggestionIndex]) {
-          const { suggestionIndex, variantIndex } = variantDetailState;
-          this.showVariantDetails(suggestionIndex, variantIndex, suggestions[suggestionIndex]);
+        let detailSuggestionIndex = null;
+        let detailVariantIndex = null;
+
+        if (variantDetailState && renderedIndexes.includes(variantDetailState.suggestionIndex)) {
+          detailSuggestionIndex = variantDetailState.suggestionIndex;
+          detailVariantIndex = typeof variantDetailState.variantIndex === 'number'
+            ? variantDetailState.variantIndex
+            : null;
         } else {
-          const firstSuggestion = suggestions[0];
-          if (firstSuggestion && Array.isArray(firstSuggestion.variants) && firstSuggestion.variants.length > 0) {
-            const defaultVariantIndex = this.findRecommendedVariantIndex(firstSuggestion);
-            const variantIndex = defaultVariantIndex !== null ? defaultVariantIndex : 0;
-            this.showVariantDetails(0, variantIndex, firstSuggestion);
+          this.variantDetailState = null;
+          detailSuggestionIndex = renderedIndexes[0];
+        }
+
+        const detailSuggestion = suggestions[detailSuggestionIndex];
+        if (detailSuggestion && Array.isArray(detailSuggestion.variants) && detailSuggestion.variants.length > 0) {
+          let variantIndexToShow = null;
+          if (detailVariantIndex !== null && detailSuggestion.variants[detailVariantIndex]) {
+            variantIndexToShow = detailVariantIndex;
           } else {
-            this.clearVariantDetails();
+            const defaultVariantIndex = this.findRecommendedVariantIndex(detailSuggestion);
+            variantIndexToShow = defaultVariantIndex !== null ? defaultVariantIndex : 0;
           }
+          this.showVariantDetails(detailSuggestionIndex, variantIndexToShow, detailSuggestion);
+        } else {
+          this.clearVariantDetails();
         }
 
         this.refreshApplyButtonState();
@@ -1347,11 +1486,7 @@
         if (!value || typeof value !== 'string') {
           return '';
         }
-        const titleCased = value
-          .split(/\s+/)
-          .filter(Boolean)
-          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(' ');
+        const titleCased = this.titleCase(value);
         return this.escapeHTML(titleCased);
       },
 

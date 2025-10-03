@@ -154,6 +154,119 @@ describe('ZoteroDBAnalyzer', () => {
     });
   });
 
+  describe('given-name variant merging', () => {
+    const makeCreator = (firstName, lastName, count = 1) => ({
+      firstName,
+      lastName,
+      count,
+      items: [],
+      parsedName: analyzer.parseName(`${firstName || ''} ${lastName || ''}`.trim())
+    });
+
+    test('does not append canonical initials to plain word variants', () => {
+      const creators = [
+        makeCreator('Fred', 'Boogerd'),
+        makeCreator('Fred.', 'Boogerd'),
+        makeCreator('Fred R. E. D.', 'Boogerd')
+      ];
+
+      const groups = analyzer.findGivenNameVariantGroups(
+        analyzer.groupCreatorsBySurnameForVariants(creators)
+      );
+
+      const boogerdGroup = groups.find(group => group && group.surnameKey === 'boogerd');
+      expect(boogerdGroup).toBeDefined();
+
+      const variantNames = boogerdGroup.variants.map(variant => variant.firstName);
+      expect(variantNames).toContain('Fred');
+      expect(variantNames).toContain('Fred R. E. D.');
+
+      const fredVariant = boogerdGroup.variants.find(variant => variant.firstName === 'Fred');
+      expect(fredVariant).toBeDefined();
+      expect(fredVariant.firstName).toBe('Fred');
+      expect(boogerdGroup.recommendedFullName).toBe('Fred Boogerd');
+    });
+
+    test('initial-only variants borrow canonical base without mangling names', () => {
+      const creators = [
+        makeCreator('Cliff', 'Hooker'),
+        makeCreator('C.A.', 'Hooker')
+      ];
+
+      const groups = analyzer.findGivenNameVariantGroups(
+        analyzer.groupCreatorsBySurnameForVariants(creators)
+      );
+
+      const hookerGroup = groups.find(group => group && group.surnameKey === 'hooker');
+      expect(hookerGroup).toBeDefined();
+
+      const variantNames = hookerGroup.variants.map(variant => variant.firstName);
+      expect(variantNames).toContain('Cliff');
+      expect(variantNames).toContain('Cliff A.');
+      expect(variantNames).not.toContain('Ca A.');
+      expect(hookerGroup.recommendedFullName).toBe('Cliff Hooker');
+    });
+
+    test('separates given-name suggestions by normalized key', async () => {
+      const creators = [
+        makeCreator('Harriet', 'Brown', 6),
+        makeCreator('Harriet R.', 'Brown', 4),
+        makeCreator('Scott', 'Brown', 5),
+        makeCreator('Scott D.', 'Brown', 3)
+      ];
+
+      const result = await analyzer.analyzeCreators(creators);
+      const givenNameSuggestions = result.suggestions.filter(
+        suggestion => suggestion.type === 'given-name' && suggestion.surnameKey === 'brown'
+      );
+
+      expect(givenNameSuggestions).toHaveLength(2);
+
+      const harrietSuggestion = givenNameSuggestions.find(suggestion =>
+        (suggestion.recommendedFullName || suggestion.primary || '').includes('Harriet')
+      );
+      const scottSuggestion = givenNameSuggestions.find(suggestion =>
+        (suggestion.recommendedFullName || suggestion.primary || '').includes('Scott')
+      );
+
+      expect(harrietSuggestion).toBeDefined();
+      expect(scottSuggestion).toBeDefined();
+
+      const harrietVariantNames = harrietSuggestion.variants.map(variant => variant.firstName);
+      const scottVariantNames = scottSuggestion.variants.map(variant => variant.firstName);
+
+      expect(harrietVariantNames).toEqual(expect.arrayContaining(['Harriet', 'Harriet R.']));
+      expect(harrietVariantNames).not.toEqual(expect.arrayContaining(['Scott', 'Scott D.']));
+      expect(scottVariantNames).toEqual(expect.arrayContaining(['Scott', 'Scott D.']));
+      expect(scottVariantNames).not.toEqual(expect.arrayContaining(['Harriet', 'Harriet R.']));
+    });
+
+    test('does not merge variants with disjoint middle initials', async () => {
+      const creators = [
+        makeCreator('Michael', 'Martin', 4),
+        makeCreator('Michael K.', 'Martin', 3),
+        makeCreator('Michael W.', 'Martin', 3)
+      ];
+
+      const result = await analyzer.analyzeCreators(creators);
+      const martinSuggestions = result.suggestions.filter(
+        suggestion => suggestion.type === 'given-name' && suggestion.surnameKey === 'martin'
+      );
+
+      const combinedGroup = martinSuggestions.find(suggestion => {
+        const names = suggestion.variants.map(variant => variant.firstName);
+        return names.includes('Michael K.') && names.includes('Michael W.');
+      });
+
+      expect(combinedGroup).toBeUndefined();
+
+      martinSuggestions.forEach(suggestion => {
+        const recommended = suggestion.recommendedFullName || suggestion.primary || '';
+        expect(recommended).not.toMatch(/K\.\s*W\./i);
+      });
+    });
+  });
+
   describe('parseName', () => {
     test('should parse a full name correctly', () => {
       const result = analyzer.parseName('John Smith');

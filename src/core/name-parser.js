@@ -16,7 +16,26 @@ class NameParser {
    */
   parse(rawName) {
     const original = rawName || '';
-    let parts = original.trim().replace(/[,\\s]+$/, '').split(/\s+/); // Remove trailing commas/space
+    let working = (original || '').trim();
+
+    if (working.includes(',')) {
+      const commaSegments = working
+        .split(',')
+        .map(segment => segment.trim())
+        .filter(segment => segment.length > 0);
+
+      if (commaSegments.length >= 2) {
+        const firstSegment = commaSegments[0];
+        const restSegments = commaSegments.slice(1);
+        const restCombined = restSegments.join(' ').trim();
+
+        if (/\p{L}/u.test(firstSegment) && /\p{L}/u.test(restCombined)) {
+          working = `${restCombined} ${firstSegment}`.trim();
+        }
+      }
+    }
+
+    let parts = working.replace(/[ ,\s]+$/, '').split(/\s+/); // Remove trailing commas/space
     const result = {
       firstName: '',
       middleName: '',
@@ -45,7 +64,7 @@ class NameParser {
     // Handle multiple word case
     if (parts.length >= 2) {
       // Set first name as the first part
-      result.firstName = parts[0];
+      result.firstName = this.stripTrailingPeriodIfName(parts[0]);
       
       // Check for prefixes at the beginning (after first name)
       let prefixEndIndex = 1;
@@ -92,10 +111,14 @@ class NameParser {
       if (prefixEndIndex < suffixStartIndex) {
         const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
         if (middleParts.length > 0) {
-          result.middleName = middleParts.join(' ');
+          result.middleName = middleParts.map(part => this.stripTrailingPeriodIfName(part)).join(' ');
         }
       }
     }
+
+    result.firstName = this.stripTrailingPeriodIfName(result.firstName);
+    result.middleName = this.stripTrailingPeriodIfName(result.middleName);
+    result.lastName = this.stripTrailingPeriodIfName(result.lastName);
 
     return result;
   }
@@ -117,6 +140,36 @@ class NameParser {
     }
     
     return false;
+  }
+
+  stripTrailingPeriodIfName(value) {
+    if (!value || typeof value !== 'string') {
+      return value || '';
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed.endsWith('.')) {
+      return trimmed;
+    }
+
+    const core = trimmed.slice(0, -1);
+    if (core.length < 2) {
+      return trimmed;
+    }
+
+    if (core.includes('.')) {
+      return trimmed;
+    }
+
+    if (!/[A-Za-z]/.test(core)) {
+      return trimmed;
+    }
+
+    if (!/[AEIOUYaeiouy]/.test(core)) {
+      return trimmed;
+    }
+
+    return core;
   }
 }
 
