@@ -1,26 +1,13 @@
 /**
- * NER Processor - Handles name parsing and recognition using GLINER or similar
+ * NER Processor - Handles name parsing and recognition using rule-based heuristics
  */
 class NERProcessor {
   constructor() {
-    this.glinerHandler = null;
     this.isInitialized = false;
     this.entities = ['PERSON', 'FIRST_NAME', 'MIDDLE_NAME', 'LAST_NAME', 'PREFIX', 'SUFFIX'];
   }
 
   async initialize() {
-    // Initialize the GLINER handler
-    const GLINERHandler = require('./gliner-handler.js');
-    this.glinerHandler = new GLINERHandler();
-    
-    try {
-      await this.glinerHandler.initialize();
-      console.log('NER Processor initialized with GLINER handler');
-    } catch (error) {
-      console.error('Error initializing GLINER handler:', error);
-      console.log('Using fallback rule-based processing');
-    }
-    
     this.isInitialized = true;
   }
 
@@ -34,12 +21,7 @@ class NERProcessor {
       await this.initialize();
     }
 
-    if (this.glinerHandler && this.glinerHandler.isInitialized) {
-      return await this.glinerHandler.runNER(text);
-    } else {
-      // Fallback to rule-based processing
-      return this.fallbackNER(text);
-    }
+    return this.fallbackNER(text);
   }
 
   /**
@@ -137,17 +119,12 @@ class NERProcessor {
       await this.initialize();
     }
 
-    if (this.glinerHandler && this.glinerHandler.isInitialized) {
-      return await this.glinerHandler.runBatchNER(names);
-    } else {
-      // Process individually with fallback
-      const results = [];
-      for (const name of names) {
-        const entities = await this.fallbackNER(name);
-        results.push({ text: name, entities });
-      }
-      return results;
+    const results = [];
+    for (const name of names) {
+      const entities = await this.fallbackNER(name);
+      results.push({ text: name, entities });
     }
+    return results;
   }
 
   /**

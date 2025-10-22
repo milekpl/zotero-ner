@@ -90,7 +90,6 @@ describe('ZoteroNER Index', () => {
     expect(indexModule).toHaveProperty('VariantGenerator');
     expect(indexModule).toHaveProperty('LearningEngine');
     expect(indexModule).toHaveProperty('CandidateFinder');
-    expect(indexModule).toHaveProperty('GLINERHandler');
     expect(indexModule).toHaveProperty('ItemProcessor');
     expect(indexModule).toHaveProperty('MenuIntegration');
     expect(indexModule).toHaveProperty('ZoteroDBAnalyzer');
@@ -116,7 +115,6 @@ describe('ZoteroNER Index', () => {
     expect(indexModule).toHaveProperty('VariantGenerator');
     expect(indexModule).toHaveProperty('LearningEngine');
     expect(indexModule).toHaveProperty('CandidateFinder');
-    expect(indexModule).toHaveProperty('GLINERHandler');
     expect(indexModule).toHaveProperty('ItemProcessor');
     expect(indexModule).toHaveProperty('MenuIntegration');
     expect(indexModule).toHaveProperty('ZoteroDBAnalyzer');

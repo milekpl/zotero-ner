@@ -1421,6 +1421,13 @@ class ZoteroDBAnalyzer {
         };
 
         this.enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups);
+
+        if (this.shouldSkipSuggestionFromLearning(suggestion)) {
+          processedSurnames.add(norm1);
+          processedSurnames.add(norm2);
+          continue;
+        }
+
         suggestions.push(suggestion);
 
         processedSurnames.add(norm1);
@@ -1460,7 +1467,7 @@ class ZoteroDBAnalyzer {
           existing.recommendedFullName = group.recommendedFullName;
         }
       } else {
-        suggestions.push({
+        const candidate = {
           type: 'given-name',
           surname: group.surname,
           surnameKey: groupSurnameKey,
@@ -1470,7 +1477,13 @@ class ZoteroDBAnalyzer {
           recommendedFirstName: group.recommendedFirstName,
           recommendedFullName: group.recommendedFullName,
           primary: group.recommendedFullName || `${variantDatasets[0]?.name || ''}`
-        });
+        };
+
+        if (this.shouldSkipSuggestionFromLearning(candidate)) {
+          continue;
+        }
+
+        suggestions.push(candidate);
       }
     }
 
@@ -1575,34 +1588,50 @@ class ZoteroDBAnalyzer {
    * @param {boolean} autoConfirm - Whether to auto-confirm all suggestions
    * @returns {Object} Results of the normalization application
    */
-  async applyNormalizationSuggestions(suggestions, autoConfirm = false) {
+  async applyNormalizationSuggestions(suggestions, autoConfirm = false, options = {}) {
     if (typeof Zotero === 'undefined') {
       throw new Error('This method must be run in the Zotero context');
     }
 
+    const { progressCallback = null, declinedSuggestions = [] } = options || {};
+    const incoming = Array.isArray(suggestions) ? suggestions : [];
+
     const results = {
-      totalSuggestions: suggestions.length,
+      totalSuggestions: incoming.length,
       applied: 0,
       skipped: 0,
-      errors: 0
+      errors: 0,
+      updatedCreators: 0,
+      declinedRecorded: 0
     };
 
+    if (incoming.length === 0) {
+      if (Array.isArray(declinedSuggestions) && declinedSuggestions.length > 0) {
+        results.declinedRecorded += await this.recordDeclinedSuggestions(declinedSuggestions);
+      }
+
+      if (progressCallback) {
+        progressCallback({
+          stage: 'complete',
+          applied: results.applied,
+          skipped: results.skipped,
+          updatedCreators: results.updatedCreators,
+          declined: results.declinedRecorded,
+          total: results.totalSuggestions
+        });
+      }
+
+      return results;
+    }
+
     try {
-      for (const suggestion of suggestions) {
+      const confirmed = [];
+
+      for (const suggestion of incoming) {
         try {
-          if (autoConfirm || await this.confirmNormalization(suggestion)) {
-            // Apply the normalization mapping
-            for (const variant of suggestion.variants) {
-              if (variant.name !== suggestion.primary) {
-                // Store mapping in learning engine
-                await this.learningEngine.storeMapping(
-                  variant.name,
-                  suggestion.primary,
-                  suggestion.similarity
-                );
-              }
-            }
-            results.applied++;
+          const shouldApply = autoConfirm || await this.confirmNormalization(suggestion);
+          if (shouldApply) {
+            confirmed.push(suggestion);
           } else {
             results.skipped++;
           }
@@ -1611,12 +1640,586 @@ class ZoteroDBAnalyzer {
           results.errors++;
         }
       }
+
+      if (confirmed.length > 0) {
+        if (progressCallback) {
+          progressCallback({
+            stage: 'prepare',
+            total: confirmed.length
+          });
+        }
+
+        const dbOutcome = await this.applyDatabaseNormalizations(confirmed, { progressCallback });
+
+        results.applied = confirmed.length;
+        results.updatedCreators = dbOutcome.updatedCreators || 0;
+        results.errors += Array.isArray(dbOutcome.errors) ? dbOutcome.errors.length : 0;
+
+        await this.persistLearningDecisions(confirmed, dbOutcome.plans);
+
+        if (progressCallback) {
+          progressCallback({
+            stage: 'finalizing',
+            total: confirmed.length,
+            updatedCreators: results.updatedCreators
+          });
+        }
+      }
+
+      if (Array.isArray(declinedSuggestions) && declinedSuggestions.length > 0) {
+        results.declinedRecorded += await this.recordDeclinedSuggestions(declinedSuggestions);
+      }
+
+      if (progressCallback) {
+        progressCallback({
+          stage: 'complete',
+          applied: results.applied,
+          skipped: results.skipped,
+          updatedCreators: results.updatedCreators,
+          declined: results.declinedRecorded,
+          total: results.totalSuggestions
+        });
+      }
     } catch (error) {
       console.error('Error in applyNormalizationSuggestions:', error);
       results.errors++;
+
+      if (progressCallback) {
+        progressCallback({ stage: 'error', error });
+      }
     }
 
     return results;
+  }
+
+  async persistLearningDecisions(suggestions, plans) {
+    if (!this.learningEngine) {
+      return;
+    }
+
+    const planMap = new Map();
+    if (Array.isArray(plans)) {
+      for (const plan of plans) {
+        if (plan && plan.suggestion) {
+          planMap.set(plan.suggestion, plan);
+        }
+      }
+    }
+
+    for (const suggestion of suggestions || []) {
+      const plan = planMap.get(suggestion) || this.buildSuggestionOperationPlan(suggestion);
+      await this.persistLearningForSuggestion(suggestion, plan);
+    }
+  }
+
+  async persistLearningForSuggestion(suggestion, plan) {
+    if (!this.learningEngine || !suggestion) {
+      return;
+    }
+
+    const normalizedValue = (suggestion.primary || '').trim();
+    const variants = Array.isArray(suggestion.variants) ? suggestion.variants : [];
+    const variantPairs = plan && Array.isArray(plan.variantPairs)
+      ? plan.variantPairs
+      : this.getVariantPairsForSuggestion(suggestion);
+
+    if (suggestion.type === 'surname') {
+      for (const variant of variants) {
+        const variantName = (variant && variant.name ? variant.name : '').trim();
+        if (!variantName) {
+          continue;
+        }
+        if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) {
+          continue;
+        }
+        try {
+          await this.learningEngine.storeMapping(
+            variantName,
+            normalizedValue,
+            suggestion.similarity || 1
+          );
+        } catch (error) {
+          console.error('Error storing surname mapping:', error);
+        }
+      }
+    } else {
+      const normalizedFirstName = plan?.normalizedFirstName || '';
+      const normalizedLastName = plan?.normalizedLastName || suggestion.surname || '';
+      const normalizedFullName = plan?.normalizedFullName || this.buildFullName(normalizedFirstName, normalizedLastName);
+
+      if (normalizedFullName) {
+        for (const variant of variants) {
+          const variantFirstName = this.extractVariantGivenName(variant);
+          const variantLastName = this.extractVariantSurname(variant, normalizedLastName);
+          const variantFullName = this.buildFullName(variantFirstName, variantLastName);
+          if (!variantFullName) {
+            continue;
+          }
+          if (this.stringsEqualIgnoreCase(variantFullName, normalizedFullName)) {
+            continue;
+          }
+          try {
+            await this.learningEngine.storeMapping(
+              variantFullName,
+              normalizedFullName,
+              suggestion.similarity || 1
+            );
+          } catch (error) {
+            console.error('Error storing given-name mapping:', error);
+          }
+        }
+      }
+    }
+
+    if (variantPairs && variantPairs.length > 0 && typeof this.learningEngine.clearDistinctPair === 'function') {
+      for (const pair of variantPairs) {
+        try {
+          await this.learningEngine.clearDistinctPair(pair.nameA, pair.nameB, pair.scope);
+        } catch (error) {
+          console.error('Error clearing distinct pair learning entry:', error);
+        }
+      }
+    }
+  }
+
+  async recordDeclinedSuggestions(suggestions) {
+    if (!this.learningEngine || typeof this.learningEngine.recordDistinctPair !== 'function') {
+      return 0;
+    }
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      return 0;
+    }
+
+    let recorded = 0;
+
+    for (const suggestion of suggestions) {
+      if (!suggestion) {
+        continue;
+      }
+      const pairs = this.getVariantPairsForSuggestion(suggestion);
+      for (const pair of pairs) {
+        try {
+          const saved = await this.learningEngine.recordDistinctPair(pair.nameA, pair.nameB, pair.scope);
+          if (saved) {
+            recorded++;
+          }
+        } catch (error) {
+          console.error('Error recording distinct pair decision:', error);
+        }
+      }
+    }
+
+    return recorded;
+  }
+
+  async applyDatabaseNormalizations(suggestions, options = {}) {
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      return { plans: [], operations: [], updatedCreators: 0, errors: [] };
+    }
+
+    const progressCallback = options.progressCallback || null;
+    const plans = suggestions.map(suggestion => this.buildSuggestionOperationPlan(suggestion));
+    const operations = [];
+
+    for (const plan of plans) {
+      for (const operation of plan.operations) {
+        operations.push({ ...operation, plan });
+      }
+    }
+
+    if (operations.length === 0) {
+      if (progressCallback) {
+        progressCallback({ stage: 'operations-finished', total: 0, updatedCreators: 0 });
+      }
+      return { plans, operations: [], updatedCreators: 0, errors: [] };
+    }
+
+    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
+      throw new Error('Zotero database access is not available');
+    }
+
+    if (progressCallback) {
+      progressCallback({
+        stage: 'operations-planned',
+        total: operations.length,
+        suggestions: suggestions.length
+      });
+    }
+
+    const errors = [];
+    let updatedCreators = 0;
+    let processed = 0;
+    const totalOperations = operations.length;
+
+    const runOperation = async (operation) => {
+      let matched = 0;
+      try {
+        matched = await this.countMatchesForOperation(operation);
+
+        if (progressCallback) {
+          progressCallback({
+            stage: 'operation-preflight',
+            processed,
+            total: totalOperations,
+            matched,
+            operation: this.describeOperation(operation),
+            type: operation.type
+          });
+        }
+
+        if (matched === 0) {
+          operation.affected = 0;
+          return;
+        }
+
+        await this.performOperationUpdate(operation);
+        operation.affected = matched;
+        updatedCreators += matched;
+      } catch (error) {
+        operation.error = error;
+        errors.push({ operation, error });
+        console.error('Error applying normalization operation:', error);
+      } finally {
+        processed++;
+        if (progressCallback) {
+          progressCallback({
+            stage: 'operation-complete',
+            processed,
+            total: totalOperations,
+            affected: operation.affected || 0,
+            operation: this.describeOperation(operation),
+            type: operation.type
+          });
+        }
+      }
+    };
+
+    const executeAll = async () => {
+      for (const operation of operations) {
+        await runOperation(operation);
+      }
+    };
+
+    if (typeof Zotero.DB.executeTransaction === 'function') {
+      await Zotero.DB.executeTransaction(executeAll);
+    } else {
+      await executeAll();
+    }
+
+    if (progressCallback) {
+      progressCallback({
+        stage: 'operations-finished',
+        total: totalOperations,
+        updatedCreators
+      });
+    }
+
+    return { plans, operations, updatedCreators, errors };
+  }
+
+  buildSuggestionOperationPlan(suggestion) {
+    const normalizedValue = (suggestion && suggestion.primary ? suggestion.primary : '').trim();
+    const plan = {
+      suggestion,
+      normalizedValue,
+      operations: [],
+      variantPairs: this.getVariantPairsForSuggestion(suggestion),
+      normalizedFirstName: '',
+      normalizedLastName: '',
+      normalizedFullName: ''
+    };
+
+    if (!suggestion || !Array.isArray(suggestion.variants) || suggestion.variants.length === 0) {
+      return plan;
+    }
+
+    const unique = new Set();
+
+    if (suggestion.type === 'surname') {
+      for (const variant of suggestion.variants) {
+        const variantName = (variant && variant.name ? variant.name : '').trim();
+        if (!variantName) {
+          continue;
+        }
+
+        const opKey = `surname|${variantName.toLowerCase()}|${normalizedValue.toLowerCase()}`;
+        if (unique.has(opKey)) {
+          continue;
+        }
+        unique.add(opKey);
+
+        if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) {
+          continue;
+        }
+
+        plan.operations.push({
+          type: 'surname',
+          fromLastName: variantName,
+          toLastName: normalizedValue,
+          scope: 'surname',
+          variant
+        });
+      }
+
+      return plan;
+    }
+
+    const parsedNormalized = this.parseName(normalizedValue);
+    const normalizedFirstName = [parsedNormalized.firstName, parsedNormalized.middleName]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || parsedNormalized.firstName || normalizedValue;
+    const normalizedLastName = parsedNormalized.lastName || suggestion.surname || '';
+
+    plan.normalizedFirstName = normalizedFirstName;
+    plan.normalizedLastName = normalizedLastName;
+    plan.normalizedFullName = this.buildFullName(normalizedFirstName, normalizedLastName);
+
+    for (const variant of suggestion.variants) {
+      const variantFirstName = this.extractVariantGivenName(variant);
+      const variantLastName = this.extractVariantSurname(variant, normalizedLastName || suggestion.surname || '');
+      if (!variantFirstName || !variantLastName) {
+        continue;
+      }
+
+      const opKey = `given|${variantFirstName.toLowerCase()}|${variantLastName.toLowerCase()}`;
+      if (unique.has(opKey)) {
+        continue;
+      }
+      unique.add(opKey);
+
+      if (this.stringsEqualIgnoreCase(variantFirstName, normalizedFirstName) &&
+          this.stringsEqualIgnoreCase(variantLastName, normalizedLastName)) {
+        continue;
+      }
+
+      plan.operations.push({
+        type: 'given-name',
+        fromFirstName: variantFirstName,
+        fromLastName: variantLastName,
+        toFirstName: normalizedFirstName,
+        toLastName: normalizedLastName || variantLastName,
+        scope: `given:${suggestion.surnameKey || (variantLastName || '').toLowerCase()}`,
+        variant
+      });
+    }
+
+    return plan;
+  }
+
+  getVariantPairsForSuggestion(suggestion) {
+    if (!suggestion || !Array.isArray(suggestion.variants) || suggestion.variants.length < 2) {
+      return [];
+    }
+
+    const variants = suggestion.variants;
+    const scopeBase = suggestion.type === 'surname'
+      ? 'surname'
+      : `given:${suggestion.surnameKey || (suggestion.surname || '').toLowerCase()}`;
+    const pairs = [];
+
+    for (let i = 0; i < variants.length; i++) {
+      const nameA = this.extractVariantPairName(suggestion, variants[i]);
+      if (!nameA) {
+        continue;
+      }
+
+      for (let j = i + 1; j < variants.length; j++) {
+        const nameB = this.extractVariantPairName(suggestion, variants[j]);
+        if (!nameB) {
+          continue;
+        }
+        pairs.push({ nameA, nameB, scope: scopeBase });
+      }
+    }
+
+    return pairs;
+  }
+
+  extractVariantPairName(suggestion, variant) {
+    if (!variant) {
+      return '';
+    }
+
+    if (suggestion && suggestion.type === 'surname') {
+      return (variant.name || '').trim();
+    }
+
+    const surname = suggestion?.surname || variant.lastName || suggestion?.primary || '';
+    const firstName = this.extractVariantGivenName(variant);
+    if (firstName) {
+      return this.buildFullName(firstName, surname);
+    }
+
+    return (variant.name || '').trim();
+  }
+
+  stringsEqualIgnoreCase(a, b) {
+    if (!a && !b) {
+      return true;
+    }
+    if (!a || !b) {
+      return false;
+    }
+    return a.trim().toLowerCase() === b.trim().toLowerCase();
+  }
+
+  extractVariantGivenName(variant) {
+    if (!variant) {
+      return '';
+    }
+
+    if (typeof variant.firstName === 'string' && variant.firstName.trim()) {
+      return variant.firstName.trim();
+    }
+
+    if (typeof variant.name === 'string' && variant.name.trim()) {
+      const parsed = this.parseName(variant.name);
+      const given = [parsed.firstName, parsed.middleName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (given) {
+        return given;
+      }
+    }
+
+    return '';
+  }
+
+  extractVariantSurname(variant, fallback = '') {
+    if (!variant) {
+      return fallback || '';
+    }
+
+    if (typeof variant.lastName === 'string' && variant.lastName.trim()) {
+      return variant.lastName.trim();
+    }
+
+    if (typeof variant.name === 'string' && variant.name.trim()) {
+      const parsed = this.parseName(variant.name);
+      if (parsed.lastName) {
+        return parsed.lastName.trim();
+      }
+    }
+
+    return fallback || '';
+  }
+
+  buildFullName(first, last) {
+    return [first, last].filter(part => part && part.trim()).join(' ').trim();
+  }
+
+  describeOperation(operation) {
+    if (!operation) {
+      return '';
+    }
+
+    if (operation.type === 'surname') {
+      return `${operation.fromLastName} → ${operation.toLastName}`;
+    }
+
+    const from = this.buildFullName(operation.fromFirstName, operation.fromLastName);
+    const to = this.buildFullName(operation.toFirstName, operation.toLastName);
+    return `${from} → ${to}`;
+  }
+
+  async countMatchesForOperation(operation) {
+    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
+      return 0;
+    }
+
+    if (operation.type === 'surname') {
+      const sql = `
+        SELECT COUNT(*) AS count
+        FROM creators
+        WHERE fieldMode = 0
+          AND LOWER(lastName) = LOWER(?)
+      `;
+      const rows = await Zotero.DB.query(sql, [operation.fromLastName]);
+      return this.extractCountFromRows(rows);
+    }
+
+    const sql = `
+      SELECT COUNT(*) AS count
+      FROM creators
+      WHERE fieldMode = 0
+        AND LOWER(lastName) = LOWER(?)
+        AND LOWER(firstName) = LOWER(?)
+    `;
+    const rows = await Zotero.DB.query(sql, [operation.fromLastName, operation.fromFirstName]);
+    return this.extractCountFromRows(rows);
+  }
+
+  async performOperationUpdate(operation) {
+    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
+      return;
+    }
+
+    if (operation.type === 'surname') {
+      const sql = `
+        UPDATE creators
+        SET lastName = ?
+        WHERE fieldMode = 0
+          AND LOWER(lastName) = LOWER(?)
+      `;
+      await Zotero.DB.query(sql, [operation.toLastName, operation.fromLastName]);
+      return;
+    }
+
+    const setParts = ['firstName = ?'];
+    const params = [operation.toFirstName];
+
+    if (operation.toLastName && !this.stringsEqualIgnoreCase(operation.toLastName, operation.fromLastName)) {
+      setParts.push('lastName = ?');
+      params.push(operation.toLastName);
+    }
+
+    params.push(operation.fromLastName, operation.fromFirstName);
+
+    const sql = `
+      UPDATE creators
+      SET ${setParts.join(', ')}
+      WHERE fieldMode = 0
+        AND LOWER(lastName) = LOWER(?)
+        AND LOWER(firstName) = LOWER(?)
+    `;
+
+    await Zotero.DB.query(sql, params);
+  }
+
+  extractCountFromRows(rows) {
+    if (!rows || rows.length === 0) {
+      return 0;
+    }
+
+    const first = rows[0];
+    const value = first.count ?? first.COUNT ?? Object.values(first)[0];
+
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    return 0;
+  }
+
+  shouldSkipSuggestionFromLearning(suggestion) {
+    if (!this.learningEngine || typeof this.learningEngine.isDistinctPair !== 'function') {
+      return false;
+    }
+
+    const pairs = this.getVariantPairsForSuggestion(suggestion);
+    if (!pairs || pairs.length === 0) {
+      return false;
+    }
+
+    return pairs.some(pair => this.learningEngine.isDistinctPair(pair.nameA, pair.nameB, pair.scope));
   }
 
   /**

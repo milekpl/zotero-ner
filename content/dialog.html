@@ -401,18 +401,20 @@
     var ZoteroNER_NormalizationDialog = {
       dbAnalyzer: null,
       isProcessing: false,
-      analysisResults: null,
-      items: null,
-      analysisResultsSource: null,
-      userSelections: null,
-  variantDetailState: null,
-  filterText: '',
+    analysisResults: null,
+    items: null,
+    analysisResultsSource: null,
+    userSelections: null,
+    variantDetailState: null,
+    filterText: '',
+    currentProgressState: null,
 
       init: function() {
         console.log('Dialog initialization started');
         this.userSelections = new Map();
         this.variantDetailState = null;
         this.filterText = '';
+  this.currentProgressState = null;
         this.setupFilterInput();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
@@ -1501,11 +1503,131 @@
 
         const applyButton = ZoteroNER_HTMLUtils.getElement('apply-button');
         if (applyButton) applyButton.disabled = isBusy;
+
+        this.updateProgress();
+      },
+
+      handleApplyProgress: function(event) {
+        if (!event) {
+          return;
+        }
+
+        const nextState = Object.assign({}, this.currentProgressState || {});
+
+        if (typeof event.stage === 'string') {
+          nextState.stage = event.stage;
+        }
+        if (typeof event.total === 'number') {
+          nextState.total = event.total;
+        }
+        if (typeof event.totalOperations === 'number') {
+          nextState.total = event.totalOperations;
+        }
+        if (typeof event.totalSuggestions === 'number') {
+          nextState.totalSuggestions = event.totalSuggestions;
+        }
+        if (typeof event.processed === 'number') {
+          nextState.processed = event.processed;
+        }
+        if (typeof event.updatedCreators === 'number') {
+          nextState.updatedCreators = event.updatedCreators;
+        }
+        if (typeof event.declined === 'number') {
+          nextState.declined = event.declined;
+        }
+        if (typeof event.applied === 'number') {
+          nextState.applied = event.applied;
+        }
+        if (typeof event.skipped === 'number') {
+          nextState.skipped = event.skipped;
+        }
+        delete nextState.percent;
+        if (typeof event.percent === 'number' && Number.isFinite(event.percent)) {
+          nextState.percent = event.percent;
+        }
+        if (typeof event.affected === 'number') {
+          nextState.affected = event.affected;
+        }
+        if (typeof event.matched === 'number') {
+          nextState.matched = event.matched;
+        }
+
+        nextState.message = this.composeProgressMessage(event, nextState);
+        this.currentProgressState = nextState;
+        this.updateProgress();
+      },
+
+      composeProgressMessage: function(event, state) {
+        switch (event.stage) {
+          case 'prepare':
+            return 'Preparing normalization updates...';
+          case 'operations-planned':
+            return `Preparing ${event.total || 0} database updates...`;
+          case 'operation-preflight': {
+            const total = event.total || state.total || 0;
+            const labelTotal = total > 0 ? total : '?';
+            const index = (event.processed || 0) + 1;
+            if (event.operation) {
+              return `Checking ${event.operation} (${index} of ${labelTotal})...`;
+            }
+            return 'Checking affected creators...';
+          }
+          case 'operation-complete': {
+            const total = event.total || state.total || 0;
+            const labelTotal = total > 0 ? total : '?';
+            const index = event.processed || 0;
+            if (event.operation) {
+              return `Applied ${event.operation} (${index}/${labelTotal})`;
+            }
+            return 'Applied normalization update.';
+          }
+          case 'operations-finished':
+            return `Database updates complete (${event.updatedCreators || state.updatedCreators || 0} creators touched)`;
+          case 'finalizing':
+            return 'Recording learning decisions...';
+          case 'complete':
+            if ((event.updatedCreators || state.updatedCreators || 0) > 0) {
+              return `All done! Updated ${event.updatedCreators || state.updatedCreators} creators.`;
+            }
+            if ((event.declined || state.declined || 0) > 0) {
+              return 'Saved “keep existing” choices. No changes applied.';
+            }
+            return 'Normalization finished.';
+          case 'error':
+            return 'An error occurred while applying normalizations.';
+          default:
+            return 'Applying normalizations...';
+        }
       },
 
       updateProgress: function() {
         const progressLabel = ZoteroNER_HTMLUtils.getElement('progress-label');
         if (!progressLabel) return;
+
+        const state = this.currentProgressState;
+        if (state) {
+          const total = typeof state.total === 'number'
+            ? state.total
+            : (typeof state.totalOperations === 'number' ? state.totalOperations : (typeof state.totalSuggestions === 'number' ? state.totalSuggestions : 0));
+          const processed = typeof state.processed === 'number' ? state.processed : 0;
+          let percent = Number.isFinite(state.percent) ? state.percent : null;
+
+          if (percent === null) {
+            if (total > 0) {
+              percent = Math.min(100, Math.round((processed / total) * 100));
+            } else if (state.stage === 'complete' || state.stage === 'operations-finished') {
+              percent = 100;
+            } else if (this.isProcessing) {
+              percent = 50;
+            } else {
+              percent = 0;
+            }
+          }
+
+          ZoteroNER_HTMLUtils.updateProgressBar(percent);
+          ZoteroNER_HTMLUtils.updateProgressLabel(state.message || 'Applying normalizations...');
+          return;
+        }
 
         if (this.analysisResults && this.analysisResults.suggestions) {
           if (this.isProcessing) {
@@ -1530,9 +1652,27 @@
         }
 
         const preparedSuggestions = [];
+        const declinedSuggestions = [];
+
         this.analysisResults.suggestions.forEach((suggestion, index) => {
           const selection = this.ensureUserSelection(index, suggestion);
-          if (!selection || selection.apply === false) {
+          if (!selection) {
+            return;
+          }
+
+          const prepared = Object.assign({}, suggestion);
+          prepared.originalPrimary = suggestion.primary;
+          prepared.userSelection = Object.assign({}, selection);
+          prepared.variants = (suggestion.variants || []).map(variant => {
+            const variantClone = Object.assign({}, variant);
+            if (Array.isArray(variantClone.items)) {
+              variantClone.items = variantClone.items.map(item => Object.assign({}, item));
+            }
+            return variantClone;
+          });
+
+          if (selection.apply === false) {
+            declinedSuggestions.push(prepared);
             return;
           }
 
@@ -1541,18 +1681,7 @@
             return;
           }
 
-          const originalPrimary = suggestion.primary;
-          const prepared = Object.assign({}, suggestion);
-          prepared.originalPrimary = originalPrimary;
           prepared.primary = normalizedValue;
-          prepared.variants = (suggestion.variants || []).map(variant => {
-            const variantClone = Object.assign({}, variant);
-            if (Array.isArray(variantClone.items)) {
-              variantClone.items = variantClone.items.map(item => Object.assign({}, item));
-            }
-            return variantClone;
-          });
-          prepared.userSelection = Object.assign({}, selection);
 
           if (selection.mode === 'variant' && typeof selection.variantIndex === 'number') {
             prepared.selectedVariant = prepared.variants[selection.variantIndex] || null;
@@ -1565,12 +1694,17 @@
           preparedSuggestions.push(prepared);
         });
 
-        if (preparedSuggestions.length === 0) {
+        if (preparedSuggestions.length === 0 && declinedSuggestions.length === 0) {
           this.alert('NER Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
           return;
         }
 
+        this.currentProgressState = preparedSuggestions.length > 0
+          ? { stage: 'prepare', total: preparedSuggestions.length, processed: 0, message: 'Preparing normalization updates...' }
+          : { stage: 'prepare', total: declinedSuggestions.length, processed: 0, message: 'Saving “keep existing” choices...' };
+
         this.setDialogBusy(true);
+        this.updateProgress();
 
         let applyError = null;
 
@@ -1583,14 +1717,31 @@
             throw new Error('Zotero NER database analyzer is not available in this context.');
           }
 
-          const results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false);
+          const results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false, {
+            declinedSuggestions,
+            progressCallback: (event) => this.handleApplyProgress(event)
+          });
 
-          this.alert('NER Author Name Normalizer',
-            'Normalization selections applied!\n\n' +
-            'Total selections: ' + results.totalSuggestions + '\n' +
-            'Applied: ' + results.applied + '\n' +
-            'Skipped: ' + results.skipped + '\n' +
-            'Errors: ' + results.errors);
+          if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
+            this.alert('NER Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');
+          } else {
+            const summary = [
+              'Suggestions reviewed: ' + results.totalSuggestions,
+              'Applied: ' + results.applied,
+              'Skipped: ' + results.skipped,
+              'Creators updated: ' + (results.updatedCreators || 0)
+            ];
+
+            if (results.declinedRecorded > 0) {
+              summary.push('Saved “keep existing” decisions: ' + results.declinedRecorded);
+            }
+
+            if (results.errors > 0) {
+              summary.push('Errors: ' + results.errors);
+            }
+
+            this.alert('NER Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
+          }
 
         } catch (error) {
           applyError = error;
@@ -1598,6 +1749,8 @@
           this.alert('Error', 'Failed to apply normalization selections: ' + error.message);
         } finally {
           this.setDialogBusy(false);
+          this.currentProgressState = null;
+          this.updateProgress();
           if (!applyError) {
             window.close();
           }

@@ -9,7 +9,6 @@ import NameParser from './core/name-parser.js';
 import VariantGenerator from './core/variant-generator.js';
 import LearningEngine from './core/learning-engine.js';
 import CandidateFinder from './core/candidate-finder.js';
-import GLINERHandler from './core/gliner-handler.js';
 
 // Zotero integration modules
 import ItemProcessor from './zotero/item-processor.js';
@@ -33,7 +32,6 @@ export {
   VariantGenerator,
   LearningEngine,
   CandidateFinder,
-  GLINERHandler,
   ItemProcessor,
   MenuIntegration,
   ZoteroDBAnalyzer,
@@ -50,7 +48,6 @@ const ZoteroNER = {
   VariantGenerator,
   LearningEngine,
   CandidateFinder,
-  GLINERHandler,
   ItemProcessor,
   MenuIntegration,
   ZoteroDBAnalyzer,

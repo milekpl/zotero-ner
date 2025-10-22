@@ -5,7 +5,8 @@
 
 // Mock the Zotero global object for testing
 const mockZoteroDB = {
-  query: jest.fn()
+  query: jest.fn(),
+  executeTransaction: jest.fn()
 };
 
 global.Zotero = {
@@ -26,6 +27,14 @@ describe('ZoteroDBAnalyzer', () => {
     analyzer = new ZoteroDBAnalyzer();
     // Reset the mock before each test
     mockZoteroDB.query.mockClear();
+    mockZoteroDB.executeTransaction.mockClear();
+    mockZoteroDB.executeTransaction.mockImplementation(async (fn) => {
+      await fn();
+    });
+    analyzer.learningEngine.storeMapping = jest.fn().mockResolvedValue();
+    analyzer.learningEngine.recordDistinctPair = jest.fn().mockResolvedValue(true);
+    analyzer.learningEngine.clearDistinctPair = jest.fn().mockResolvedValue();
+    analyzer.learningEngine.isDistinctPair = jest.fn().mockReturnValue(false);
   });
 
   describe('constructor', () => {
@@ -285,6 +294,7 @@ describe('ZoteroDBAnalyzer', () => {
     test('should apply normalizations when autoConfirm is true', async () => {
       const suggestions = [
         {
+          type: 'surname',
           primary: 'Smith',
           variants: [
             { name: 'Smyth', frequency: 2 },
@@ -294,12 +304,28 @@ describe('ZoteroDBAnalyzer', () => {
         }
       ];
 
+      const queryCalls = [];
+      mockZoteroDB.query.mockImplementation(async (sql, params) => {
+        queryCalls.push({ sql, params });
+        if (/SELECT\s+COUNT/i.test(sql)) {
+          return [{ count: 2 }];
+        }
+        if (/UPDATE/i.test(sql)) {
+          return [];
+        }
+        return [];
+      });
+
       const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
 
       expect(results).toHaveProperty('totalSuggestions', 1);
-      expect(results).toHaveProperty('applied');
-      expect(results).toHaveProperty('skipped');
-      expect(results).toHaveProperty('errors');
+      expect(results.applied).toBe(1);
+      expect(results.skipped).toBe(0);
+      expect(results.errors).toBe(0);
+      expect(results.updatedCreators).toBe(2);
+      expect(analyzer.learningEngine.storeMapping).toHaveBeenCalledWith('Smyth', 'Smith', 0.9);
+      expect(mockZoteroDB.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE creators'), expect.any(Array));
+      expect(queryCalls.some(call => /SELECT\s+COUNT/i.test(call.sql))).toBe(true);
     });
 
     test('should skip normalizations when autoConfirm is false and confirmNormalization returns false', async () => {
@@ -308,6 +334,7 @@ describe('ZoteroDBAnalyzer', () => {
 
       const suggestions = [
         {
+          type: 'surname',
           primary: 'Smith',
           variants: [{ name: 'Smyth', frequency: 2 }],
           similarity: 0.9
@@ -318,6 +345,7 @@ describe('ZoteroDBAnalyzer', () => {
 
       expect(results.applied).toBe(0);
       expect(results.skipped).toBeGreaterThan(0);
+      expect(results.updatedCreators).toBe(0);
     });
   });
 });

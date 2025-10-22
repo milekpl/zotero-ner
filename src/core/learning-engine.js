@@ -7,9 +7,12 @@ class LearningEngine {
     this.settingsKey = 'ner_normalizer_settings';
     this.mappings = new Map();
     this.settings = this.getDefaultSettings();
-    
+    this.distinctPairsKey = 'ner_normalizer_distinct_pairs';
+    this.distinctPairs = new Map();
+
     this.loadMappings();
     this.loadSettings();
+    this.loadDistinctPairs();
   }
 
   /**
@@ -91,6 +94,82 @@ class LearningEngine {
     } catch (error) {
       console.error('Error saving settings:', error);
     }
+  }
+
+  async loadDistinctPairs() {
+    try {
+      const storage = this.getStorage();
+      const stored = storage.getItem(this.distinctPairsKey);
+      if (stored) {
+        this.distinctPairs = new Map(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading distinct name pairs:', error);
+      this.distinctPairs = new Map();
+    }
+  }
+
+  async saveDistinctPairs() {
+    try {
+      const storage = this.getStorage();
+      const serialized = JSON.stringify([...this.distinctPairs.entries()]);
+      storage.setItem(this.distinctPairsKey, serialized);
+    } catch (error) {
+      console.error('Error saving distinct name pairs:', error);
+    }
+  }
+
+  createPairKey(nameA, nameB, scope = '') {
+    if (!nameA || !nameB) {
+      return null;
+    }
+
+    const canonicalA = this.createCanonicalKey(nameA);
+    const canonicalB = this.createCanonicalKey(nameB);
+    if (!canonicalA || !canonicalB) {
+      return null;
+    }
+
+    const sorted = [canonicalA, canonicalB].sort();
+    return `${scope || 'global'}::${sorted[0]}|${sorted[1]}`;
+  }
+
+  async recordDistinctPair(nameA, nameB, scope = '') {
+    const key = this.createPairKey(nameA, nameB, scope);
+    if (!key) {
+      return false;
+    }
+
+    if (!this.distinctPairs.has(key)) {
+      this.distinctPairs.set(key, {
+        scope: scope || 'global',
+        timestamp: Date.now()
+      });
+      await this.saveDistinctPairs();
+      return true;
+    }
+
+    return false;
+  }
+
+  isDistinctPair(nameA, nameB, scope = '') {
+    const key = this.createPairKey(nameA, nameB, scope);
+    if (!key) {
+      return false;
+    }
+    return this.distinctPairs.has(key);
+  }
+
+  async clearDistinctPair(nameA, nameB, scope = '') {
+    const key = this.createPairKey(nameA, nameB, scope);
+    if (!key) {
+      return false;
+    }
+    if (this.distinctPairs.delete(key)) {
+      await this.saveDistinctPairs();
+      return true;
+    }
+    return false;
   }
 
   /**
