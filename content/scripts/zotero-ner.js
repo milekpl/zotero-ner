@@ -62,6 +62,9 @@ if (typeof Zotero === 'undefined') {
               if (!this.normalizerDialog && typeof ZoteroNER.NormalizerDialog === 'function') {
                 this.normalizerDialog = new ZoteroNER.NormalizerDialog();
               }
+              if (!this.menuIntegration && typeof ZoteroNER.MenuIntegration === 'function') {
+                this.menuIntegration = new ZoteroNER.MenuIntegration();
+              }
               this.log('Core components initialized');
             } else {
               this.log('ZoteroNER bundle not available during init');
@@ -371,6 +374,20 @@ if (typeof Zotero === 'undefined') {
             console.error(e);
           }
         }
+      },
+
+      /**
+       * Apply normalization suggestions (called from dialog via window.opener)
+       * @param {Array} suggestions - Array of normalization suggestions
+       * @param {boolean} autoConfirm - Whether to auto-confirm all
+       * @param {Object} options - Additional options including progressCallback
+       * @returns {Object} Results of the normalization application
+       */
+      applyNormalizationSuggestions: async function(suggestions, autoConfirm = false, options = {}) {
+        if (!this.menuIntegration) {
+          throw new Error('Menu integration not initialized');
+        }
+        return await this.menuIntegration.applyNormalizationSuggestions(suggestions, autoConfirm, options);
       }
     };
   }

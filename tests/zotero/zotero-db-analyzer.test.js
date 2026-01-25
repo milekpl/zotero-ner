@@ -9,8 +9,23 @@ const mockZoteroDB = {
   executeTransaction: jest.fn()
 };
 
+// Mock item structure
+const mockItem = {
+  id: 123,
+  key: 'ABC123',
+  getCreators: jest.fn().mockReturnValue([
+    { firstName: 'John', lastName: 'Smyth', creatorType: 'author' },
+    { firstName: 'Jane', lastName: 'Doe', creatorType: 'author' }
+  ]),
+  setCreators: jest.fn(),
+  save: jest.fn().mockResolvedValue(true)
+};
+
 global.Zotero = {
   DB: mockZoteroDB,
+  Items: {
+    getAsync: jest.fn().mockResolvedValue([mockItem])
+  },
   debug: jest.fn(),
   logError: jest.fn(),
   getMainWindow: () => ({
@@ -31,6 +46,10 @@ describe('ZoteroDBAnalyzer', () => {
     mockZoteroDB.executeTransaction.mockImplementation(async (fn) => {
       await fn();
     });
+    global.Zotero.Items.getAsync.mockClear().mockResolvedValue([mockItem]);
+    // Reset mock item state
+    mockItem.setCreators.mockClear();
+    mockItem.save.mockClear().mockResolvedValue(true);
     analyzer.learningEngine.storeMapping = jest.fn().mockResolvedValue();
     analyzer.learningEngine.recordDistinctPair = jest.fn().mockResolvedValue(true);
     analyzer.learningEngine.clearDistinctPair = jest.fn().mockResolvedValue();
@@ -297,24 +316,12 @@ describe('ZoteroDBAnalyzer', () => {
           type: 'surname',
           primary: 'Smith',
           variants: [
-            { name: 'Smyth', frequency: 2 },
-            { name: 'Smith', frequency: 5 } // This one should be skipped (same as primary)
+            { name: 'Smyth', frequency: 2, items: [{ id: 123, key: 'ABC123' }] },
+            { name: 'Smith', frequency: 5, items: [{ id: 456, key: 'DEF456' }] } // This one should be skipped (same as primary)
           ],
           similarity: 0.9
         }
       ];
-
-      const queryCalls = [];
-      mockZoteroDB.query.mockImplementation(async (sql, params) => {
-        queryCalls.push({ sql, params });
-        if (/SELECT\s+COUNT/i.test(sql)) {
-          return [{ count: 2 }];
-        }
-        if (/UPDATE/i.test(sql)) {
-          return [];
-        }
-        return [];
-      });
 
       const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
 
@@ -322,10 +329,12 @@ describe('ZoteroDBAnalyzer', () => {
       expect(results.applied).toBe(1);
       expect(results.skipped).toBe(0);
       expect(results.errors).toBe(0);
-      expect(results.updatedCreators).toBe(2);
+      // Only one item should be updated (Smyth -> Smith)
+      expect(results.updatedCreators).toBe(1);
       expect(analyzer.learningEngine.storeMapping).toHaveBeenCalledWith('Smyth', 'Smith', 0.9);
-      expect(mockZoteroDB.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE creators'), expect.any(Array));
-      expect(queryCalls.some(call => /SELECT\s+COUNT/i.test(call.sql))).toBe(true);
+      // Verify item.save() was called for the normalized item
+      expect(mockItem.save).toHaveBeenCalled();
+      expect(mockItem.setCreators).toHaveBeenCalled();
     });
 
     test('should skip normalizations when autoConfirm is false and confirmNormalization returns false', async () => {
@@ -336,7 +345,7 @@ describe('ZoteroDBAnalyzer', () => {
         {
           type: 'surname',
           primary: 'Smith',
-          variants: [{ name: 'Smyth', frequency: 2 }],
+          variants: [{ name: 'Smyth', frequency: 2, items: [{ id: 123, key: 'ABC123' }] }],
           similarity: 0.9
         }
       ];
@@ -346,6 +355,47 @@ describe('ZoteroDBAnalyzer', () => {
       expect(results.applied).toBe(0);
       expect(results.skipped).toBeGreaterThan(0);
       expect(results.updatedCreators).toBe(0);
+    });
+
+    test('should handle empty suggestions gracefully', async () => {
+      const results = await analyzer.applyNormalizationSuggestions([], true);
+
+      expect(results.totalSuggestions).toBe(0);
+      expect(results.applied).toBe(0);
+      expect(results.updatedCreators).toBe(0);
+    });
+
+    test('should update items with matching variant names', async () => {
+      // Create a mock item with Smyth lastName
+      const smythItem = {
+        id: 789,
+        key: 'GHI789',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'John', lastName: 'Smyth', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([smythItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Smith',
+          variants: [
+            { name: 'Smyth', frequency: 1, items: [{ id: 789, key: 'GHI789' }] }
+          ],
+          similarity: 0.9
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(smythItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
+      ]);
+      expect(smythItem.save).toHaveBeenCalled();
     });
   });
 });

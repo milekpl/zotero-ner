@@ -88,7 +88,7 @@ class MenuIntegration {
   async handleFullLibraryAnalysis() {
     try {
       const results = await this.performFullLibraryAnalysis();
-      
+
       // In a real implementation, this would show the results in a dedicated UI
       // For now, we'll just return the results
       console.log('Full library analysis results:', {
@@ -96,10 +96,39 @@ class MenuIntegration {
         totalVariantGroups: results.totalVariantGroups,
         topSuggestions: results.suggestions.slice(0, 10) // First 10 suggestions
       });
-      
+
       return results;
     } catch (error) {
       console.error('Error handling full library analysis:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Apply normalization suggestions (called from dialog via window.opener)
+   * @param {Array} suggestions - Array of normalization suggestions
+   * @param {boolean} autoConfirm - Whether to auto-confirm all
+   * @param {Object} options - Additional options including progressCallback
+   * @returns {Object} Results of the normalization application
+   */
+  async applyNormalizationSuggestions(suggestions, autoConfirm = false, options = {}) {
+    if (typeof Zotero === 'undefined') {
+      throw new Error('This feature requires Zotero context');
+    }
+
+    console.log('Applying normalization suggestions for ' + suggestions.length + ' items');
+
+    try {
+      const results = await this.zoteroDBAnalyzer.applyNormalizationSuggestions(
+        suggestions,
+        autoConfirm,
+        options
+      );
+
+      console.log('Normalization application complete:', results);
+      return results;
+    } catch (error) {
+      console.error('Error applying normalization suggestions:', error);
       throw error;
     }
   }

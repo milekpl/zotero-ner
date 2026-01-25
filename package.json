@@ -8,6 +8,7 @@
     "lint:fix": "eslint . --ext .js,.json --fix",
     "test": "npm run test:unit && npm run ui-test",
     "test:unit": "jest",
+    "test:zotero": "node tests/zotero-integration/index.js",
     "build": "node build.js",
     "dev": "webpack --mode development --watch",
     "ui-test": "playwright test",

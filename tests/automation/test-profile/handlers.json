@@ -1,0 +1,1 @@
+{"defaultHandlersVersion":{},"mimeTypes":{},"schemes":{"mailto":{"stubEntry":true,"handlers":[null,{"name":"Gmail","uriTemplate":"https://mail.google.com/mail/?extsrc=mailto&url=%s"}]},"http":{"action":4},"https":{"action":4}},"isDownloadsImprovementsAlreadyMigrated":true,"isSVGXMLAlreadyMigrated":true}

@@ -248,3 +248,146 @@ function isZoteroMainWindow(win) {
   const windowType = win.document.documentElement.getAttribute('windowtype');
   return windowType === 'navigator:browser' || windowType === 'zotero:browser';
 }
+
+// Export test runner functions for use by test harness
+if (typeof globalThis !== 'undefined') {
+  globalThis.ZoteroNERTests = {
+    /**
+     * Run a test and return result
+     * @param {string} testName - Name of the test to run
+     * @returns {Object} Test result
+     */
+    runTest: function(testName) {
+      if (typeof Zotero === 'undefined' || !Zotero.NER) {
+        return { success: false, error: 'Zotero or Zotero.NER not available' };
+      }
+
+      try {
+        switch (testName) {
+          case 'testZoteroLoaded':
+            return {
+              success: typeof Zotero !== 'undefined',
+              version: Zotero.version,
+              message: 'Zotero is loaded'
+            };
+
+          case 'testExtensionLoaded':
+            const loaded = typeof Zotero !== 'undefined' && Zotero.NER;
+            return {
+              success: loaded,
+              initialized: loaded ? Zotero.NER.initialized : false,
+              message: loaded ? 'Extension is loaded' : 'Zotero.NER not defined'
+            };
+
+          case 'testLearningEngine':
+            if (!Zotero.NER.learningEngine) {
+              return { success: false, error: 'Learning engine not initialized' };
+            }
+            // Test storing and retrieving a mapping
+            Zotero.NER.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
+            const mappings = Zotero.NER.learningEngine.getMapping('Smyth');
+            const success = mappings && mappings.normalized === 'Smith';
+            return {
+              success: success,
+              message: success ? 'Learning engine working' : 'Mapping not found',
+              mappings: mappings
+            };
+
+          case 'testNameParser':
+            if (!Zotero.NER.nameParser) {
+              return { success: false, error: 'Name parser not initialized' };
+            }
+            const testCases = [
+              { input: 'John Smith', expected: { firstName: 'John', lastName: 'Smith' } },
+              { input: 'J. Smith', expected: { firstName: 'J.', lastName: 'Smith' } }
+            ];
+            const results = testCases.map(tc => {
+              const parsed = Zotero.NER.nameParser.parse(tc.input);
+              return {
+                input: tc.input,
+                parsed: parsed,
+                matches: parsed.lastName === tc.expected.lastName
+              };
+            });
+            const allPassed = results.every(r => r.matches);
+            return {
+              success: allPassed,
+              results: results,
+              message: allPassed ? 'All name parsing tests passed' : 'Some tests failed'
+            };
+
+          case 'testCandidateFinder':
+            if (!Zotero.NER.candidateFinder) {
+              return { success: false, error: 'Candidate finder not initialized' };
+            }
+            const surnames = ['Smith', 'Smyth', 'Smythe', 'Johnson', 'Johnsen'];
+            const candidates = Zotero.NER.candidateFinder.findPotentialVariants(surnames);
+            return {
+              success: candidates && candidates.length > 0,
+              candidateCount: candidates ? candidates.length : 0,
+              candidates: candidates
+            };
+
+          case 'testDBAnalyzer':
+            if (!Zotero.NER.menuIntegration) {
+              return { success: false, error: 'Menu integration not initialized' };
+            }
+            const dbAnalyzer = Zotero.NER.menuIntegration.zoteroDBAnalyzer;
+            return {
+              success: !!dbAnalyzer,
+              hasDBAnalyzer: !!dbAnalyzer,
+              message: dbAnalyzer ? 'DB analyzer available' : 'DB analyzer not available'
+            };
+
+          case 'testLibraryAccess':
+            if (typeof Zotero === 'undefined' || !Zotero.Libraries) {
+              return { success: false, error: 'Zotero Libraries not available' };
+            }
+            const userLibraryID = Zotero.Libraries.userLibraryID;
+            const hasAccess = typeof userLibraryID === 'number';
+            return {
+              success: hasAccess,
+              libraryID: userLibraryID,
+              message: hasAccess ? 'Library access confirmed' : 'No library access'
+            };
+
+          default:
+            return { success: false, error: 'Unknown test: ' + testName };
+        }
+      } catch (e) {
+        return { success: false, error: e.message, stack: e.stack };
+      }
+    },
+
+    /**
+     * Run all tests and return results
+     * @returns {Object} All test results
+     */
+    runAllTests: function() {
+      const testNames = [
+        'testZoteroLoaded',
+        'testExtensionLoaded',
+        'testLearningEngine',
+        'testNameParser',
+        'testCandidateFinder',
+        'testDBAnalyzer',
+        'testLibraryAccess'
+      ];
+
+      const results = {};
+      for (const testName of testNames) {
+        results[testName] = this.runTest(testName);
+      }
+
+      const passed = Object.values(results).filter(r => r.success).length;
+      const failed = Object.values(results).filter(r => !r.success).length;
+
+      return {
+        tests: results,
+        passed: passed,
+        failed: failed,
+        total: testNames.length
+      };
+    }
+  };
+}

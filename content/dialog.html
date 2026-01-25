@@ -1709,18 +1709,30 @@
         let applyError = null;
 
         try {
-          if (typeof ZoteroNER !== 'undefined' && ZoteroNER.ZoteroDBAnalyzer) {
+          // Try to use the main window's Zotero.NER which has proper Zotero context
+          let results;
+          if (window.opener && window.opener.Zotero && window.opener.Zotero.NER) {
+            results = await window.opener.Zotero.NER.applyNormalizationSuggestions(
+              preparedSuggestions,
+              false,
+              {
+                declinedSuggestions,
+                progressCallback: (event) => this.handleApplyProgress(event)
+              }
+            );
+          } else if (typeof ZoteroNER !== 'undefined' && ZoteroNER.ZoteroDBAnalyzer) {
+            // Fallback: instantiate in dialog context (will fail if Zotero is undefined)
             this.dbAnalyzer = new ZoteroNER.ZoteroDBAnalyzer();
-          }
-
-          if (!this.dbAnalyzer || typeof this.dbAnalyzer.applyNormalizationSuggestions !== 'function') {
+            if (!this.dbAnalyzer || typeof this.dbAnalyzer.applyNormalizationSuggestions !== 'function') {
+              throw new Error('Zotero NER database analyzer is not available in this context.');
+            }
+            results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false, {
+              declinedSuggestions,
+              progressCallback: (event) => this.handleApplyProgress(event)
+            });
+          } else {
             throw new Error('Zotero NER database analyzer is not available in this context.');
           }
-
-          const results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false, {
-            declinedSuggestions,
-            progressCallback: (event) => this.handleApplyProgress(event)
-          });
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
             this.alert('NER Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');

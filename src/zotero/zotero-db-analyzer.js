@@ -161,13 +161,14 @@ class ZoteroDBAnalyzer {
         };
       }
 
-      // Filter to items that actually have creators
+      // Process items in batches to avoid memory issues
+      const filterBatchSize = 200;
+      const processingBatchSize = 100;
+      const creatorsMap = {};
       const itemsWithCreators = [];
-      const filterBatchSize = 200; // Larger batch for filtering
+      let processedItems = 0;
 
-      Zotero.debug('ZoteroDBAnalyzer: Starting item filtering for creators, total items: ' + itemIDs.length);
-      console.log(`Filtering ${itemIDs.length} items to find those with creators...`);
-
+      // First pass: filter items with creators and populate creatorsMap
       for (let i = 0; i < itemIDs.length; i += filterBatchSize) {
         const batch = itemIDs.slice(i, i + filterBatchSize);
         const items = await Zotero.Items.getAsync(batch);
@@ -241,79 +242,6 @@ class ZoteroDBAnalyzer {
           console.error('Fallback search failed:', fallbackError);
         }
         Zotero.debug('ZoteroDBAnalyzer: No items with creators found, fallback search initiated');
-      }
-
-      // Process items in batches to avoid memory issues
-      const processingBatchSize = 100;
-      const creatorsMap = {};
-      let processedItems = 0;
-
-      for (let i = 0; i < itemIDs.length; i += processingBatchSize) {
-        // Check for cancellation
-        if (shouldCancel && shouldCancel()) {
-          console.log('Analysis cancelled by user');
-          throw new Error('Analysis cancelled');
-        }
-
-        const batch = itemIDs.slice(i, i + filterBatchSize);
-        const items = await Zotero.Items.getAsync(batch);
-
-        for (const item of items) {
-          try {
-            const creators = item.getCreators ? item.getCreators() : [];
-            for (const creator of creators) {
-              this.addCreatorOccurrence(creatorsMap, creator, item);
-            }
-          } catch (itemError) {
-            console.warn('Error processing item creators:', itemError);
-          }
-        }
-
-        processedItems += batch.length;
-
-        // Report progress
-        if (progressCallback) {
-          progressCallback({
-            stage: 'processing_items',
-            processed: processedItems,
-            total: itemIDs.length,
-            percent: Math.round((processedItems / itemIDs.length) * 100)
-          });
-        }
-      }
-
-      Zotero.debug('ZoteroDBAnalyzer: Starting creator extraction from ' + itemsWithCreators.length + ' items');
-      console.log(`Found ${itemsWithCreators.length} items with creators, now extracting creator data...`);
-
-      // Now extract creators from the filtered items
-      for (let i = 0; i < itemsWithCreators.length; i += processingBatchSize) {
-        // Check for cancellation
-        if (shouldCancel && shouldCancel()) {
-          throw new Error('Analysis cancelled');
-        }
-
-        const batch = itemsWithCreators.slice(i, i + processingBatchSize);
-
-        for (const item of batch) {
-          try {
-            const creators = item.getCreators ? item.getCreators() : [];
-            for (const creator of creators) {
-              this.addCreatorOccurrence(creatorsMap, creator, item);
-            }
-          } catch (itemError) {
-            console.warn('Error processing item creators:', itemError);
-          }
-        }
-
-        // Report progress
-        if (progressCallback) {
-          progressCallback({
-            stage: 'extracting_creators',
-            processed: i + batch.length,
-            total: itemsWithCreators.length,
-            percent: Math.round(((i + batch.length) / itemsWithCreators.length) * 100)
-          });
-        }
       }
 
       const creators = Object.values(creatorsMap);
@@ -1593,6 +1521,11 @@ class ZoteroDBAnalyzer {
       throw new Error('This method must be run in the Zotero context');
     }
 
+    // Ensure Zotero.Items is available
+    if (typeof Zotero === 'undefined' || !Zotero.Items || typeof Zotero.Items.getAsync !== 'function') {
+      throw new Error('Zotero Items API is not available');
+    }
+
     const { progressCallback = null, declinedSuggestions = [] } = options || {};
     const incoming = Array.isArray(suggestions) ? suggestions : [];
 
@@ -1819,30 +1752,11 @@ class ZoteroDBAnalyzer {
     }
 
     const progressCallback = options.progressCallback || null;
-    const plans = suggestions.map(suggestion => this.buildSuggestionOperationPlan(suggestion));
-    const operations = [];
-
-    for (const plan of plans) {
-      for (const operation of plan.operations) {
-        operations.push({ ...operation, plan });
-      }
-    }
-
-    if (operations.length === 0) {
-      if (progressCallback) {
-        progressCallback({ stage: 'operations-finished', total: 0, updatedCreators: 0 });
-      }
-      return { plans, operations: [], updatedCreators: 0, errors: [] };
-    }
-
-    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
-      throw new Error('Zotero database access is not available');
-    }
 
     if (progressCallback) {
       progressCallback({
         stage: 'operations-planned',
-        total: operations.length,
+        total: suggestions.length,
         suggestions: suggestions.length
       });
     }
@@ -1850,72 +1764,127 @@ class ZoteroDBAnalyzer {
     const errors = [];
     let updatedCreators = 0;
     let processed = 0;
-    const totalOperations = operations.length;
+    const totalSuggestions = suggestions.length;
 
-    const runOperation = async (operation) => {
-      let matched = 0;
+    // Collect all item IDs that need updating
+    const allItemIds = new Set();
+    const itemUpdates = new Map(); // itemId -> { suggestion, variant, normalizedValue }
+
+    for (const suggestion of suggestions) {
+      if (!suggestion || !suggestion.primary) continue;
+
+      const normalizedValue = suggestion.primary.trim();
+      const type = suggestion.type || 'surname';
+
+      for (const variant of (suggestion.variants || [])) {
+        if (!variant || !variant.items || variant.items.length === 0) continue;
+
+        for (const itemSummary of variant.items) {
+          if (!itemSummary || !itemSummary.id) continue;
+          const itemId = itemSummary.id;
+
+          // Skip if this variant IS the normalized value
+          const variantName = variant.name || '';
+          if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) continue;
+
+          allItemIds.add(itemId);
+          if (!itemUpdates.has(itemId)) {
+            itemUpdates.set(itemId, { suggestion, variant, normalizedValue, type });
+          }
+        }
+      }
+    }
+
+    if (allItemIds.size === 0) {
+      if (progressCallback) {
+        progressCallback({ stage: 'operations-finished', total: 0, updatedCreators: 0 });
+      }
+      return { plans: [], operations: [], updatedCreators: 0, errors: [] };
+    }
+
+    // Get all items that need updating
+    const itemIdsArray = Array.from(allItemIds);
+    const items = await Zotero.Items.getAsync(itemIdsArray);
+
+    // Process each item
+    for (const item of items) {
+      if (!item || typeof item.getCreators !== 'function') continue;
+
       try {
-        matched = await this.countMatchesForOperation(operation);
+        const creators = item.getCreators();
+        if (!Array.isArray(creators)) continue;
 
-        if (progressCallback) {
-          progressCallback({
-            stage: 'operation-preflight',
-            processed,
-            total: totalOperations,
-            matched,
-            operation: this.describeOperation(operation),
-            type: operation.type
-          });
+        let updated = false;
+        const normalizedCreators = creators.map(creator => {
+          if (!creator) return creator;
+
+          const updateInfo = itemUpdates.get(item.id);
+          if (!updateInfo) return creator;
+
+          const { normalizedValue, type, variant } = updateInfo;
+          let newCreator = { ...creator };
+
+          if (type === 'surname') {
+            // Check if this creator's lastName matches the variant being normalized
+            const creatorLastName = (creator.lastName || '').trim();
+            const variantName = (variant.name || '').trim();
+
+            if (this.stringsEqualIgnoreCase(creatorLastName, variantName)) {
+              newCreator.lastName = normalizedValue;
+              updated = true;
+            }
+          } else {
+            // Full name normalization
+            const creatorFirstName = (creator.firstName || '').trim();
+            const creatorLastName = (creator.lastName || '').trim();
+            const variantFirstName = (variant.firstName || '').trim();
+            const variantLastName = (variant.lastName || creatorLastName).trim();
+
+            if (this.stringsEqualIgnoreCase(creatorFirstName, variantFirstName) &&
+                this.stringsEqualIgnoreCase(creatorLastName, variantLastName)) {
+              // Parse the normalized value
+              const normalizedParts = normalizedValue.split(' ');
+              newCreator.firstName = normalizedParts[0] || '';
+              newCreator.lastName = normalizedParts.slice(1).join(' ') || creatorLastName;
+              updated = true;
+            }
+          }
+
+          return newCreator;
+        });
+
+        if (updated) {
+          item.setCreators(normalizedCreators);
+          await item.save();
+          updatedCreators++;
+
+          if (progressCallback) {
+            processed++;
+            progressCallback({
+              stage: 'operation-complete',
+              processed,
+              total: totalSuggestions,
+              affected: 1,
+              itemId: item.id
+            });
+          }
         }
-
-        if (matched === 0) {
-          operation.affected = 0;
-          return;
-        }
-
-        await this.performOperationUpdate(operation);
-        operation.affected = matched;
-        updatedCreators += matched;
       } catch (error) {
-        operation.error = error;
-        errors.push({ operation, error });
-        console.error('Error applying normalization operation:', error);
-      } finally {
-        processed++;
-        if (progressCallback) {
-          progressCallback({
-            stage: 'operation-complete',
-            processed,
-            total: totalOperations,
-            affected: operation.affected || 0,
-            operation: this.describeOperation(operation),
-            type: operation.type
-          });
-        }
+        errors.push({ itemId: item.id, error });
+        console.error('Error updating item:', error);
       }
-    };
-
-    const executeAll = async () => {
-      for (const operation of operations) {
-        await runOperation(operation);
-      }
-    };
-
-    if (typeof Zotero.DB.executeTransaction === 'function') {
-      await Zotero.DB.executeTransaction(executeAll);
-    } else {
-      await executeAll();
     }
 
     if (progressCallback) {
       progressCallback({
         stage: 'operations-finished',
-        total: totalOperations,
+        total: totalSuggestions,
         updatedCreators
       });
     }
 
-    return { plans, operations, updatedCreators, errors };
+    const plans = suggestions.map(suggestion => this.buildSuggestionOperationPlan(suggestion));
+    return { plans, operations: [], updatedCreators, errors };
   }
 
   buildSuggestionOperationPlan(suggestion) {
@@ -2123,90 +2092,6 @@ class ZoteroDBAnalyzer {
     const from = this.buildFullName(operation.fromFirstName, operation.fromLastName);
     const to = this.buildFullName(operation.toFirstName, operation.toLastName);
     return `${from} → ${to}`;
-  }
-
-  async countMatchesForOperation(operation) {
-    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
-      return 0;
-    }
-
-    if (operation.type === 'surname') {
-      const sql = `
-        SELECT COUNT(*) AS count
-        FROM creators
-        WHERE fieldMode = 0
-          AND LOWER(lastName) = LOWER(?)
-      `;
-      const rows = await Zotero.DB.query(sql, [operation.fromLastName]);
-      return this.extractCountFromRows(rows);
-    }
-
-    const sql = `
-      SELECT COUNT(*) AS count
-      FROM creators
-      WHERE fieldMode = 0
-        AND LOWER(lastName) = LOWER(?)
-        AND LOWER(firstName) = LOWER(?)
-    `;
-    const rows = await Zotero.DB.query(sql, [operation.fromLastName, operation.fromFirstName]);
-    return this.extractCountFromRows(rows);
-  }
-
-  async performOperationUpdate(operation) {
-    if (!Zotero.DB || typeof Zotero.DB.query !== 'function') {
-      return;
-    }
-
-    if (operation.type === 'surname') {
-      const sql = `
-        UPDATE creators
-        SET lastName = ?
-        WHERE fieldMode = 0
-          AND LOWER(lastName) = LOWER(?)
-      `;
-      await Zotero.DB.query(sql, [operation.toLastName, operation.fromLastName]);
-      return;
-    }
-
-    const setParts = ['firstName = ?'];
-    const params = [operation.toFirstName];
-
-    if (operation.toLastName && !this.stringsEqualIgnoreCase(operation.toLastName, operation.fromLastName)) {
-      setParts.push('lastName = ?');
-      params.push(operation.toLastName);
-    }
-
-    params.push(operation.fromLastName, operation.fromFirstName);
-
-    const sql = `
-      UPDATE creators
-      SET ${setParts.join(', ')}
-      WHERE fieldMode = 0
-        AND LOWER(lastName) = LOWER(?)
-        AND LOWER(firstName) = LOWER(?)
-    `;
-
-    await Zotero.DB.query(sql, params);
-  }
-
-  extractCountFromRows(rows) {
-    if (!rows || rows.length === 0) {
-      return 0;
-    }
-
-    const first = rows[0];
-    const value = first.count ?? first.COUNT ?? Object.values(first)[0];
-
-    if (typeof value === 'number') {
-      return value;
-    }
-
-    if (typeof value === 'string') {
-      const parsed = parseInt(value, 10);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    }
-
-    return 0;
   }
 
   shouldSkipSuggestionFromLearning(suggestion) {
