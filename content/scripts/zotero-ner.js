@@ -212,7 +212,6 @@ if (typeof Zotero === 'undefined') {
               menuItem.setAttribute('label', 'Normalize Author Names');
               menuItem.setAttribute('tooltiptext', 'Normalize author names using NER');
               menuItem.addEventListener('command', commandHandler);
-              menuItem.addEventListener('click', commandHandler);
               if (toolsPopup && typeof toolsPopup.appendChild === 'function') {
                 toolsPopup.appendChild(menuItem);
                 state.menuElement = menuItem;
