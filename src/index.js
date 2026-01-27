@@ -3,6 +3,39 @@
  * This file exports all core modules for use in the bundled extension
  */
 
+// Console polyfill for Zotero 8 compatibility
+// In Zotero's extension context, console may not be defined
+if (typeof console === 'undefined') {
+  // eslint-disable-next-line no-global-assign
+  globalThis.console = {
+    log: function(...args) {
+      if (typeof Zotero !== 'undefined' && Zotero.debug) {
+        Zotero.debug('NER: ' + args.join(' '));
+      }
+    },
+    warn: function(...args) {
+      if (typeof Zotero !== 'undefined' && Zotero.debug) {
+        Zotero.debug('NER WARN: ' + args.join(' '));
+      }
+    },
+    error: function(...args) {
+      if (typeof Zotero !== 'undefined' && Zotero.debug) {
+        Zotero.debug('NER ERROR: ' + args.join(' '));
+      }
+    },
+    info: function(...args) {
+      if (typeof Zotero !== 'undefined' && Zotero.debug) {
+        Zotero.debug('NER INFO: ' + args.join(' '));
+      }
+    },
+    debug: function(...args) {
+      if (typeof Zotero !== 'undefined' && Zotero.debug) {
+        Zotero.debug('NER DEBUG: ' + args.join(' '));
+      }
+    }
+  };
+}
+
 // Core modules
 import NERProcessor from './core/ner-processor.js';
 import NameParser from './core/name-parser.js';

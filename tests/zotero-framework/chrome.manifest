@@ -1,0 +1,5 @@
+# Zotero NER Test Chrome Manifest
+# Registers test content and resources
+
+content zotero-ner-test test/content/
+resource zotero-ner-tests test/tests/

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="chrome://global/content/transformiix/rng2xul.xsl"?>
+
+<!DOCTYPE page [
+    <!ENTITY % globalDTD SYSTEM "chrome://global/locale/global.dtd">
+    %globalDTD;
+]>
+
+<page xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+      onload="ZoteroNerTest.init()"
+      width="800"
+      height="600">
+
+<head>
+    <title>Zotero NER Test</title>
+</head>
+
+<body>
+    <vbox flex="1">
+        <label id="status" value="Initializing..."/>
+        <label id="results" value=""/>
+        <textbox id="log" readonly="true" multiline="true" rows="20" flex="1"/>
+    </vbox>
+
+    <script>
+    <![CDATA[
+
+    var ZoteroNerTest = {
+        results: [],
+        log: [],
+
+        init: function() {
+            dump("NER_TEST: init() called\n");
+            document.getElementById('status').value = 'Running tests...';
+            this.log("Zotero NER Test starting...");
+            this.log("Zotero: " + (typeof Zotero !== 'undefined' ? Zotero.version : 'NOT FOUND'));
+
+            if (typeof Zotero === 'undefined') {
+                this.log("ERROR: Zotero is not defined!");
+                this.writeResults();
+                return;
+            }
+
+            setTimeout(() => this.runTests(), 1000);
+        },
+
+        log: function(msg) {
+            var timestamp = new Date().toISOString();
+            var entry = "[" + timestamp + "] " + msg;
+            this.log.push(entry);
+            var logEl = document.getElementById('log');
+            if (logEl) {
+                logEl.value += entry + "\n";
+            }
+            if (typeof Zotero !== 'undefined') {
+                Zotero.debug("[NER Test] " + msg);
+            }
+        },
+
+        pass: function(name) {
+            this.results.push({ name: name, status: 'pass' });
+            this.log("PASS: " + name);
+        },
+
+        fail: function(name, error) {
+            this.results.push({ name: name, status: 'fail', error: error });
+            this.log("FAIL: " + name + " - " + error);
+        },
+
+        assert: function(condition, name, error) {
+            if (condition) this.pass(name); else this.fail(name, error || 'assertion failed');
+        },
+
+        runTests: function() {
+            this.log("Running tests...");
+
+            // Basic checks
+            this.assert(typeof Zotero !== 'undefined', "Zotero defined");
+            this.assert(typeof Zotero.NER !== 'undefined', "Zotero.NER defined");
+
+            if (typeof Zotero.NER !== 'undefined') {
+                // Use PascalCase to match exports from src/index.js
+                var modules = ['NameParser', 'LearningEngine', 'CandidateFinder',
+                               'NERProcessor', 'VariantGenerator', 'MenuIntegration', 'ItemProcessor'];
+                var allPresent = true;
+                for (var i = 0; i < modules.length; i++) {
+                    if (!Zotero.NER[modules[i]]) {
+                        allPresent = false;
+                        this.log("  Missing: " + modules[i]);
+                    }
+                }
+                this.assert(allPresent, "All modules present");
+
+                // Test name parser
+                if (Zotero.NER.NameParser) {
+                    var p = Zotero.NER.NameParser.parse("John Smith");
+                    if (p.firstName === "John") this.pass("Name parser: firstName");
+                    else this.fail("Name parser: firstName", "Expected John, got " + p.firstName);
+
+                    if (p.lastName === "Smith") this.pass("Name parser: lastName");
+                    else this.fail("Name parser: lastName", "Expected Smith, got " + p.lastName);
+                } else {
+                    this.fail("Name parser", "Not available");
+                }
+
+                // Test learning engine
+                if (Zotero.NER.LearningEngine) {
+                    var key = "Test_" + Date.now();
+                    Zotero.NER.LearningEngine.storeMapping(key, "TestValue", 0.9);
+                    var m = Zotero.NER.LearningEngine.getMapping(key);
+                    if (m && m.normalized === "TestValue") {
+                        this.pass("Learning engine: store/retrieve");
+                    } else {
+                        this.fail("Learning engine: store/retrieve", "Mapping not found");
+                    }
+                } else {
+                    this.fail("Learning engine", "Not available");
+                }
+            }
+
+            // Summary
+            var passed = this.results.filter(r => r.status === 'pass').length;
+            var failed = this.results.filter(r => r.status === 'fail').length;
+            var total = this.results.length;
+
+            document.getElementById('status').value = passed + "/" + total + " passed";
+            document.getElementById('results').value = "Passed: " + passed + ", Failed: " + failed;
+
+            this.log("");
+            this.log("=".repeat(40));
+            this.log("SUMMARY: " + passed + "/" + total + " passed");
+            this.log("=".repeat(40));
+
+            // Write results file
+            this.writeResults();
+        },
+
+        writeResults: function() {
+            try {
+                var file = Components.classes["@mozilla.org/file/local;1"]
+                    .createInstance(Components.interfaces.nsILocalFile);
+                file.initWithPath("/tmp/zotero-ner-test-results.json");
+                var stream = Components.classes["@mozilla.org/network/file-output-stream;1"]
+                    .createInstance(Components.interfaces.nsIFileOutputStream);
+                stream.init(file, 0x02 | 0x08 | 0x20, 0o644, 0);
+                var content = JSON.stringify({
+                    passed: this.results.filter(r => r.status === 'pass').length,
+                    failed: this.results.filter(r => r.status === 'fail').length,
+                    tests: this.results
+                });
+                stream.write(content, content.length);
+                stream.close();
+                this.log("Results written to /tmp/zotero-ner-test-results.json");
+            } catch(e) {
+                this.log("Write error: " + e.message);
+            }
+        }
+    };
+
+    window.ZoteroNerTest = ZoteroNerTest;
+
+    ]]>
+    </script>
+</body>
+
+</page>

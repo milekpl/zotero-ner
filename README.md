@@ -1,137 +1,172 @@
 # Zotero NER Author Name Normalizer
 
-This Zotero extension uses Named Entity Recognition (NER) to normalize author names in Zotero libraries, addressing common issues with inconsistent name formats and incomplete metadata.
+A Zotero 7/8 extension that uses Named Entity Recognition (NER) to normalize author names in Zotero libraries.
+
+## Status
+
+✅ **Fully functional** - Extension loads in Zotero 8, displays UI menu, opens dialogs with all normalization options available.
 
 ## Problem Solved
 
-Metadata in academic papers often contains author names in various formats:
-- Jerry Alan Fodor
-- Jerry A. Fodor  
-- Jerry Fodor
-- J.A. Fodor
-- etc.
+Academic metadata contains author names in various formats:
+- Jerry Alan Fodor vs Jerry A. Fodor vs Jerry Fodor vs J.A. Fodor
+- Inconsistent handling of Spanish double surnames
+- Prefixes like "van", "de", "la" often misplaced
 
-Additionally, Spanish double surnames and prefixes like "van", "de", "la" are often not properly handled.
+This extension normalizes these variations for better search and citation functionality.
 
 ## Features
 
-- **NER-based parsing**: Uses GLINER model to identify name components (first name, middle name, last name, prefixes, suffixes)
-- **Variant generation**: Creates multiple normalized forms of author names for user selection
-- **Learning system**: Remembers user preferences to improve future suggestions
+- **NER-based parsing**: Uses GLINER model to identify name components
+- **Variant generation**: Creates multiple normalized forms for user selection
+- **Learning system**: Remembers user preferences for future suggestions
 - **Zotero integration**: Seamlessly integrates with Zotero's interface
 - **Batch processing**: Process multiple items at once
 
-## Architecture
+## Development Setup
 
-The extension is organized into the following modules:
+### Prerequisites
 
-### Core
-- `ner-processor.js`: Handles NER model integration and name parsing
-- `name-parser.js`: Enhanced name parsing logic with special cases
-- `variant-generator.js`: Creates multiple normalized name variations
-- `learning-engine.js`: Stores and retrieves learned mappings with similarity matching
-- `gliner-handler.js`: Interface for GLINER NER model
+- Node.js 16+
+- npm
+- Zotero 8.0+ (tested on Zotero 8.0)
+- zotero-plugin-scaffold
 
-### UI
-- `normalizer-dialog.js`: Dialog for showing normalization options
-- `batch-processor.js`: Batch processing interface
+### Installation
 
-### Storage
-- `data-manager.js`: Handles data persistence
-
-### Zotero Integration
-- `item-processor.js`: Processes Zotero items
-- `menu-integration.js`: Adds menu items to Zotero interface
-
-### Worker
-- `ner-worker.js`: Handles intensive processing in background
-
-## Installation
-
-1. Make sure you have Zotero installed (version 5.0 or higher)
-2. Download the extension package
-3. Install in Zotero via Tools → Add-ons → Extensions
-
-## Usage
-
-1. Select items in your Zotero library
-2. Right-click and select "Normalize Author Names with NER..." or use the Tools menu
-3. Review the suggested normalizations
-4. Accept or modify as needed
-5. The extension will learn from your choices for future use
-
-## Technical Implementation
-
-The extension currently uses a hybrid approach:
-- A rule-based fallback system for immediate functionality
-- Integration points for GLINER NER model (using ONNX.js for browser execution)
-- Comprehensive learning system to remember user preferences
-- Full integration with Zotero's data model
-
-## Dependencies
-
-- onnxruntime-web: For running ONNX models in the browser environment
-
-## Development
-
-To build and test the extension:
-
+1. Install dependencies:
 ```bash
 npm install
-npm test
 ```
 
-## Roadmap
+2. Configure the Zotero scaffold by creating `~/.zotero-plugin`:
+```bash
+zoteroBinPath=/usr/local/bin/zotero
+profilePath=/home/username/.zotero/zotero/PROFILE_NAME
+dataDir=/home/username/.zotero/zotero/PROFILE_NAME/zotero
+```
 
-Future improvements:
-- Better NER model integration with GLINER
-- More sophisticated similarity algorithms
-- Improved handling of cultural name patterns
-- Additional export/import options for learned mappings
+3. Start development:
+```bash
+npm start
+```
 
-## Building the Extension
+This launches Zotero with hot reload enabled.
 
-To build the Zotero 7 extension .xpi file:
+## Build
 
+Create a production build:
 ```bash
 npm run build
 ```
 
-This creates a distributable .xpi file in the `dist/` directory that is compatible with Zotero 7.
+The built extension is in `build/addon/`.
 
-The built extension can be installed in Zotero 7 by:
-1. Opening Zotero
-2. Going to Tools → Add-ons
-3. Clicking the gear icon → "Install Add-on From File..."
-4. Selecting the .xpi file from the `dist/` directory
+## Architecture
 
-## Compatibility
+### Core Modules (`src/core/`)
+- `ner-processor.js`: NER model integration and name parsing
+- `name-parser.js`: Enhanced name parsing with special cases
+- `variant-generator.js`: Creates normalized name variations
+- `learning-engine.js`: Stores and retrieves learned mappings
+- `candidate-finder.js`: Finds similar names in library
 
-This extension is now compatible with Zotero 7.x! It uses the modern WebExtension-based architecture required for Zotero 7.
+### UI Modules (`src/ui/`)
+- `normalizer-dialog.js`: Dialog for normalization options
+- `batch-processor.js`: Batch processing interface
 
-~~This extension is compatible with Zotero versions 5.0 - 6.x. It uses the legacy addon architecture and may not work with Zotero 7.0+ which has a different extension system.~~
+### Zotero Integration (`src/zotero/`)
+- `item-processor.js`: Processes Zotero items
+- `menu-integration.js`: Adds menu items to Zotero
 
-~~For Zotero 7.x compatibility, a complete rewrite using the new WebExtension-based architecture would be required.~~
+### Storage (`src/storage/`)
+- `data-manager.js`: Handles data persistence
 
-## UI Tests
+### Content (`content/`)
+- `dialog.html`: Dialog UI
+- `zotero-ner.js`: Extension main logic
+- `zotero-ner-bundled.js`: Bundled core modules (webpack output)
 
-UI tests using Playwright are included in the `playwright-tests/` directory:
+### Bootstrap (`bootstrap.js`)
+- Extension lifecycle management (startup, shutdown)
+- Chrome URI registration for `chrome://zoteroner/`
+- Bundle injection into Zotero windows
 
+## Technical Details
+
+### Zotero 8 Compatibility
+
+Key implementation details for Zotero 8:
+
+- **Bootstrap extension**: Uses `bootstrap.js` for extension lifecycle
+- **ESM modules**: `ChromeUtils.importESModule()` for module imports
+- **Console polyfill**: Provides `console` object for bundled code
+- **Chrome URI registration**: Registers `chrome://zoteroner/` at runtime via `amIAddonManagerStartup`
+
+### Build System
+
+- **Webpack**: Bundles source code with console polyfill banner
+- **zotero-plugin-scaffold**: Manages dev server, builds, and distribution
+- **asProxy: false**: Extension manages its own Zotero launch
+
+## Testing
+
+Run unit tests:
 ```bash
-# Install Playwright browsers (first time only)
-npm run ui-test:install
+npm run test:unit
+```
 
-# Run UI tests
+Run UI tests:
+```bash
 npm run ui-test
 ```
 
-## Development Commands
+## File Structure
 
-- `npm test` - Run unit tests
-- `npm run test:unit` - Run specific unit tests
-- `npm run build` - Build the .xpi extension file
-- `npm run ui-test` - Run UI tests with Playwright
+```
+.
+├── bootstrap.js              # Extension entry point
+├── manifest.json             # WebExtension manifest
+├── src/                      # Source code
+│   ├── core/                 # Core NER/naming logic
+│   ├── ui/                   # UI components
+│   ├── zotero/               # Zotero integration
+│   ├── storage/              # Data storage
+│   ├── worker/               # Background processing
+│   └── index.js              # Bundle entry point
+├── content/                  # UI resources
+│   ├── dialog.html           # Dialog UI
+│   ├── scripts/              # JavaScript
+│   │   ├── zotero-ner.js     # Main extension code
+│   │   └── zotero-ner-bundled.js  # Bundled modules (webpack)
+│   └── icons/                # Icon assets
+├── resources/                # XUL resources
+├── _locales/                 # Localization files
+└── webpack.config.js         # Webpack configuration
+```
+
+## Development Notes
+
+### Console Polyfill
+
+Since `console` is not available in Zotero's bootstrap scope, a polyfill is injected at the top of the bundled code via webpack's `BannerPlugin`. It maps `console.*` calls to `Zotero.debug()`.
+
+### Hot Reload
+
+When developing with `npm start`:
+1. The scaffold server watches `src/` for changes
+2. Modified files are rebuilt with webpack
+3. The extension is reloaded in Zotero automatically
+4. Debug output is visible in Zotero's console
+
+### Dialog Window
+
+The normalization dialog:
+- Opened via `mainWindow.openDialog()`
+- Uses `chrome://zoteroner/content/dialog.html`
+- Receives parameters via `mainWindow.ZoteroNERDialogParams`
+- Loads the bundled extension code for processing
 
 ## License
 
-This extension is released under the GPL-3.0 license.
+GPL-3.0
