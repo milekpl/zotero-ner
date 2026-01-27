@@ -34,30 +34,35 @@ class MenuIntegration {
    * @param {Array} items - Selected Zotero items
    */
   async handleNormalizeAction(items) {
-    console.log(`Handling normalize action for ${items.length} items`);
-    
-    // Process each selected item
-    const results = [];
-    for (const item of items) {
-      const itemResults = await this.itemProcessor.processItemCreators(item);
-      results.push({
-        item: item,
-        results: itemResults
-      });
+    try {
+      console.log(`Handling normalize action for ${items.length} items`);
+
+      // Process each selected item
+      const results = [];
+      for (const item of items) {
+        const itemResults = await this.itemProcessor.processItemCreators(item);
+        results.push({
+          item: item,
+          results: itemResults
+        });
+      }
+
+      // Show the normalization dialog with results
+      const normalizerDialog = new (require('../ui/normalizer-dialog.js'))();
+      const userSelections = await normalizerDialog.showDialog(items);
+
+      // Apply the user's selections
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const selections = userSelections[i];
+        await this.itemProcessor.applyNormalizations(item, selections.creators);
+      }
+
+      return { success: true, processed: items.length };
+    } catch (error) {
+      Zotero.debug(`MenuIntegration: Error in handleNormalizeAction: ${error.message}`);
+      throw error;
     }
-    
-    // Show the normalization dialog with results
-    const normalizerDialog = new (require('../ui/normalizer-dialog.js'))();
-    const userSelections = await normalizerDialog.showDialog(items);
-    
-    // Apply the user's selections
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const selections = userSelections[i];
-      await this.itemProcessor.applyNormalizations(item, selections.creators);
-    }
-    
-    return { success: true, processed: items.length };
   }
 
   /**

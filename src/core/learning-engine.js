@@ -314,6 +314,10 @@ class LearningEngine {
    * @returns {string} Canonical key
    */
   createCanonicalKey(name) {
+    // Handle null/undefined input
+    if (name == null) {
+      return '';
+    }
     // Simple canonicalization - remove spaces, convert to lowercase, remove punctuation
     return name.trim()
       .toLowerCase()

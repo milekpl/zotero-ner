@@ -118,10 +118,9 @@ class GLINERHandler {
    */
   ruleBasedNER(text) {
     // This is our enhanced rule-based approach as a fallback
+    const { NAME_PREFIXES, NAME_SUFFIXES } = require('../config/name-constants');
     const words = text.split(/\s+/);
     const entities = [];
-    const prefixes = ['van', 'de', 'la', 'von', 'del', 'di', 'du', 'le', 'lo', 'da', 'des', 'dos', 'das', 'el', 'al'];
-    const suffixes = ['Jr', 'Sr', 'II', 'III', 'IV', 'PhD', 'MD', 'Jr.', 'Sr.'];
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i].replace(/[.,]/g, ''); // Remove punctuation
@@ -129,9 +128,9 @@ class GLINERHandler {
 
       let label = 'O'; // Default: not an entity
 
-      if (suffixes.some(s => s.toLowerCase() === word.toLowerCase())) {
+      if (NAME_SUFFIXES.some(s => s.toLowerCase() === word.toLowerCase())) {
         label = 'suffix';
-      } else if (prefixes.includes(word.toLowerCase())) {
+      } else if (NAME_PREFIXES.includes(word.toLowerCase())) {
         label = 'prefix';
       } else if (/^[A-Z]\.?$/.test(word)) {
         label = 'initial';

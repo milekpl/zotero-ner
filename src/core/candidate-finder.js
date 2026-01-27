@@ -4,10 +4,55 @@
  */
 class CandidateFinder {
   constructor() {
-    this.nerProcessor = new (require('./ner-processor.js'))();
-    this.learningEngine = new (require('./learning-engine.js'))();
-    this.nameParser = new (require('./name-parser.js'))();
-    this.variantGenerator = new (require('./variant-generator.js'))();
+    // Lazy initialization - dependencies are loaded on first access
+    this._nerProcessor = null;
+    this._learningEngine = null;
+    this._nameParser = null;
+    this._variantGenerator = null;
+  }
+
+  /**
+   * Lazy getter for NER processor
+   */
+  get nerProcessor() {
+    if (!this._nerProcessor) {
+      const NERProcessor = require('./ner-processor.js');
+      this._nerProcessor = new NERProcessor();
+    }
+    return this._nerProcessor;
+  }
+
+  /**
+   * Lazy getter for learning engine
+   */
+  get learningEngine() {
+    if (!this._learningEngine) {
+      const LearningEngine = require('./learning-engine.js');
+      this._learningEngine = new LearningEngine();
+    }
+    return this._learningEngine;
+  }
+
+  /**
+   * Lazy getter for name parser
+   */
+  get nameParser() {
+    if (!this._nameParser) {
+      const NameParser = require('./name-parser.js');
+      this._nameParser = new NameParser();
+    }
+    return this._nameParser;
+  }
+
+  /**
+   * Lazy getter for variant generator
+   */
+  get variantGenerator() {
+    if (!this._variantGenerator) {
+      const VariantGenerator = require('./variant-generator.js');
+      this._variantGenerator = new VariantGenerator();
+    }
+    return this._variantGenerator;
   }
 
   /**

@@ -1,6 +1,9 @@
 /**
  * NER Processor - Handles name parsing and recognition using rule-based heuristics
  */
+const { NAME_PREFIXES, NAME_SUFFIXES } = require('../config/name-constants');
+const { levenshteinDistance } = require('../utils/string-distance');
+
 class NERProcessor {
   constructor() {
     this.isInitialized = false;
@@ -33,8 +36,6 @@ class NERProcessor {
     // This uses the same logic as in GLINERHandler for consistency
     const words = text.split(/\s+/);
     const entities = [];
-    const prefixes = ['van', 'de', 'la', 'von', 'del', 'di', 'du', 'le', 'lo', 'da', 'des', 'dos', 'das', 'el', 'al'];
-    const suffixes = ['Jr', 'Sr', 'II', 'III', 'IV', 'PhD', 'MD', 'Jr.', 'Sr.'];
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i].replace(/[.,]/g, ''); // Remove punctuation
@@ -42,9 +43,9 @@ class NERProcessor {
 
       let label = 'O'; // Default: not an entity
 
-      if (suffixes.some(s => s.toLowerCase() === word.toLowerCase())) {
+      if (NAME_SUFFIXES.some(s => s.toLowerCase() === word.toLowerCase())) {
         label = 'suffix';
-      } else if (prefixes.includes(word.toLowerCase())) {
+      } else if (NAME_PREFIXES.includes(word.toLowerCase())) {
         label = 'prefix';
       } else if (/^[A-Z]\.?$/.test(word)) {
         label = 'initial';
@@ -163,7 +164,7 @@ class NERProcessor {
     const results = [];
     
     for (const candidate of candidates) {
-      const distance = this.levenshteinDistance(name, candidate);
+      const distance = levenshteinDistance(name, candidate);
       const maxLength = Math.max(name.length, candidate.length);
       const similarity = 1 - (distance / maxLength);
       
@@ -178,44 +179,6 @@ class NERProcessor {
     
     // Sort by similarity descending
     return results.sort((a, b) => b.similarity - a.similarity);
-  }
-
-  /**
-   * Calculate Levenshtein distance between two strings
-   * @param {string} str1 - First string
-   * @param {string} str2 - Second string
-   * @returns {number} Levenshtein distance
-   */
-  levenshteinDistance(str1, str2) {
-    const matrix = [];
-
-    if (str1.length === 0) return str2.length;
-    if (str2.length === 0) return str1.length;
-
-    // Initialize matrix
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    // Fill the matrix
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
-          );
-        }
-      }
-    }
-
-    return matrix[str2.length][str1.length];
   }
 
   /**

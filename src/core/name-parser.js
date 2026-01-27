@@ -1,10 +1,12 @@
 /**
  * Name Parser - Enhanced name parsing logic
  */
+const { NAME_PREFIXES, NAME_SUFFIXES } = require('../config/name-constants');
+
 class NameParser {
   constructor() {
-    this.prefixes = ['van', 'de', 'la', 'von', 'del', 'di', 'du', 'le', 'lo', 'da', 'des', 'dos', 'das', 'el', 'al'];
-    this.suffixes = ['Jr', 'Sr', 'II', 'III', 'IV', 'PhD', 'MD', 'Jr.', 'Sr.'];
+    this.prefixes = NAME_PREFIXES;
+    this.suffixes = NAME_SUFFIXES;
     this.initialPattern = /^[A-Z]\.?$/;
     this.initialsPattern = /^[A-Z]\.[A-Z]\.?$/;
   }
