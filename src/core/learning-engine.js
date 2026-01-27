@@ -2,17 +2,28 @@
  * Learning Engine - Handles storing and retrieving learned name mappings with enhanced learning capabilities
  */
 class LearningEngine {
+  // Constants for similarity calculations
+  static get CONFIDENCE_THRESHOLD() { return 0.8; }
+  static get JARO_WINKLER_WEIGHT() { return 0.5; }
+  static get LCS_WEIGHT() { return 0.3; }
+  static get INITIAL_MATCHING_WEIGHT() { return 0.2; }
+  static get PREFIX_BONUS() { return 0.1; }
+  static get SINGLE_CHAR_MATCH_SCORE() { return 0.8; }
+
   constructor() {
-    this.storageKey = 'ner_normalizer_mappings';
-    this.settingsKey = 'ner_normalizer_settings';
+    this.storageKey = 'name_normalizer_mappings';
+    this.settingsKey = 'name_normalizer_settings';
     this.mappings = new Map();
     this.settings = this.getDefaultSettings();
-    this.distinctPairsKey = 'ner_normalizer_distinct_pairs';
+    this.distinctPairsKey = 'name_normalizer_distinct_pairs';
     this.distinctPairs = new Map();
+    this.skipStorageKey = 'name_normalizer_skipped_suggestions';
+    this.skippedPairs = new Set();
 
     this.loadMappings();
     this.loadSettings();
     this.loadDistinctPairs();
+    this.loadSkippedPairs();
   }
 
   /**
@@ -26,13 +37,13 @@ class LearningEngine {
     } else {
       // For Node.js environment, use a simple in-memory store
       // In a real Zotero extension, this would use Zotero's storage APIs
-      if (!global._nerStorage) {
-        global._nerStorage = {};
+      if (!global._nameNormalizerStorage) {
+        global._nameNormalizerStorage = {};
       }
       return {
-        getItem: (key) => global._nerStorage[key] || null,
-        setItem: (key, value) => { global._nerStorage[key] = value; },
-        removeItem: (key) => { delete global._nerStorage[key]; }
+        getItem: (key) => global._nameNormalizerStorage[key] || null,
+        setItem: (key, value) => { global._nameNormalizerStorage[key] = value; },
+        removeItem: (key) => { delete global._nameNormalizerStorage[key]; }
       };
     }
   }
@@ -178,7 +189,7 @@ class LearningEngine {
   getDefaultSettings() {
     return {
       autoApplyLearned: true,
-      confidenceThreshold: 0.8,
+      confidenceThreshold: LearningEngine.CONFIDENCE_THRESHOLD,
       enableSpanishSurnameDetection: true,
       showSimilarityScore: true,
       maxSuggestions: 5
@@ -369,9 +380,11 @@ class LearningEngine {
     const jaroWinkler = this.jaroWinklerSimilarity(str1, str2);
     const longestCommonSubsequence = this.lcsSimilarity(str1, str2);
     const initialMatching = this.initialMatchingSimilarity(str1, str2);
-    
+
     // Weighted combination of similarity metrics
-    return (jaroWinkler * 0.5) + (longestCommonSubsequence * 0.3) + (initialMatching * 0.2);
+    return (jaroWinkler * LearningEngine.JARO_WINKLER_WEIGHT) +
+           (longestCommonSubsequence * LearningEngine.LCS_WEIGHT) +
+           (initialMatching * LearningEngine.INITIAL_MATCHING_WEIGHT);
   }
 
   /**
@@ -433,7 +446,7 @@ class LearningEngine {
     }
 
     // Winkler adjustment
-    return jaro + (0.1 * prefix * (1 - jaro));
+    return jaro + (LearningEngine.PREFIX_BONUS * prefix * (1 - jaro));
   }
 
   /**
@@ -566,8 +579,8 @@ class LearningEngine {
     const clean1 = part1.replace(/\./g, '').toLowerCase();
     const clean2 = part2.replace(/\./g, '').toLowerCase();
 
-    if (clean1.length === 1 && clean2.startsWith(clean1)) return 0.8;
-    if (clean2.length === 1 && clean1.startsWith(clean2)) return 0.8;
+    if (clean1.length === 1 && clean2.startsWith(clean1)) return LearningEngine.SINGLE_CHAR_MATCH_SCORE;
+    if (clean2.length === 1 && clean1.startsWith(clean2)) return LearningEngine.SINGLE_CHAR_MATCH_SCORE;
 
     // Use Jaro-Winkler for the actual name comparison
     return this.jaroWinklerSimilarity(clean1, clean2);
@@ -614,19 +627,236 @@ class LearningEngine {
     const totalMappings = this.mappings.size;
     let totalUsage = 0;
     let avgConfidence = 0;
-    
+
     for (const mapping of this.mappings.values()) {
       totalUsage += mapping.usageCount || 0;
       avgConfidence += mapping.confidence || 0;
     }
-    
+
     avgConfidence = totalMappings > 0 ? avgConfidence / totalMappings : 0;
-    
+
     return {
       totalMappings,
       totalUsage,
       averageUsage: totalMappings > 0 ? totalUsage / totalMappings : 0,
-      averageConfidence: avgConfidence
+      averageConfidence: avgConfidence,
+      skippedPairs: this.skippedPairs ? this.skippedPairs.size : 0
+    };
+  }
+
+  // ============ Skip Learning Methods ============
+
+  /**
+   * Get the storage key for skipped suggestions
+   */
+  static get SKIP_STORAGE_KEY() {
+    return 'name_normalizer_skipped_suggestions';
+  }
+
+  /**
+   * Initialize skipped pairs from storage
+   */
+  loadSkippedPairs() {
+    try {
+      const storage = this.getStorage();
+      const stored = storage.getItem(LearningEngine.SKIP_STORAGE_KEY);
+      if (stored) {
+        this.skippedPairs = new Set(JSON.parse(stored));
+      } else {
+        this.skippedPairs = new Set();
+      }
+    } catch (error) {
+      console.error('Error loading skipped pairs:', error);
+      this.skippedPairs = new Set();
+    }
+  }
+
+  /**
+   * Save skipped pairs to storage
+   */
+  saveSkippedPairs() {
+    try {
+      const storage = this.getStorage();
+      const serialized = JSON.stringify([...this.skippedPairs]);
+      storage.setItem(LearningEngine.SKIP_STORAGE_KEY, serialized);
+
+      // Also sync to Zotero.Prefs if available
+      if (typeof Zotero !== 'undefined' && Zotero.Prefs) {
+        Zotero.Prefs.set(LearningEngine.SKIP_STORAGE_KEY, serialized);
+      }
+    } catch (error) {
+      console.error('Error saving skipped pairs:', error);
+    }
+  }
+
+  /**
+   * Generate a unique key for skip decisions
+   * Format: name:skip:{surnameHash}:{firstNamePatternHash}
+   * @param {string} surname - Surname to generate key for
+   * @param {string} firstNamePattern - First name pattern (can be empty string)
+   * @returns {string} Skip key
+   */
+  generateSkipKey(surname, firstNamePattern) {
+    const s = (surname || '').toLowerCase().trim();
+    const f = (firstNamePattern || '').toLowerCase().trim();
+
+    // Simple hash function
+    const hashString = (str) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return Math.abs(hash).toString(16);
+    };
+
+    const sHash = hashString(s);
+    const fHash = hashString(f);
+    return `name:skip:${sHash}:${fHash}`;
+  }
+
+  /**
+   * Record a skip decision for a suggestion
+   * @param {string} surname - Surname that was skipped
+   * @param {string} firstNamePattern - First name pattern that was skipped
+   * @param {Object} context - Additional context (e.g., suggestion object)
+   * @returns {boolean} True if recorded successfully
+   */
+  recordSkipDecision(surname, firstNamePattern, context = {}) {
+    const key = this.generateSkipKey(surname, firstNamePattern);
+
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    if (!this.skippedPairs.has(key)) {
+      this.skippedPairs.add(key);
+      this.saveSkippedPairs();
+
+      // Log for debugging
+      if (context.debug) {
+        console.debug(`LearningEngine: Recorded skip for "${surname}, ${firstNamePattern}" -> ${key}`);
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a suggestion should be skipped
+   * @param {Object} suggestion - Suggestion object with surname and firstNamePattern
+   * @returns {boolean} True if suggestion should be skipped
+   */
+  shouldSkipSuggestion(suggestion) {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    const surname = suggestion.surname || suggestion.canonical || '';
+    const firstNamePattern = suggestion.firstNamePattern || suggestion.firstName || '';
+    const key = this.generateSkipKey(surname, firstNamePattern);
+
+    return this.skippedPairs.has(key);
+  }
+
+  /**
+   * Check if a specific pair should be skipped
+   * @param {string} surname - Surname to check
+   * @param {string} firstNamePattern - First name pattern to check
+   * @returns {boolean} True if should be skipped
+   */
+  shouldSkipPair(surname, firstNamePattern) {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    const key = this.generateSkipKey(surname, firstNamePattern);
+    return this.skippedPairs.has(key);
+  }
+
+  /**
+   * Remove a skip decision
+   * @param {string} surname - Surname to unskip
+   * @param {string} firstNamePattern - First name pattern to unskip
+   * @returns {boolean} True if removed successfully
+   */
+  removeSkipDecision(surname, firstNamePattern) {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    const key = this.generateSkipKey(surname, firstNamePattern);
+    const removed = this.skippedPairs.delete(key);
+
+    if (removed) {
+      this.saveSkippedPairs();
+    }
+
+    return removed;
+  }
+
+  /**
+   * Clear all skip decisions
+   */
+  clearSkippedPairs() {
+    this.skippedPairs = new Set();
+    this.saveSkippedPairs();
+
+    // Also clear from Zotero.Prefs
+    if (typeof Zotero !== 'undefined' && Zotero.Prefs) {
+      Zotero.Prefs.clear(LearningEngine.SKIP_STORAGE_KEY);
+    }
+  }
+
+  /**
+   * Get count of skipped pairs
+   * @returns {number} Number of skipped pairs
+   */
+  getSkippedPairsCount() {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+    return this.skippedPairs.size;
+  }
+
+  /**
+   * Get all skipped pairs (for debugging/display)
+   * @returns {Array} Array of skipped pair objects
+   */
+  getSkippedPairs() {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+    return [...this.skippedPairs];
+  }
+
+  /**
+   * Filter out skipped suggestions from an array
+   * @param {Array} suggestions - Array of suggestions to filter
+   * @returns {Array} Filtered suggestions
+   */
+  filterSkippedSuggestions(suggestions) {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    return suggestions.filter(suggestion => !this.shouldSkipSuggestion(suggestion));
+  }
+
+  /**
+   * Get statistics about skipped suggestions
+   * @returns {Object} Skip statistics
+   */
+  getSkipStatistics() {
+    if (!this.skippedPairs) {
+      this.loadSkippedPairs();
+    }
+
+    return {
+      skippedCount: this.skippedPairs ? this.skippedPairs.size : 0
     };
   }
 }

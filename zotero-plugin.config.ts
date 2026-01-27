@@ -38,11 +38,11 @@ export default defineConfig({
           js: `// Console polyfill for Zotero 8
 if (typeof console === 'undefined') {
   globalThis.console = {
-    log: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER: ' + Array.prototype.join.call(arguments, ' ')); },
-    warn: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER WARN: ' + Array.prototype.join.call(arguments, ' ')); },
-    error: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER ERROR: ' + Array.prototype.join.call(arguments, ' ')); },
-    info: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER INFO: ' + Array.prototype.join.call(arguments, ' ')); },
-    debug: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER DEBUG: ' + Array.prototype.join.call(arguments, ' ')); }
+    log: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer: ' + Array.prototype.join.call(arguments, ' ')); },
+    warn: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer WARN: ' + Array.prototype.join.call(arguments, ' ')); },
+    error: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer ERROR: ' + Array.prototype.join.call(arguments, ' ')); },
+    info: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer INFO: ' + Array.prototype.join.call(arguments, ' ')); },
+    debug: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer DEBUG: ' + Array.prototype.join.call(arguments, ' ')); }
   };
 }`,
         },

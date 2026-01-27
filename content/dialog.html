@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>NER Author Name Normalizer</title>
+  <title>Author Name Normalizer</title>
   <style>
     body { 
       font-family: -moz-dialog, Arial, sans-serif; 
@@ -133,6 +133,25 @@
     .custom-normalization input[type="text"]:disabled {
       background: #f0f0f0;
       color: #777;
+    }
+    .skip-row {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+    .skip-button {
+      background: transparent;
+      border: 1px solid #999;
+      color: #666;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      cursor: pointer;
+    }
+    .skip-button:hover:not(:disabled) {
+      background: #f5f5f5;
+      border-color: #666;
+      color: #333;
     }
     .progress { 
       margin: 10px 0; 
@@ -300,7 +319,7 @@
   </style>
 </head>
 <body>
-  <h1>NER Author Name Normalizer</h1>
+  <h1>Author Name Normalizer</h1>
   <p>Review and apply author name normalizations for your library.</p>
 
   <!-- Summary header for full-library analysis -->
@@ -408,6 +427,7 @@
     variantDetailState: null,
     filterText: '',
     currentProgressState: null,
+    virtualScroll: null,
 
       init: function() {
         console.log('Dialog initialization started');
@@ -537,10 +557,10 @@
       },
 
       log: function(message) {
-        console.log('Zotero NER Dialog: ' + message);
+        console.log('Zotero Name Normalizer Dialog: ' + message);
         try {
           if (typeof Zotero !== 'undefined' && typeof Zotero.debug === 'function') {
-            Zotero.debug('Zotero NER Dialog: ' + message);
+            Zotero.debug('Zotero Name Normalizer Dialog: ' + message);
           }
         } catch (e) {}
       },
@@ -1220,6 +1240,20 @@
         const customRow = this.createCustomSelectionRow(index, suggestion, selection, recommendedValue);
         choiceGroup.appendChild(customRow);
 
+        // Add skip button
+        const skipRow = ZoteroNER_HTMLUtils.createElement('div', { class: 'skip-row' });
+        const skipButton = ZoteroNER_HTMLUtils.createElement('button', {
+          type: 'button',
+          class: 'skip-button',
+          textContent: 'Skip this group'
+        });
+        skipButton.title = 'Mark this group as reviewed without making changes. Will not show again.';
+        skipButton.addEventListener('click', () => {
+          this.skipSuggestion(index, suggestion);
+        });
+        skipRow.appendChild(skipButton);
+        choiceGroup.appendChild(skipRow);
+
         return choiceGroup;
       },
 
@@ -1339,8 +1373,6 @@
           return false;
         }
 
-        container.innerHTML = '';
-
         const suggestions = (this.analysisResults && Array.isArray(this.analysisResults.suggestions))
           ? this.analysisResults.suggestions
           : [];
@@ -1356,8 +1388,9 @@
           emptyMsg.style.display = 'none';
         }
 
-        const renderedIndexes = [];
-        let visibleCount = 0;
+        // Filter suggestions
+        const filteredSuggestions = [];
+        const originalIndexMap = [];
 
         suggestions.forEach((suggestion, index) => {
           if (!suggestion) {
@@ -1366,59 +1399,20 @@
           if (!this.matchesFilter(suggestion)) {
             return;
           }
-
-          visibleCount++;
-          renderedIndexes.push(index);
-          this.ensureUserSelection(index, suggestion);
-          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
-
-          const header = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-header' });
-          const title = ZoteroNER_HTMLUtils.createElement('h3');
-          title.textContent = this.getGroupTitle(index, suggestion);
-          header.appendChild(title);
-
-          const summary = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-summary' });
-          summary.textContent = this.getVariantSummaryText(suggestion);
-          header.appendChild(summary);
-
-          const recommendedValue = this.getDefaultNormalizationValue(suggestion);
-          if (recommendedValue) {
-            const recommended = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-meta' });
-            recommended.innerHTML = this.buildRecommendedHTML(suggestion, recommendedValue);
-            header.appendChild(recommended);
-          }
-
-          groupElement.appendChild(header);
-
-          const variantsContainer = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-variants' });
-          const variantList = this.buildVariantListElement(index, suggestion);
-
-          if (variantList && variantList.childElementCount > 0) {
-            variantsContainer.appendChild(variantList);
-          } else {
-            const emptyVariants = document.createElement('div');
-            emptyVariants.className = 'variant-meta';
-            emptyVariants.textContent = 'No variants detected.';
-            variantsContainer.appendChild(emptyVariants);
-          }
-
-          const controls = this.buildSelectionControls(index, suggestion);
-          variantsContainer.appendChild(controls);
-
-          if (suggestion.type === 'given-name') {
-            const relatedSection = this.buildRelatedGivenNamesSection(suggestion);
-            if (relatedSection && relatedSection.childNodes.length) {
-              variantsContainer.appendChild(relatedSection);
-            }
-          }
-
-          groupElement.appendChild(variantsContainer);
-          container.appendChild(groupElement);
+          filteredSuggestions.push({ ...suggestion, _originalIndex: index });
+          originalIndexMap.push(index);
         });
 
+        const visibleCount = filteredSuggestions.length;
         this.updateFilterSummary(visibleCount, totalSuggestions);
 
         if (visibleCount === 0) {
+          // Destroy existing virtual scroll
+          if (this.virtualScroll) {
+            this.virtualScroll.destroy();
+            this.virtualScroll = null;
+          }
+          container.innerHTML = '';
           const noMatches = document.createElement('div');
           noMatches.className = 'empty-message';
           noMatches.textContent = this.filterText
@@ -1430,18 +1424,101 @@
           return false;
         }
 
+        // Render function for virtual scroll items
+        const renderVariantGroup = (item, index) => {
+          const suggestionIndex = item._originalIndex;
+          this.ensureUserSelection(suggestionIndex, item);
+
+          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
+          groupElement.dataset.suggestionIndex = suggestionIndex;
+
+          const header = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-header' });
+          const title = ZoteroNER_HTMLUtils.createElement('h3');
+          title.textContent = this.getGroupTitle(suggestionIndex, item);
+          header.appendChild(title);
+
+          const summary = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-summary' });
+          summary.textContent = this.getVariantSummaryText(item);
+          header.appendChild(summary);
+
+          const recommendedValue = this.getDefaultNormalizationValue(item);
+          if (recommendedValue) {
+            const recommended = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-meta' });
+            recommended.innerHTML = this.buildRecommendedHTML(item, recommendedValue);
+            header.appendChild(recommended);
+          }
+
+          groupElement.appendChild(header);
+
+          const variantsContainer = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-variants' });
+          const variantList = this.buildVariantListElement(suggestionIndex, item);
+
+          if (variantList && variantList.childElementCount > 0) {
+            variantsContainer.appendChild(variantList);
+          } else {
+            const emptyVariants = document.createElement('div');
+            emptyVariants.className = 'variant-meta';
+            emptyVariants.textContent = 'No variants detected.';
+            variantsContainer.appendChild(emptyVariants);
+          }
+
+          const controls = this.buildSelectionControls(suggestionIndex, item);
+          variantsContainer.appendChild(controls);
+
+          if (item.type === 'given-name') {
+            const relatedSection = this.buildRelatedGivenNamesSection(item);
+            if (relatedSection && relatedSection.childNodes.length) {
+              variantsContainer.appendChild(relatedSection);
+            }
+          }
+
+          groupElement.appendChild(variantsContainer);
+          return groupElement;
+        };
+
+        // Initialize or update virtual scroll
+        if (!this.virtualScroll) {
+          // Prepare container for virtual scrolling
+          container.style.position = 'relative';
+          container.style.overflowY = 'auto';
+          container.style.height = '600px'; // Fixed height for scroll container
+
+          this.virtualScroll = new DynamicVirtualScroll(container, {
+            estimatedHeight: 120,
+            buffer: 5
+          });
+        }
+
+        // Set up visible range change callback for detail panel sync
+        this.virtualScroll.onVisibleRangeChange = (startIndex, endIndex) => {
+          this.handleVisibleRangeChange(startIndex, endIndex, originalIndexMap);
+        };
+
+        // Set items and render
+        this.virtualScroll.setItems(filteredSuggestions, renderVariantGroup);
+
+        // Store the original index map for lookups
+        this.virtualScroll._originalIndexMap = originalIndexMap;
+
+        // Handle detail panel - use virtual scroll's mapping instead of renderedIndexes.includes()
         const { variantDetailState } = this;
         let detailSuggestionIndex = null;
         let detailVariantIndex = null;
 
-        if (variantDetailState && renderedIndexes.includes(variantDetailState.suggestionIndex)) {
-          detailSuggestionIndex = variantDetailState.suggestionIndex;
-          detailVariantIndex = typeof variantDetailState.variantIndex === 'number'
-            ? variantDetailState.variantIndex
-            : null;
-        } else {
+        if (variantDetailState && variantDetailState.suggestionIndex !== null) {
+          // Check if the detail suggestion is in the filtered list
+          const virtualIndex = this.getVirtualIndexForSuggestion(variantDetailState.suggestionIndex);
+          if (virtualIndex !== -1) {
+            detailSuggestionIndex = variantDetailState.suggestionIndex;
+            detailVariantIndex = typeof variantDetailState.variantIndex === 'number'
+              ? variantDetailState.variantIndex
+              : null;
+          }
+        }
+
+        if (detailSuggestionIndex === null) {
           this.variantDetailState = null;
-          detailSuggestionIndex = renderedIndexes[0];
+          detailSuggestionIndex = originalIndexMap[0];
         }
 
         const detailSuggestion = suggestions[detailSuggestionIndex];
@@ -1460,6 +1537,113 @@
 
         this.refreshApplyButtonState();
         return true;
+      },
+
+      /**
+       * Get virtual index for a suggestion index using the virtual scroll mapping
+       */
+      getVirtualIndexForSuggestion: function(suggestionIndex) {
+        if (!this.virtualScroll || !this.virtualScroll._originalIndexMap) {
+          return -1;
+        }
+        const map = this.virtualScroll._originalIndexMap;
+        for (let i = 0; i < map.length; i++) {
+          if (map[i] === suggestionIndex) {
+            return i;
+          }
+        }
+        return -1;
+      },
+
+      /**
+       * Handle visible range changes for detail panel sync
+       */
+      handleVisibleRangeChange: function(startIndex, endIndex, originalIndexMap) {
+        // Update rendered indexes for external reference if needed
+        const renderedOriginalIndexes = [];
+        for (let i = startIndex; i <= endIndex; i++) {
+          if (originalIndexMap[i] !== undefined) {
+            renderedOriginalIndexes.push(originalIndexMap[i]);
+          }
+        }
+        this._renderedSuggestionIndexes = renderedOriginalIndexes;
+
+        // Sync detail panel if needed
+        const { variantDetailState } = this;
+        if (variantDetailState && variantDetailState.suggestionIndex !== null) {
+          const virtualIndex = this.getVirtualIndexForSuggestion(variantDetailState.suggestionIndex);
+          // Item is visible if virtualIndex is within visible range
+          if (virtualIndex >= startIndex && virtualIndex <= endIndex) {
+            // Detail panel is still visible, no action needed
+          } else {
+            // Item scrolled out of view - could hide detail panel or keep it
+            // For now, keep it visible (user can still interact with it)
+          }
+        }
+      },
+
+      /**
+       * Destroy virtual scroll and clean up
+       */
+      destroyVirtualScroll: function() {
+        if (this.virtualScroll) {
+          this.virtualScroll.destroy();
+          this.virtualScroll = null;
+        }
+        const container = ZoteroNER_HTMLUtils.getElement('variant-groups-container');
+        if (container) {
+          container.style.position = '';
+          container.style.overflowY = '';
+          container.style.height = '';
+        }
+      },
+
+      /**
+       * Skip a suggestion - mark as reviewed without applying changes
+       * Uses the learning engine to remember this decision
+       */
+      skipSuggestion: function(index, suggestion) {
+        // Record skip decision in learning engine
+        if (typeof ZoteroNER !== 'undefined' && ZoteroNER.LearningEngine) {
+          const learningEngine = ZoteroNER.LearningEngine;
+          const firstNamePattern = this.getFirstNamePattern(suggestion);
+          learningEngine.recordSkipDecision(suggestion.surname, firstNamePattern, {
+            type: suggestion.type,
+            timestamp: Date.now()
+          });
+        }
+
+        // Mark as "keep" (not apply)
+        this.updateSelection(index, suggestion, {
+          mode: 'keep',
+          apply: false
+        });
+
+        // Update progress
+        this.updateProgress();
+
+        // If this was the currently selected item, move to next
+        if (this.variantDetailState && this.variantDetailState.suggestionIndex === index) {
+          this.clearVariantDetails();
+        }
+
+        // Refresh to apply filter (hide skipped items if filter is enabled)
+        this.populateVariantGroupList();
+      },
+
+      /**
+       * Get first name pattern for skip key generation
+       */
+      getFirstNamePattern: function(suggestion) {
+        // Use the primary/first variant's first name as the pattern
+        if (suggestion.primary && typeof suggestion.primary === 'object') {
+          return suggestion.primary.firstName || '';
+        }
+        if (suggestion.variants && suggestion.variants.length > 0) {
+          const firstVariant = suggestion.variants[0];
+          return firstVariant.firstName || '';
+        }
+        return '';
       },
 
       formatNameString: function(name) {
@@ -1695,7 +1879,7 @@
         });
 
         if (preparedSuggestions.length === 0 && declinedSuggestions.length === 0) {
-          this.alert('NER Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
+          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
           return;
         }
 
@@ -1724,18 +1908,18 @@
             // Fallback: instantiate in dialog context (will fail if Zotero is undefined)
             this.dbAnalyzer = new ZoteroNER.ZoteroDBAnalyzer();
             if (!this.dbAnalyzer || typeof this.dbAnalyzer.applyNormalizationSuggestions !== 'function') {
-              throw new Error('Zotero NER database analyzer is not available in this context.');
+              throw new Error('Zotero Name Normalizer database analyzer is not available in this context.');
             }
             results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false, {
               declinedSuggestions,
               progressCallback: (event) => this.handleApplyProgress(event)
             });
           } else {
-            throw new Error('Zotero NER database analyzer is not available in this context.');
+            throw new Error('Zotero Name Normalizer database analyzer is not available in this context.');
           }
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
-            this.alert('NER Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');
+            this.alert('Author Name Normalizer', 'No normalization changes were applied. Your "keep existing" choices were saved for future runs.');
           } else {
             const summary = [
               'Suggestions reviewed: ' + results.totalSuggestions,
@@ -1752,7 +1936,7 @@
               summary.push('Errors: ' + results.errors);
             }
 
-            this.alert('NER Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
+            this.alert('Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
           }
 
         } catch (error) {

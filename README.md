@@ -1,10 +1,10 @@
-# Zotero NER Author Name Normalizer
+# Zotero Name Normalizer
 
-A Zotero 7/8 extension that uses Named Entity Recognition (NER) to normalize author names in Zotero libraries.
+A Zotero 7/8 extension that normalizes author names in Zotero libraries.
 
 ## Status
 
-✅ **Fully functional** - Extension loads in Zotero 8, displays UI menu, opens dialogs with all normalization options available.
+**Fully functional** - Extension loads in Zotero 8, displays UI menu, opens dialogs with all normalization options available.
 
 ## Problem Solved
 
@@ -17,7 +17,7 @@ This extension normalizes these variations for better search and citation functi
 
 ## Features
 
-- **NER-based parsing**: Uses GLINER model to identify name components
+- **Name parsing**: Parses author names and identifies components
 - **Variant generation**: Creates multiple normalized forms for user selection
 - **Learning system**: Remembers user preferences for future suggestions
 - **Zotero integration**: Seamlessly integrates with Zotero's interface
@@ -65,7 +65,6 @@ The built extension is in `build/addon/`.
 ## Architecture
 
 ### Core Modules (`src/core/`)
-- `ner-processor.js`: NER model integration and name parsing
 - `name-parser.js`: Enhanced name parsing with special cases
 - `variant-generator.js`: Creates normalized name variations
 - `learning-engine.js`: Stores and retrieves learned mappings
@@ -85,11 +84,11 @@ The built extension is in `build/addon/`.
 ### Content (`content/`)
 - `dialog.html`: Dialog UI
 - `zotero-ner.js`: Extension main logic
-- `zotero-ner-bundled.js`: Bundled core modules (webpack output)
+- `zotero-name-normalizer-bundled.js`: Bundled core modules (webpack output)
 
 ### Bootstrap (`bootstrap.js`)
 - Extension lifecycle management (startup, shutdown)
-- Chrome URI registration for `chrome://zoteroner/`
+- Chrome URI registration for `chrome://zoteronamenormalizer/`
 - Bundle injection into Zotero windows
 
 ## Technical Details
@@ -101,7 +100,7 @@ Key implementation details for Zotero 8:
 - **Bootstrap extension**: Uses `bootstrap.js` for extension lifecycle
 - **ESM modules**: `ChromeUtils.importESModule()` for module imports
 - **Console polyfill**: Provides `console` object for bundled code
-- **Chrome URI registration**: Registers `chrome://zoteroner/` at runtime via `amIAddonManagerStartup`
+- **Chrome URI registration**: Registers `chrome://zoteronamenormalizer/` at runtime via `amIAddonManagerStartup`
 
 ### Build System
 
@@ -128,17 +127,16 @@ npm run ui-test
 ├── bootstrap.js              # Extension entry point
 ├── manifest.json             # WebExtension manifest
 ├── src/                      # Source code
-│   ├── core/                 # Core NER/naming logic
+│   ├── core/                 # Core naming logic
 │   ├── ui/                   # UI components
 │   ├── zotero/               # Zotero integration
 │   ├── storage/              # Data storage
-│   ├── worker/               # Background processing
 │   └── index.js              # Bundle entry point
 ├── content/                  # UI resources
 │   ├── dialog.html           # Dialog UI
 │   ├── scripts/              # JavaScript
 │   │   ├── zotero-ner.js     # Main extension code
-│   │   └── zotero-ner-bundled.js  # Bundled modules (webpack)
+│   │   └── zotero-name-normalizer-bundled.js  # Bundled modules (webpack)
 │   └── icons/                # Icon assets
 ├── resources/                # XUL resources
 ├── _locales/                 # Localization files
@@ -163,8 +161,8 @@ When developing with `npm start`:
 
 The normalization dialog:
 - Opened via `mainWindow.openDialog()`
-- Uses `chrome://zoteroner/content/dialog.html`
-- Receives parameters via `mainWindow.ZoteroNERDialogParams`
+- Uses `chrome://zoteronamenormalizer/content/dialog.html`
+- Receives parameters via `mainWindow.ZoteroNameNormalizerDialogParams`
 - Loads the bundled extension code for processing
 
 ## License

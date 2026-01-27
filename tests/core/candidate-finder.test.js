@@ -13,12 +13,6 @@ global.Zotero = {
 };
 
 // Mock all the dependencies before importing the module
-jest.mock('../../src/core/ner-processor.js', () => {
-  return jest.fn().mockImplementation(() => {
-    return {};
-  });
-});
-
 jest.mock('../../src/core/learning-engine.js', () => {
   return jest.fn().mockImplementation(() => {
     return {};
@@ -64,7 +58,6 @@ describe('CandidateFinder', () => {
 
   describe('constructor', () => {
     test('should initialize with required components', () => {
-      expect(candidateFinder.nerProcessor).toBeDefined();
       expect(candidateFinder.learningEngine).toBeDefined();
       expect(candidateFinder.nameParser).toBeDefined();
       expect(candidateFinder.variantGenerator).toBeDefined();

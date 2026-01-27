@@ -42,8 +42,8 @@ describe('DataManager', () => {
 
   describe('constructor', () => {
     test('should initialize with correct keys', () => {
-      expect(dataManager.settingsKey).toBe('ner_normalizer_settings');
-      expect(dataManager.mappingsKey).toBe('ner_normalizer_mappings');
+      expect(dataManager.settingsKey).toBe('name_normalizer_settings');
+      expect(dataManager.mappingsKey).toBe('name_normalizer_mappings');
     });
   });
 

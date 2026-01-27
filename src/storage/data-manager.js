@@ -4,8 +4,8 @@
  */
 class DataManager {
   constructor() {
-    this.settingsKey = 'ner_normalizer_settings';
-    this.mappingsKey = 'ner_normalizer_mappings';
+    this.settingsKey = 'name_normalizer_settings';
+    this.mappingsKey = 'name_normalizer_mappings';
   }
 
   /**

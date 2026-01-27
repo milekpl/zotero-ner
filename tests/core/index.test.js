@@ -6,11 +6,6 @@
 // Since the index.js file uses ES6 imports, we need to mock them
 // For simplicity in testing, we'll mock the modules it imports
 
-// Mock all the imported modules
-jest.mock('../../src/core/ner-processor.js', () => {
-  return jest.fn().mockImplementation(() => ({}));
-});
-
 jest.mock('../../src/core/name-parser.js', () => {
   return jest.fn().mockImplementation(() => ({}));
 });
@@ -24,10 +19,6 @@ jest.mock('../../src/core/learning-engine.js', () => {
 });
 
 jest.mock('../../src/core/candidate-finder.js', () => {
-  return jest.fn().mockImplementation(() => ({}));
-});
-
-jest.mock('../../src/core/gliner-handler.js', () => {
   return jest.fn().mockImplementation(() => ({}));
 });
 
@@ -55,37 +46,36 @@ jest.mock('../../src/storage/data-manager.js', () => {
   return jest.fn().mockImplementation(() => ({}));
 });
 
-jest.mock('../../src/worker/ner-worker.js', () => {
-  return jest.fn().mockImplementation(() => ({}));
+jest.mock('../../src/utils/virtual-scroll.js', () => {
+  return { DynamicVirtualScroll: jest.fn() };
 });
 
-describe('ZoteroNER Index', () => {
+describe('ZoteroNameNormalizer Index', () => {
   let originalWindow;
-  let originalZoteroNER;
+  let originalZoteroNameNormalizer;
 
   beforeEach(() => {
-    // Save original window and ZoteroNER
+    // Save original window and ZoteroNameNormalizer
     originalWindow = global.window;
-    originalZoteroNER = global.ZoteroNER;
-    
+    originalZoteroNameNormalizer = global.ZoteroNameNormalizer;
+
     // Create a mock window object
     global.window = {
-      ZoteroNER: undefined
+      ZoteroNameNormalizer: undefined
     };
   });
 
   afterEach(() => {
-    // Restore original window and ZoteroNER
+    // Restore original window and ZoteroNameNormalizer
     global.window = originalWindow;
-    global.ZoteroNER = originalZoteroNER;
+    global.ZoteroNameNormalizer = originalZoteroNameNormalizer;
   });
 
   test('should export all core modules', async () => {
     // Import the index file dynamically
     const indexModule = await import('../../src/index.js');
-    
+
     // Check that all expected exports are present
-    expect(indexModule).toHaveProperty('NERProcessor');
     expect(indexModule).toHaveProperty('NameParser');
     expect(indexModule).toHaveProperty('VariantGenerator');
     expect(indexModule).toHaveProperty('LearningEngine');
@@ -96,21 +86,20 @@ describe('ZoteroNER Index', () => {
     expect(indexModule).toHaveProperty('NormalizerDialog');
     expect(indexModule).toHaveProperty('BatchProcessor');
     expect(indexModule).toHaveProperty('DataManager');
-    expect(indexModule).toHaveProperty('NERWorker');
-    
+    expect(indexModule).toHaveProperty('DynamicVirtualScroll');
+
     // Check that default export is present
     expect(indexModule.default).toBeDefined();
   });
 
-  test('should create global ZoteroNER object when window is available', async () => {
+  test('should create global ZoteroNameNormalizer object when window is available', async () => {
     // Import the index file to execute the code that sets up the global object
     const indexModule = await import('../../src/index.js');
-    
+
     // Check that the module was imported successfully
     expect(indexModule).toBeDefined();
-    
+
     // Check that all exports are available
-    expect(indexModule).toHaveProperty('NERProcessor');
     expect(indexModule).toHaveProperty('NameParser');
     expect(indexModule).toHaveProperty('VariantGenerator');
     expect(indexModule).toHaveProperty('LearningEngine');
@@ -121,21 +110,21 @@ describe('ZoteroNER Index', () => {
     expect(indexModule).toHaveProperty('NormalizerDialog');
     expect(indexModule).toHaveProperty('BatchProcessor');
     expect(indexModule).toHaveProperty('DataManager');
-    expect(indexModule).toHaveProperty('NERWorker');
+    expect(indexModule).toHaveProperty('DynamicVirtualScroll');
     expect(indexModule).toHaveProperty('default');
   });
 
-  test('should not create global ZoteroNER object when window is not available', async () => {
+  test('should not create global ZoteroNameNormalizer object when window is not available', async () => {
     // Remove window object temporarily
     const originalWindow = global.window;
     delete global.window;
-    
+
     // Import the index file
     const indexModule = await import('../../src/index.js');
-    
+
     // Check that the module was still imported successfully
     expect(indexModule).toBeDefined();
-    
+
     // Restore window object
     global.window = originalWindow;
   });

@@ -8,8 +8,6 @@
 ```javascript
 for (let i = 0; i < firstNames.length; i++) {
   for (let j = i + 1; j < firstNames.length; j++) {
-    const name1 = firstNames[i];
-    const name2 = firstNames[j];
     const distance = this.calculateLevenshteinDistance(name1, name2);
     // ... comparison
   }
@@ -19,36 +17,51 @@ for (let i = 0; i < firstNames.length; i++) {
 ### Problem
 - O(k²) comparisons where k = number of unique first names
 - For k=100, that's 4950 comparisons
-- First name variations are often related by having the same initial
 
-### Solution: Hash-Based Grouping by Initial
+### Solution: First Letter + Length Bucket Grouping
+
+Group by first letter AND name length bucket. This catches:
+- Typos: "Smith" vs "Smythe" (both "S", ~5 chars)
+- Initial variations: "J." vs "John" (both "J", different lengths)
+
 ```javascript
-// Group first names by their first letter/initial
-const byInitial = {};
-for (const name of firstNames) {
-  const initial = name.charAt(0).toUpperCase();
-  if (!byInitial[initial]) byInitial[initial] = [];
-  byInitial[initial].push(name);
+function getGroupingKey(firstName) {
+  const len = firstName.length;
+  const lengthBucket = len <= 3 ? 'tiny' : len <= 5 ? 'short' : len <= 8 ? 'medium' : 'long';
+  const initial = firstName.charAt(0).toLowerCase();
+  return `${initial}_${lengthBucket}`;
 }
 
-// Only compare names within the same initial group
-for (const initial in byInitial) {
-  const group = byInitial[initial];
+// Group first names by initial+length
+const byGroup = {};
+for (const name of firstNames) {
+  const key = getGroupingKey(name);
+  if (!byGroup[key]) byGroup[key] = [];
+  byGroup[key].push(name);
+}
+
+// Only compare names within same group
+for (const key in byGroup) {
+  const group = byGroup[key];
   for (let i = 0; i < group.length; i++) {
     for (let j = i + 1; j < group.length; j++) {
-      // Compare only within group
+      compare(group[i], group[j]);
     }
   }
 }
 ```
 
-### Expected Improvement
-- From O(k²) to O(k² * p) where p = avg(1/26) ≈ 0.04
-- For k=100: 4950 → ~190 comparisons (96% reduction)
+**Tradeoff Note:** This optimization targets typos and initial variations, NOT nickname variants (William/Bill). For nicknames, use the existing `COMMON_GIVEN_NAME_EQUIVALENTS` lookup instead of Levenshtein.
 
-### Edge Case
-- Single-letter names like "J." need special handling - group them together
-- Initials should match regardless of trailing period
+### Edge Cases Handled
+- Single letters ("J.", "J") - same group (both "J_tiny")
+- Multi-letter initials ("J.D.", "John") - "J_tiny" vs "J_medium" - different groups
+- Hyphenated names - use first letter before hyphen
+- Unicode - handled by charAt and toLowerCase
+
+### Expected Improvement
+- From O(k²) to O(k² * p) where p ≈ 1/156 (26 letters × 4 length buckets)
+- For k=100: 4950 → ~32 comparisons (99.4% reduction)
 
 ---
 
@@ -57,99 +70,137 @@ for (const initial in byInitial) {
 **Location:** `src/zotero/zotero-db-analyzer.js:410-479`
 
 ### Current Implementation
-- Already has optimizations: length filtering, max comparisons limit
-- Still O(n²) in worst case when names have similar lengths
-- Uses Levenshtein distance for similarity calculation
+- Already has: length filtering (within 2 chars), max comparisons limit (n*5)
+- Still O(n²) for surnames of similar lengths
 
 ### Problem
-- For 10,000 surnames with similar lengths, still does ~10M comparisons
-- Length filtering alone is insufficient
+- For 10,000 surnames, ~10M comparisons in worst case
+- Alphabetical sorting alone doesn't correlate with edit distance
 
-### Solution: N-Gram Indexing (Blocking)
+### Solution: 2-Gram Blocking Index
 
-1. **Create n-gram index:**
 ```javascript
-function createNGramIndex(surnames, n = 2) {
+function create2GramIndex(surnames) {
   const index = {};
   for (const surname of surnames) {
-    const ngrams = getNGrams(surname, n); // e.g., "smith" → ["sm", "mi", "it", "th"]
+    const ngrams = get2Grams(surname.toLowerCase());
     for (const ngram of ngrams) {
-      if (!index[ngram]) index[ngram] = [];
-      index[ngram].push(surname);
+      if (!index[ngram]) index[ngram] = new Set();
+      index[ngram].add(surname);
     }
   }
   return index;
 }
-```
 
-2. **Use blocking to limit comparisons:**
-```javascript
-// Only compare surnames that share at least one n-gram
-// Use the most discriminative n-grams (appear in fewer surnames)
-```
-
-### Alternative: Sorted Neighborhood Method
-```javascript
-// Sort surnames and only compare nearby entries
-const sorted = surnames.sort();
-for (let i = 0; i < sorted.length; i++) {
-  // Compare with next WINDOW_SIZE entries
-  for (let j = 1; j < windowSize && i + j < sorted.length; j++) {
-    compare(sorted[i], sorted[i + j]);
+function get2Grams(str) {
+  const grams = new Set();
+  for (let i = 0; i < str.length - 1; i++) {
+    grams.add(str.substring(i, i + 2));
   }
+  return grams;
 }
 ```
 
-### Recommended Approach: Combined Strategy
-1. **Primary:** Sorted Neighborhood Method (simpler, effective)
-   - Sort by surname
-   - Compare each name with next N neighbors
-   - Works well for typo-like variations (Smith vs Smyth)
+**Comparison strategy:**
+1. Build 2-gram index for all surnames
+2. For each surname, get candidates from shared n-gram buckets
+3. Only compare with candidates (not all other surnames)
+4. Apply existing length filter and similarity threshold
 
-2. **Secondary:** N-gram indexing for exact matches
-   - Group by common 2-grams
-   - Compare within groups
+### Why 2-Gram Over Sorted Neighborhood?
+- "Smith" shares "sm", "mi", "it", "th" with similar names
+- Better for typo detection (1-2 character differences)
+- More discriminative than alphabetical position
 
 ### Expected Improvement
-- From O(n²) to O(n * w) where w = window size (e.g., 10-20)
-- For n=10,000: 100M → 100K comparisons (99.9% reduction)
+- From O(n²) to O(n × avg_bucket_size)
+- For n=10,000 with avg_bucket_size=50: 100M → 500K (99.5% reduction)
 
 ---
 
 ## Implementation Plan
 
 ### Phase 1: Fix findFirstInitialVariations (candidate-finder.js)
-- [ ] Add helper function to extract initial from first name
-- [ ] Group first names by initial (with special handling for initials)
-- [ ] Modify loop to only compare within same initial group
-- [ ] Add tests for edge cases (single letters, periods, etc.)
-- [ ] Verify no regression in test results
+- [ ] Add `getGroupingKey()` helper function
+- [ ] Modify loop to use initial+length grouping
+- [ ] Add tests for edge cases (single letters, unicode, hyphens)
+- [ ] Add regression test comparing old vs new results
+- [ ] Verify existing tests still pass
 
 ### Phase 2: Fix findVariantsEfficiently (zotero-db-analyzer.js)
-- [ ] Implement sorted neighborhood method
-- [ ] Add configurable window size parameter
-- [ ] Add tests for large surname lists
+- [ ] Add `get2Grams()` helper function
+- [ ] Add `create2GramIndex()` helper function
+- [ ] Implement blocking-based comparison
+- [ ] Add tests with synthetic surname datasets
 - [ ] Verify existing tests still pass
 
 ### Phase 3: Integration Testing
 - [ ] Run full test suite
-- [ ] Profile performance with large datasets
+- [ ] Profile performance with synthetic large datasets
+- [ ] Compare matching accuracy before/after
 - [ ] Verify build completes without warnings
 
 ---
 
 ## Files to Modify
-- `src/core/candidate-finder.js` - Add initial-based grouping
-- `src/zotero/zotero-db-analyzer.js` - Add sorted neighborhood
+- `src/core/candidate-finder.js` - Add grouping optimization
+- `src/zotero/zotero-db-analyzer.js` - Add n-gram blocking
 
-## Test Strategy
-1. Create test cases with known first name variants
-2. Verify same results as original O(n²) implementation
-3. Profile with synthetic large datasets
-4. Compare results before/after to ensure correctness
+## Test Cases to Add
+
+### candidate-finder.js Tests
+```javascript
+// Edge case: Single letter vs full name
+test('matches J. with John', () => {
+  const creators = [
+    { firstName: 'J.', lastName: 'Smith' },
+    { firstName: 'John', lastName: 'Smith' }
+  ];
+  const result = findFirstInitialVariations(creators);
+  expect(result).toHaveLength(1);
+});
+
+// Edge case: Similar length names
+test('matches similar length names efficiently', () => {
+  const creators = generateCreatorsWithFirstNames(['Smith', 'Smythe', 'Jones']);
+  const result = findFirstInitialVariations(creators);
+  expect(result.length).toBeGreaterThan(0);
+});
+
+// Edge case: Unicode handling
+test('handles accented characters', () => {
+  const creators = [
+    { firstName: 'Jose', lastName: 'Smith' },
+    { firstName: 'José', lastName: 'Smith' }
+  ];
+  const result = findFirstInitialVariations(creators);
+  expect(result.length).toBeGreaterThan(0);
+});
+```
+
+### zotero-db-analyzer.js Tests
+```javascript
+// Performance test with large dataset
+test('handles 1000 surnames efficiently', () => {
+  const surnames = generateTestSurnames(1000);
+  const start = Date.now();
+  const result = findVariantsEfficiently(surnameFrequencies);
+  const elapsed = Date.now() - start;
+  expect(elapsed).toBeLessThan(5000); // Should complete in < 5s
+  expect(result.length).toBeGreaterThan(0);
+});
+```
 
 ## Success Criteria
 - All existing tests pass
-- No regression in matching accuracy
+- No regression in matching accuracy (same pairs matched)
 - Build completes without errors/warnings
 - Performance improvement of 90%+ for large datasets
+- Edge cases handled correctly
+
+## Risk Mitigation
+| Risk | Mitigation |
+|------|------------|
+| New grouping misses valid matches | Add regression test comparing old vs new results |
+| N-gram index memory usage | Use Set for O(1) lookup, clean up after use |
+| Edge case regressions | Add explicit tests for each edge case |

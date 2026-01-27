@@ -10,15 +10,15 @@
  */
 
 (function(global) {
-  if (!global || global.__ZoteroNERLegacyControllerWarned) {
+  if (!global || global.__ZoteroNameNormalizerLegacyControllerWarned) {
     return;
   }
 
   try {
-    global.__ZoteroNERLegacyControllerWarned = true;
+    global.__ZoteroNameNormalizerLegacyControllerWarned = true;
     const consoleObject = global.console || (typeof console !== 'undefined' ? console : null);
     if (consoleObject && typeof consoleObject.warn === 'function') {
-      consoleObject.warn('[Zotero NER] normalization-dialog-controller.js is deprecated. The HTML dialog (content/dialog.html) hosts the live implementation.');
+      consoleObject.warn('[Zotero Name Normalizer] normalization-dialog-controller.js is deprecated. The HTML dialog (content/dialog.html) hosts the live implementation.');
     }
   } catch (_error) {
     void _error;

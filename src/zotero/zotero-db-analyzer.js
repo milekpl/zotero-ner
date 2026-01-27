@@ -411,36 +411,77 @@ class ZoteroDBAnalyzer {
     const surnames = Object.keys(surnameFrequencies);
     const potentialVariants = [];
 
-    // Use a more efficient approach: sort by frequency and compare similar-length names
+    // Helper function: Extract 2-grams from a string
+    const get2Grams = (str) => {
+      const grams = new Set();
+      for (let i = 0; i < str.length - 1; i++) {
+        grams.add(str.substring(i, i + 2));
+      }
+      return grams;
+    };
+
+    // Helper function: Build 2-gram index for blocking
+    const create2GramIndex = (names) => {
+      const index = {};
+      for (const name of names) {
+        const ngrams = get2Grams(name);
+        for (const ngram of ngrams) {
+          if (!index[ngram]) index[ngram] = [];
+          index[ngram].push(name);
+        }
+      }
+      return index;
+    };
+
+    // Build 2-gram index for all surnames (O(n * avg_length))
+    const ngramIndex = create2GramIndex(surnames);
+
+    // Sort by frequency for deterministic results
     const sortedSurnames = surnames.sort((a, b) => surnameFrequencies[b] - surnameFrequencies[a]);
 
-    const maxComparisons = Math.min(10000, sortedSurnames.length * 5); // Limit comparisons
+    // Track which pairs we've already compared to avoid duplicates
+    const comparedPairs = new Set();
+
+    // Use blocking: only compare surnames that share at least one 2-gram
     let comparisons = 0;
 
-    for (let i = 0; i < sortedSurnames.length && comparisons < maxComparisons; i++) {
+    for (let i = 0; i < sortedSurnames.length; i++) {
       // Check for cancellation
       if (shouldCancel && shouldCancel()) {
         throw new Error('Analysis cancelled');
       }
 
       const name1 = sortedSurnames[i];
+      const ngrams1 = get2Grams(name1);
 
-      // Only compare with surnames of similar length (within 2 characters)
-      const name1Length = name1.length;
-      const minLength = Math.max(3, name1Length - 2);
-      const maxLength = name1Length + 2;
-
-      for (let j = i + 1; j < sortedSurnames.length && comparisons < maxComparisons; j++) {
-        const name2 = sortedSurnames[j];
-
-        // Skip if lengths are too different
-        if (name2.length < minLength || name2.length > maxLength) {
-          continue;
+      // Get candidate surnames from shared n-grams
+      const candidates = new Set();
+      for (const ngram of ngrams1) {
+        if (ngramIndex[ngram]) {
+          for (const candidate of ngramIndex[ngram]) {
+            if (candidate !== name1) {
+              candidates.add(candidate);
+            }
+          }
         }
+      }
+
+      // Only compare with candidates that have been "seen" (higher index or same frequency processed)
+      // This ensures each pair is compared only once
+      for (const name2 of candidates) {
+        // Create unique pair key (alphabetically sorted to avoid duplicates)
+        const pairKey = name1 < name2 ? `${name1}|${name2}` : `${name2}|${name1}`;
+        if (comparedPairs.has(pairKey)) continue;
+        comparedPairs.add(pairKey);
+
+        // Apply length filtering (within 2 characters) as additional filter
+        const len1 = name1.length;
+        const len2 = name2.length;
+        if (Math.abs(len1 - len2) > 2) continue;
 
         comparisons++;
 
-        // Calculate similarity using Levenshtein distance
+        // Calculate similarity using normalized Levenshtein
         const similarity = this.calculateStringSimilarity(name1, name2);
 
         if (similarity >= 0.8) { // 80% similarity threshold
@@ -459,15 +500,18 @@ class ZoteroDBAnalyzer {
           });
         }
 
-        // Yield control periodically to prevent UI freezing
-        if (comparisons % 100 === 0) {
-          // Use synchronous timeout to yield control
-          // Note: This is a simplified approach - in a real implementation,
-          // you might want to use a different strategy for yielding control
+        // Progress reporting
+        if (progressCallback && comparisons % 100 === 0) {
+          progressCallback({
+            stage: 'analyzing_surnames',
+            processed: comparisons,
+            total: null,
+            percent: null
+          });
         }
       }
 
-      // Report progress
+      // Report progress based on surnames processed
       if (progressCallback && i % 10 === 0) {
         progressCallback({
           stage: 'analyzing_surnames',

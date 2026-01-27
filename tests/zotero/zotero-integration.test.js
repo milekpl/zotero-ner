@@ -12,7 +12,7 @@ const mockActivePane = {
 };
 
 global.Zotero = {
-  NER: null, // Initially undefined, will be defined by the script
+  NameNormalizer: null, // Initially undefined, will be defined by the script
   getMainWindow: () => ({
     alert: jest.fn()
   }),
@@ -32,32 +32,35 @@ global.window = {
   setTimeout: jest.fn((fn) => fn()) // Execute immediately for testing
 };
 
-// Mock the ZoteroNER object that might be available
-global.ZoteroNER = {
-  NERProcessor: jest.fn(),
+// Mock the ZoteroNameNormalizer object that might be available
+global.ZoteroNameNormalizer = {
   NameParser: jest.fn(),
   LearningEngine: jest.fn(),
   NormalizerDialog: jest.fn(),
   ItemProcessor: jest.fn(),
-  ZoteroDBAnalyzer: jest.fn()
+  ZoteroDBAnalyzer: jest.fn(),
+  MenuIntegration: jest.fn()
 };
 
 // Also mock the constructors
-const mockNERProcessorInstance = {};
 const mockNameParserInstance = {};
 const mockLearningEngineInstance = {};
 const mockNormalizerDialogInstance = {};
 const mockItemProcessorInstance = {};
 const mockZoteroDBAnalyzerInstance = {};
+const mockMenuIntegrationInstance = {};
 
-global.ZoteroNER.NERProcessor = jest.fn(() => mockNERProcessorInstance);
-global.ZoteroNER.NameParser = jest.fn(() => mockNameParserInstance);
-global.ZoteroNER.LearningEngine = jest.fn(() => mockLearningEngineInstance);
-global.ZoteroNER.NormalizerDialog = jest.fn(() => mockNormalizerDialogInstance);
-global.ZoteroNER.ItemProcessor = jest.fn(() => mockItemProcessorInstance);
-global.ZoteroNER.ZoteroDBAnalyzer = jest.fn(() => mockZoteroDBAnalyzerInstance);
+global.ZoteroNameNormalizer.NameParser = jest.fn(() => mockNameParserInstance);
+global.ZoteroNameNormalizer.LearningEngine = jest.fn(() => mockLearningEngineInstance);
+global.ZoteroNameNormalizer.NormalizerDialog = jest.fn(() => mockNormalizerDialogInstance);
+global.ZoteroNameNormalizer.ItemProcessor = jest.fn(() => mockItemProcessorInstance);
+global.ZoteroNameNormalizer.ZoteroDBAnalyzer = jest.fn(() => mockZoteroDBAnalyzerInstance);
+global.ZoteroNameNormalizer.MenuIntegration = jest.fn(() => mockMenuIntegrationInstance);
 
-// Now run the actual script to initialize Zotero.NER
+// Backward compatibility alias - this is what the script actually creates
+global.ZoteroNER = global.ZoteroNameNormalizer;
+
+// Now run the actual script to initialize Zotero.NameNormalizer
 const fs = require('fs');
 const path = require('path');
 const scriptContent = fs.readFileSync(path.join(__dirname, '../../content/scripts/zotero-ner.js'), 'utf8');
@@ -65,45 +68,45 @@ const scriptContent = fs.readFileSync(path.join(__dirname, '../../content/script
 // Execute the script content
 eval(scriptContent);
 
-describe('Zotero NER Integration', () => {
-  let zoteroNER;
+describe('Zotero NameNormalizer Integration', () => {
+  let nameNormalizer;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
-    // Ensure the Zotero.NER object was created
-    zoteroNER = global.Zotero.NER;
-    expect(zoteroNER).toBeDefined();
+
+    // Ensure the Zotero.NameNormalizer object was created
+    nameNormalizer = global.Zotero.NameNormalizer;
+    expect(nameNormalizer).toBeDefined();
   });
 
   test('should initialize properly', () => {
-    expect(zoteroNER.initialized).toBe(false);
-    
+    expect(nameNormalizer.initialized).toBe(false);
+
     // Call init to test initialization
-    zoteroNER.init();
-    
-    expect(zoteroNER.initialized).toBe(true);
-    expect(zoteroNER.nerProcessor).toBeDefined();
-    expect(zoteroNER.nameParser).toBeDefined();
-    expect(zoteroNER.learningEngine).toBeDefined();
-    expect(zoteroNER.normalizerDialog).toBeDefined();
+    nameNormalizer.init();
+
+    expect(nameNormalizer.initialized).toBe(true);
+    expect(nameNormalizer.nameParser).toBeDefined();
+    expect(nameNormalizer.learningEngine).toBeDefined();
+    expect(nameNormalizer.normalizerDialog).toBeDefined();
+    expect(nameNormalizer.menuIntegration).toBeDefined();
   });
 
   test('should handle initialization with options', () => {
     const mockWindow = {
-      ZoteroNER: {
-        NERProcessor: jest.fn(() => mockNERProcessorInstance),
+      ZoteroNameNormalizer: {
         NameParser: jest.fn(() => mockNameParserInstance),
         LearningEngine: jest.fn(() => mockLearningEngineInstance),
-        NormalizerDialog: jest.fn(() => mockNormalizerDialogInstance)
+        NormalizerDialog: jest.fn(() => mockNormalizerDialogInstance),
+        MenuIntegration: jest.fn(() => mockMenuIntegrationInstance)
       }
     };
-    
-    zoteroNER.initialized = false; // Reset for this test
-    zoteroNER.init({ window: mockWindow });
-    
-    expect(zoteroNER.initialized).toBe(true);
+
+    nameNormalizer.initialized = false; // Reset for this test
+    nameNormalizer.init({ window: mockWindow });
+
+    expect(nameNormalizer.initialized).toBe(true);
   });
 
   test('showDialogForFullLibrary should work with proper DB access', async () => {
@@ -113,21 +116,21 @@ describe('Zotero NER Integration', () => {
         suggestions: [{ primary: 'Smith', variants: [{ name: 'Smyth', frequency: 1 }] }]
       })
     };
-    
-    // Mock the bundled ZoteroNER
-    global.ZoteroNER.ZoteroDBAnalyzer = jest.fn(() => mockAnalyzer);
-    
-    zoteroNER.init();
-    
+
+    // Mock the bundled ZoteroNameNormalizer
+    global.ZoteroNameNormalizer.ZoteroDBAnalyzer = jest.fn(() => mockAnalyzer);
+
+    nameNormalizer.init();
+
     // Mock the openDialog function
     const mockOpenDialog = jest.fn();
     global.Zotero.getMainWindow = () => ({
       openDialog: mockOpenDialog
     });
-    
+
     // Call the function
-    await zoteroNER.showDialogForFullLibrary();
-    
+    await nameNormalizer.showDialogForFullLibrary();
+
     // Verify that dialog was opened with analysis results
     expect(mockOpenDialog).toHaveBeenCalledWith(
       expect.any(String), // dialog URL
@@ -144,33 +147,33 @@ describe('Zotero NER Integration', () => {
     const mockAnalyzer = {
       analyzeFullLibrary: jest.fn().mockRejectedValue(new Error('DB Error'))
     };
-    
-    global.ZoteroNER.ZoteroDBAnalyzer = jest.fn(() => mockAnalyzer);
-    
-    zoteroNER.init();
-    
+
+    global.ZoteroNameNormalizer.ZoteroDBAnalyzer = jest.fn(() => mockAnalyzer);
+
+    nameNormalizer.init();
+
     // Mock alert function
     const mockAlert = jest.fn();
     global.Zotero.getMainWindow = () => ({
       alert: mockAlert
     });
-    
+
     // Call the function and expect it not to crash
-    await expect(zoteroNER.showDialogForFullLibrary()).resolves.not.toThrow();
+    await expect(nameNormalizer.showDialogForFullLibrary()).resolves.not.toThrow();
   });
 
   test('showDialog should handle null/undefined items properly', () => {
-    zoteroNER.init();
-    
+    nameNormalizer.init();
+
     // Mock the openDialog function
     const mockOpenDialog = jest.fn();
     global.Zotero.getMainWindow = () => ({
       openDialog: mockOpenDialog
     });
-    
+
     // Call showDialog with null items
-    zoteroNER.showDialog(null);
-    
+    nameNormalizer.showDialog(null);
+
     // Verify dialog was opened with null items
     expect(mockOpenDialog).toHaveBeenCalledWith(
       expect.any(String),
@@ -183,17 +186,22 @@ describe('Zotero NER Integration', () => {
     );
   });
 
-  test('should handle missing ZoteroNER gracefully', () => {
-    // Temporarily remove ZoteroNER to test fallback
-    const originalZoteroNER = global.ZoteroNER;
-    global.ZoteroNER = undefined;
-    
-    zoteroNER.init();
-    
+  test('should handle missing ZoteroNameNormalizer gracefully', () => {
+    // Temporarily remove ZoteroNameNormalizer to test fallback
+    const originalZoteroNameNormalizer = global.ZoteroNameNormalizer;
+    global.ZoteroNameNormalizer = undefined;
+
+    nameNormalizer.init();
+
     // Should still initialize without crashing
-    expect(zoteroNER.initialized).toBe(true);
-    
-    // Restore ZoteroNER
-    global.ZoteroNER = originalZoteroNER;
+    expect(nameNormalizer.initialized).toBe(true);
+
+    // Restore ZoteroNameNormalizer
+    global.ZoteroNameNormalizer = originalZoteroNameNormalizer;
+  });
+
+  test('backward compatibility alias Zotero.NER should reference NameNormalizer', () => {
+    // Verify backward compatibility alias works
+    expect(global.Zotero.NER).toBe(global.Zotero.NameNormalizer);
   });
 });

@@ -5,11 +5,11 @@ const webpack = require('webpack');
 const consolePolyfill = `
 if (typeof console === 'undefined') {
   globalThis.console = {
-    log: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER: ' + Array.prototype.join.call(arguments, ' ')); },
-    warn: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER WARN: ' + Array.prototype.join.call(arguments, ' ')); },
-    error: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER ERROR: ' + Array.prototype.join.call(arguments, ' ')); },
-    info: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER INFO: ' + Array.prototype.join.call(arguments, ' ')); },
-    debug: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NER DEBUG: ' + Array.prototype.join.call(arguments, ' ')); }
+    log: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer: ' + Array.prototype.join.call(arguments, ' ')); },
+    warn: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer WARN: ' + Array.prototype.join.call(arguments, ' ')); },
+    error: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer ERROR: ' + Array.prototype.join.call(arguments, ' ')); },
+    info: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer INFO: ' + Array.prototype.join.call(arguments, ' ')); },
+    debug: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer DEBUG: ' + Array.prototype.join.call(arguments, ' ')); }
   };
 }
 `;
@@ -17,9 +17,9 @@ if (typeof console === 'undefined') {
 module.exports = {
   entry: './src/index.js',
   output: {
-    filename: 'zotero-ner-bundled.js',
+    filename: 'zotero-name-normalizer-bundled.js',
     path: path.resolve(__dirname, 'content/scripts'),
-    library: 'ZoteroNER',
+    library: 'ZoteroNameNormalizer',
     libraryTarget: 'umd',
     globalObject: 'this'
   },

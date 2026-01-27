@@ -1,33 +1,33 @@
 /**
- * Main integration file for Zotero NER Author Name Normalization Extension
- * This file handles integration with the Zotero 7 interface
+ * Main integration file for Zotero Name Normalizer Extension
+ * This file handles integration with the Zotero 7/8 interface
  */
 
 if (typeof Zotero === 'undefined') {
   // In some contexts (like dialogs), Zotero might not be immediately available
   // but that's OK - the extension components will handle this appropriately
 } else {
-  if (!Zotero.NER) {
-    Zotero.NER = {
+  if (!Zotero.NameNormalizer) {
+    Zotero.NameNormalizer = {
       initialized: false,
       rootURI: null,
       windowStates: new Map(),
-      menuItemId: 'zotero-ner-menuitem',
+      menuItemId: 'zotero-name-normalizer-menuitem',
       hooks: {
         onStartup: function() {
           // This will be called from bootstrap.js startup
-          console.log('NER Author Name Normalizer: Zotero.NER.hooks.onStartup called.');
+          console.log('Name Normalizer: Zotero.NameNormalizer.hooks.onStartup called.');
         },
         onMainWindowLoad: function(window) {
           // This will be called from bootstrap.js onMainWindowLoad
-          console.log('NER Author Name Normalizer: Zotero.NER.hooks.onMainWindowLoad called.');
+          console.log('Name Normalizer: Zotero.NameNormalizer.hooks.onMainWindowLoad called.');
           // Pass the rootURI from bootstrap.js directly
-          Zotero.NER.init({ rootURI: globalThis.registeredRootURI, window: window });
+          Zotero.NameNormalizer.init({ rootURI: globalThis.registeredRootURI, window: window });
         },
         onMainWindowUnload: function(window) {
           // This will be called from bootstrap.js onMainWindowUnload
-          console.log('NER Author Name Normalizer: Zotero.NER.hooks.onMainWindowUnload called.');
-          Zotero.NER.teardown(window);
+          console.log('Name Normalizer: Zotero.NameNormalizer.hooks.onMainWindowUnload called.');
+          Zotero.NameNormalizer.teardown(window);
         }
       },
 
@@ -49,25 +49,22 @@ if (typeof Zotero === 'undefined') {
 
         if (!this.initialized) {
           try {
-            if (typeof ZoteroNER !== 'undefined') {
-              if (!this.nerProcessor && typeof ZoteroNER.NERProcessor === 'function') {
-                this.nerProcessor = new ZoteroNER.NERProcessor();
+            if (typeof ZoteroNameNormalizer !== 'undefined') {
+              if (!this.nameParser && typeof ZoteroNameNormalizer.NameParser === 'function') {
+                this.nameParser = new ZoteroNameNormalizer.NameParser();
               }
-              if (!this.nameParser && typeof ZoteroNER.NameParser === 'function') {
-                this.nameParser = new ZoteroNER.NameParser();
+              if (!this.learningEngine && typeof ZoteroNameNormalizer.LearningEngine === 'function') {
+                this.learningEngine = new ZoteroNameNormalizer.LearningEngine();
               }
-              if (!this.learningEngine && typeof ZoteroNER.LearningEngine === 'function') {
-                this.learningEngine = new ZoteroNER.LearningEngine();
+              if (!this.normalizerDialog && typeof ZoteroNameNormalizer.NormalizerDialog === 'function') {
+                this.normalizerDialog = new ZoteroNameNormalizer.NormalizerDialog();
               }
-              if (!this.normalizerDialog && typeof ZoteroNER.NormalizerDialog === 'function') {
-                this.normalizerDialog = new ZoteroNER.NormalizerDialog();
-              }
-              if (!this.menuIntegration && typeof ZoteroNER.MenuIntegration === 'function') {
-                this.menuIntegration = new ZoteroNER.MenuIntegration();
+              if (!this.menuIntegration && typeof ZoteroNameNormalizer.MenuIntegration === 'function') {
+                this.menuIntegration = new ZoteroNameNormalizer.MenuIntegration();
               }
               this.log('Core components initialized');
             } else {
-              this.log('ZoteroNER bundle not available during init');
+              this.log('ZoteroNameNormalizer bundle not available during init');
             }
 
             this.initialized = true;
@@ -87,7 +84,7 @@ if (typeof Zotero === 'undefined') {
       },
 
       log: function(message) {
-        const formatted = 'NER Author Name Normalizer: ' + message;
+        const formatted = 'Name Normalizer: ' + message;
         if (typeof Zotero !== 'undefined' && typeof Zotero.debug === 'function') {
           Zotero.debug(formatted);
         } else {
@@ -210,7 +207,7 @@ if (typeof Zotero === 'undefined') {
               }
               menuItem.id = this.menuItemId;
               menuItem.setAttribute('label', 'Normalize Author Names');
-              menuItem.setAttribute('tooltiptext', 'Normalize author names using NER');
+              menuItem.setAttribute('tooltiptext', 'Normalize author names');
               menuItem.addEventListener('command', commandHandler);
               if (toolsPopup && typeof toolsPopup.appendChild === 'function') {
                 toolsPopup.appendChild(menuItem);
@@ -291,8 +288,8 @@ if (typeof Zotero === 'undefined') {
       showDialogForFullLibrary: async function() {
         try {
           this.log('showDialogForFullLibrary called');
-          if (typeof ZoteroNER !== 'undefined' && ZoteroNER.ZoteroDBAnalyzer) {
-            const dbAnalyzer = new ZoteroNER.ZoteroDBAnalyzer();
+          if (typeof ZoteroNameNormalizer !== 'undefined' && ZoteroNameNormalizer.ZoteroDBAnalyzer) {
+            const dbAnalyzer = new ZoteroNameNormalizer.ZoteroDBAnalyzer();
             const analysisResults = await dbAnalyzer.analyzeFullLibrary();
 
             this.showDialog(null, analysisResults);
@@ -337,13 +334,13 @@ if (typeof Zotero === 'undefined') {
 
           if (mainWindow) {
             try {
-              mainWindow.ZoteroNERDialogParams = params;
+              mainWindow.ZoteroNameNormalizerDialogParams = params;
               if (analysisResults) {
-                mainWindow.ZoteroNERAnalysisResults = analysisResults;
+                mainWindow.ZoteroNameNormalizerAnalysisResults = analysisResults;
               }
               if (serializedAnalysisResults) {
-                mainWindow.ZoteroNERDialogParamsJSON = serializedAnalysisResults;
-                mainWindow.ZoteroNERAnalysisResultsJSON = serializedAnalysisResults;
+                mainWindow.ZoteroNameNormalizerDialogParamsJSON = serializedAnalysisResults;
+                mainWindow.ZoteroNameNormalizerAnalysisResultsJSON = serializedAnalysisResults;
               }
             } catch (paramError) {
               this.log('Unable to cache dialog params on main window: ' + paramError.message);
@@ -352,8 +349,8 @@ if (typeof Zotero === 'undefined') {
 
           // Open the dialog slightly wider so the variant detail panel is visible
           mainWindow.openDialog(
-            'chrome://zoteroner/content/dialog.html',
-            'zotero-ner-normalization-dialog',
+            'chrome://zoteronamenormalizer/content/dialog.html',
+            'zotero-name-normalizer-dialog',
             'chrome,modal,resizable=yes,dialog=yes,width=1200,height=700',
             params
           );
@@ -390,6 +387,7 @@ if (typeof Zotero === 'undefined') {
       }
     };
   }
-
-
+  
+  // Backward compatibility alias
+  Zotero.NER = Zotero.NameNormalizer;
 }

@@ -1,5 +1,5 @@
 /**
- * Entry point for bundling all NER functionality
+ * Entry point for bundling all Name Normalizer functionality
  * This file exports all core modules for use in the bundled extension
  */
 
@@ -10,34 +10,33 @@ if (typeof console === 'undefined') {
   globalThis.console = {
     log: function(...args) {
       if (typeof Zotero !== 'undefined' && Zotero.debug) {
-        Zotero.debug('NER: ' + args.join(' '));
+        Zotero.debug('NameNormalizer: ' + args.join(' '));
       }
     },
     warn: function(...args) {
       if (typeof Zotero !== 'undefined' && Zotero.debug) {
-        Zotero.debug('NER WARN: ' + args.join(' '));
+        Zotero.debug('NameNormalizer WARN: ' + args.join(' '));
       }
     },
     error: function(...args) {
       if (typeof Zotero !== 'undefined' && Zotero.debug) {
-        Zotero.debug('NER ERROR: ' + args.join(' '));
+        Zotero.debug('NameNormalizer ERROR: ' + args.join(' '));
       }
     },
     info: function(...args) {
       if (typeof Zotero !== 'undefined' && Zotero.debug) {
-        Zotero.debug('NER INFO: ' + args.join(' '));
+        Zotero.debug('NameNormalizer INFO: ' + args.join(' '));
       }
     },
     debug: function(...args) {
       if (typeof Zotero !== 'undefined' && Zotero.debug) {
-        Zotero.debug('NER DEBUG: ' + args.join(' '));
+        Zotero.debug('NameNormalizer DEBUG: ' + args.join(' '));
       }
     }
   };
 }
 
 // Core modules
-import NERProcessor from './core/ner-processor.js';
 import NameParser from './core/name-parser.js';
 import VariantGenerator from './core/variant-generator.js';
 import LearningEngine from './core/learning-engine.js';
@@ -52,15 +51,14 @@ import ZoteroDBAnalyzer from './zotero/zotero-db-analyzer.js';
 import NormalizerDialog from './ui/normalizer-dialog.js';
 import BatchProcessor from './ui/batch-processor.js';
 
+// Utility modules
+import DynamicVirtualScroll from './utils/virtual-scroll.js';
+
 // Storage modules
 import DataManager from './storage/data-manager.js';
 
-// Worker modules
-import NERWorker from './worker/ner-worker.js';
-
 // Re-export modules for external usage
 export {
-  NERProcessor,
   NameParser,
   VariantGenerator,
   LearningEngine,
@@ -71,12 +69,11 @@ export {
   NormalizerDialog,
   BatchProcessor,
   DataManager,
-  NERWorker
+  DynamicVirtualScroll
 };
 
 // Create a global namespace for easy access
-const ZoteroNER = {
-  NERProcessor,
+const ZoteroNameNormalizer = {
   NameParser,
   VariantGenerator,
   LearningEngine,
@@ -87,13 +84,13 @@ const ZoteroNER = {
   NormalizerDialog,
   BatchProcessor,
   DataManager,
-  NERWorker
+  DynamicVirtualScroll
 };
 
 // Make it available globally
 if (typeof window !== 'undefined') {
-  window.ZoteroNER = ZoteroNER;
+  window.ZoteroNameNormalizer = ZoteroNameNormalizer;
 }
 
 // Also make it available as a module export
-export default ZoteroNER;
+export default ZoteroNameNormalizer;

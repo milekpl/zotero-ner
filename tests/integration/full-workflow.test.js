@@ -1,7 +1,7 @@
 describe('Full workflow integration', () => {
   beforeEach(() => {
     jest.resetModules();
-    global._nerStorage = {};
+    global._nameNormalizerStorage = {};
 
     global.Zotero = {
       debug: jest.fn(),
@@ -33,12 +33,13 @@ describe('Full workflow integration', () => {
 
   afterEach(() => {
     delete global.Zotero;
+    delete global.ZoteroNameNormalizer;
     delete global.ZoteroNER;
     delete global.window;
-    delete global._nerStorage;
+    delete global._nameNormalizerStorage;
   });
 
-  test('Zotero.NER full library workflow triggers dialog with analysis results', async () => {
+  test('Zotero.NameNormalizer full library workflow triggers dialog with analysis results', async () => {
     const analysisResults = {
       totalUniqueSurnames: 2,
       totalVariantGroups: 1,
@@ -54,8 +55,7 @@ describe('Full workflow integration', () => {
       analyzeFullLibrary: jest.fn().mockResolvedValue(analysisResults)
     };
 
-    global.ZoteroNER = {
-      NERProcessor: jest.fn(() => ({})),
+    global.ZoteroNameNormalizer = {
       NameParser: jest.fn(() => ({})),
       LearningEngine: jest.fn(() => ({})),
       NormalizerDialog: jest.fn(() => ({})),
@@ -70,13 +70,13 @@ describe('Full workflow integration', () => {
     };
     global.Zotero.getMainWindow.mockReturnValue(mainWindowStub);
 
-    global.Zotero.NER.init({ window: global.window });
-    await global.Zotero.NER.showDialogForFullLibrary();
+    global.Zotero.NameNormalizer.init({ window: global.window });
+    await global.Zotero.NameNormalizer.showDialogForFullLibrary();
 
     expect(mockAnalyzerInstance.analyzeFullLibrary).toHaveBeenCalled();
     expect(mainWindowStub.openDialog).toHaveBeenCalledWith(
-      'chrome://zoteroner/content/dialog.html',
-      'zotero-ner-normalization-dialog',
+      'chrome://zoteronamenormalizer/content/dialog.html',
+      'zotero-name-normalizer-dialog',
       expect.any(String),
       expect.objectContaining({
         analysisResults

@@ -2,7 +2,7 @@
 /* eslint-disable no-unused-vars */
 
 /**
- * Bootstrap file for Zotero NER Author Name Normalizer Extension
+ * Bootstrap file for Zotero Name Normalizer Extension
  * Based on Zotero 7/8 hybrid extension approach
  */
 
@@ -16,23 +16,23 @@ try {
 
 var chromeHandle;
 var windowListener;
-var zoteroNERScope;
+var zoteroNameNormalizerScope;
 var registeredRootURI;
 
 // Console polyfill for Zotero 8 - console not available in bootstrap scope
 // Use Zotero.debug instead
 function log(message) {
   if (typeof Zotero !== 'undefined' && Zotero.debug) {
-    Zotero.debug('NER Author Name Normalizer: ' + message);
+    Zotero.debug('Name Normalizer: ' + message);
   }
 }
 
 function install(_data, _reason) {}
 
 async function startup({ resourceURI, rootURI }, reason) {
-  Zotero.debug('NER Author Name Normalizer: startup called');
+  Zotero.debug('Name Normalizer: startup called');
   await Zotero.initializationPromise;
-  Zotero.debug('NER Author Name Normalizer: Zotero initializationPromise resolved.');
+  Zotero.debug('Name Normalizer: Zotero initializationPromise resolved.');
 
   // String 'rootURI' introduced in Zotero 7
   if (!rootURI) {
@@ -51,12 +51,12 @@ async function startup({ resourceURI, rootURI }, reason) {
   ].getService(Components.interfaces.amIAddonManagerStartup);
   var manifestURI = Services.io.newURI(rootURI + 'manifest.json');
   chromeHandle = aomStartup.registerChrome(manifestURI, [
-    ['content', 'zoteroner', rootURI + 'content/'],
+    ['content', 'zoteronamenormalizer', rootURI + 'content/'],
   ]);
   log('chromeHandle registered.');
 
   // Load bundled core into an isolated scope so we can share it with Zotero windows
-  zoteroNERScope = {
+  zoteroNameNormalizerScope = {
     Zotero,
     Components,
     Services,
@@ -65,58 +65,58 @@ async function startup({ resourceURI, rootURI }, reason) {
   };
 
   if (typeof Cu !== 'undefined') {
-    zoteroNERScope.Cu = Cu;
+    zoteroNameNormalizerScope.Cu = Cu;
   }
   if (typeof Ci !== 'undefined') {
-    zoteroNERScope.Ci = Ci;
+    zoteroNameNormalizerScope.Ci = Ci;
   }
   if (typeof Cr !== 'undefined') {
-    zoteroNERScope.Cr = Cr;
+    zoteroNameNormalizerScope.Cr = Cr;
   }
   if (typeof Cc !== 'undefined') {
-    zoteroNERScope.Cc = Cc;
+    zoteroNameNormalizerScope.Cc = Cc;
   }
 
   Services.scriptloader.loadSubScript(
-    `${rootURI}content/scripts/zotero-ner-bundled.js`,
-    zoteroNERScope,
+    `${rootURI}content/scripts/zotero-name-normalizer-bundled.js`,
+    zoteroNameNormalizerScope,
     'UTF-8',
   );
-  log('zotero-ner-bundled.js loaded.');
+  log('zotero-name-normalizer-bundled.js loaded.');
 
-  if (zoteroNERScope.ZoteroNER) {
-    globalThis.ZoteroNER = zoteroNERScope.ZoteroNER;
-    log('ZoteroNER exposed globally.');
+  if (zoteroNameNormalizerScope.ZoteroNameNormalizer) {
+    globalThis.ZoteroNameNormalizer = zoteroNameNormalizerScope.ZoteroNameNormalizer;
+    log('ZoteroNameNormalizer exposed globally.');
     // Call custom onStartup hook
-    if (globalThis.ZoteroNER.hooks && globalThis.ZoteroNER.hooks.onStartup) {
-      globalThis.ZoteroNER.hooks.onStartup();
+    if (globalThis.ZoteroNameNormalizer.hooks && globalThis.ZoteroNameNormalizer.hooks.onStartup) {
+      globalThis.ZoteroNameNormalizer.hooks.onStartup();
     }
   }
 
   registerWindowListeners(reason);
 
   // Load Mocha tests if test mode and test file exists
-  if (Zotero.Prefs.get('extensions.zotero-ner.testMode')) {
+  if (Zotero.Prefs.get('extensions.zotero-name-normalizer.testMode')) {
     try {
       Services.scriptloader.loadSubScript(
-        `${rootURI}tests/zotero-framework/test/tests/zotero-ner-test.js`,
+        `${rootURI}tests/zotero-framework/test/tests/zotero-name-normalizer-test.js`,
         globalThis,
         'UTF-8'
       );
-      Zotero.debug('NER Test: Loaded Mocha test file');
+      Zotero.debug('Name Normalizer Test: Loaded Mocha test file');
     } catch (e) {
-      Zotero.debug('NER Test: Could not load test file: ' + e.message);
+      Zotero.debug('Name Normalizer Test: Could not load test file: ' + e.message);
     }
 
     try {
       Services.scriptloader.loadSubScript(
-        `${rootURI}tests/zotero-framework/test/tests/zotero-ner-ui-test.js`,
+        `${rootURI}tests/zotero-framework/test/tests/zotero-name-normalizer-ui-test.js`,
         globalThis,
         'UTF-8'
       );
-      Zotero.debug('NER Test: Loaded UI test file');
+      Zotero.debug('Name Normalizer Test: Loaded UI test file');
     } catch (e) {
-      Zotero.debug('NER Test: Could not load UI test file: ' + e.message);
+      Zotero.debug('Name Normalizer Test: Could not load UI test file: ' + e.message);
     }
   }
 }
@@ -150,7 +150,7 @@ function shutdown(data, reason) {
  */
 function runTestsAndExit() {
   if (runTestsAndExit._started) {
-    Zotero.debug('NER Test: runTestsAndExit already started; skipping');
+    Zotero.debug('Name Normalizer Test: runTestsAndExit already started; skipping');
     return;
   }
   runTestsAndExit._started = true;
@@ -158,14 +158,14 @@ function runTestsAndExit() {
   function getResultsPaths() {
     let configured;
     try {
-      configured = Zotero.Prefs.get('extensions.zotero-ner.testResultsPath');
+      configured = Zotero.Prefs.get('extensions.zotero-name-normalizer.testResultsPath');
     } catch (e) {
       configured = null;
     }
 
-    const base = configured || '/tmp/zotero-ner-test-results.json';
-    const ui = configured ? configured.replace(/\.json$/i, '-ui.json') : '/tmp/zotero-ner-ui-results.json';
-    const mocha = configured ? configured.replace(/\.json$/i, '-mocha.json') : '/tmp/zotero-ner-mocha-results.json';
+    const base = configured || '/tmp/zotero-name-normalizer-test-results.json';
+    const ui = configured ? configured.replace(/\.json$/i, '-ui.json') : '/tmp/zotero-name-normalizer-ui-results.json';
+    const mocha = configured ? configured.replace(/\.json$/i, '-mocha.json') : '/tmp/zotero-name-normalizer-mocha-results.json';
     return { base, ui, mocha };
   }
 
@@ -199,9 +199,9 @@ function runTestsAndExit() {
       const content = JSON.stringify(results, null, 2);
       stream.write(content, content.length);
       stream.close();
-      Zotero.debug('NER Test: Results written to ' + filename);
+      Zotero.debug('Name Normalizer Test: Results written to ' + filename);
     } catch (e) {
-      Zotero.debug('NER Test: Write error: ' + e.message);
+      Zotero.debug('Name Normalizer Test: Write error: ' + e.message);
     }
   }
 
@@ -212,21 +212,21 @@ function runTestsAndExit() {
     function pass(name) {
       results.passed++;
       results.tests.push({ name: name, status: 'pass' });
-      Zotero.debug('NER Test: PASS - ' + name);
+      Zotero.debug('Name Normalizer Test: PASS - ' + name);
     }
 
     function fail(name, error) {
       results.failed++;
       results.tests.push({ name: name, status: 'fail', error: error });
-      Zotero.debug('NER Test: FAIL - ' + name + ': ' + error);
+      Zotero.debug('Name Normalizer Test: FAIL - ' + name + ': ' + error);
     }
 
     function assert(condition, name, error) {
       if (condition) pass(name); else fail(name, error || 'assertion failed');
     }
 
-    Zotero.debug('NER Test: Starting tests...');
-    Zotero.debug('NER Test: Zotero version = ' + Zotero.version);
+    Zotero.debug('Name Normalizer Test: Starting tests...');
+    Zotero.debug('Name Normalizer Test: Zotero version = ' + Zotero.version);
 
     // Wait for Zotero initialization before any test suites
     try {
@@ -234,100 +234,94 @@ function runTestsAndExit() {
         await Zotero.initializationPromise;
       }
     } catch (e) {
-      Zotero.debug('NER Test: Zotero initialization wait failed: ' + e.message);
+      Zotero.debug('Name Normalizer Test: Zotero initialization wait failed: ' + e.message);
     }
 
     // Prefer Mocha suite when available
-    if (typeof ZoteroNERMochaTests !== 'undefined' && ZoteroNERMochaTests.runTests) {
-      Zotero.debug('NER Test: Running Mocha test suite...');
+    if (typeof ZoteroNameNormalizerMochaTests !== 'undefined' && ZoteroNameNormalizerMochaTests.runTests) {
+      Zotero.debug('Name Normalizer Test: Running Mocha test suite...');
       try {
-        const mochaResults = await ZoteroNERMochaTests.runTests();
+        const mochaResults = await ZoteroNameNormalizerMochaTests.runTests();
         results.passed += mochaResults.passed || 0;
         results.failed += mochaResults.failed || 0;
         if (Array.isArray(mochaResults.tests)) {
           results.tests.push(...mochaResults.tests);
         }
       } catch (e) {
-        Zotero.debug('NER Test: Mocha tests failed: ' + e.message);
+        Zotero.debug('Name Normalizer Test: Mocha tests failed: ' + e.message);
         fail('Mocha suite: runTests', e.message);
       }
     } else {
       // Fallback to original tests
-      Zotero.debug('NER Test: Running inline tests (Mocha tests not available)');
+      Zotero.debug('Name Normalizer Test: Running inline tests (Mocha tests not available)');
 
       // Test Zotero loaded
       assert(typeof Zotero !== 'undefined', 'Zotero defined');
 
-      // Test Zotero.NER loaded
-      assert(typeof Zotero.NER !== 'undefined', 'Zotero.NER defined');
+      // Test Zotero.NameNormalizer loaded
+      assert(typeof Zotero.NameNormalizer !== 'undefined', 'Zotero.NameNormalizer defined');
 
-      if (typeof Zotero.NER !== 'undefined') {
-        // Test all modules present (use camelCase to match exports)
+      if (typeof Zotero.NameNormalizer !== 'undefined') {
+        // Test all modules present
         var modules = ['nameParser', 'learningEngine', 'candidateFinder',
-                       'nerProcessor', 'variantGenerator', 'menuIntegration', 'itemProcessor'];
+                       'variantGenerator', 'menuIntegration', 'itemProcessor'];
         var allPresent = true;
         for (var i = 0; i < modules.length; i++) {
-          if (!Zotero.NER[modules[i]]) {
+          if (!Zotero.NameNormalizer[modules[i]]) {
             allPresent = false;
-            Zotero.debug('NER Test: Missing module: ' + modules[i]);
+            Zotero.debug('Name Normalizer Test: Missing module: ' + modules[i]);
           }
         }
         assert(allPresent, 'All modules present');
 
         // Test name parser
-        if (Zotero.NER.nameParser) {
-          var p = Zotero.NER.nameParser.parse('John Smith');
+        if (Zotero.NameNormalizer.nameParser) {
+          var p = Zotero.NameNormalizer.nameParser.parse('John Smith');
           assert(p.firstName === 'John', 'Name parser: firstName');
           assert(p.lastName === 'Smith', 'Name parser: lastName');
         }
 
         // Test learning engine
-        if (Zotero.NER.learningEngine) {
+        if (Zotero.NameNormalizer.learningEngine) {
           var testKey = 'Test_' + Date.now();
-          Zotero.NER.learningEngine.storeMapping(testKey, 'TestValue', 0.9);
-          var m = Zotero.NER.learningEngine.getMapping(testKey);
+          Zotero.NameNormalizer.learningEngine.storeMapping(testKey, 'TestValue', 0.9);
+          var m = Zotero.NameNormalizer.learningEngine.getMapping(testKey);
           assert(m !== null && m.normalized === 'TestValue', 'Learning engine: store/retrieve');
         }
 
         // Test candidate finder
-        if (Zotero.NER.candidateFinder) {
-          var c = Zotero.NER.candidateFinder.findPotentialVariants(['Smith', 'Smyth']);
+        if (Zotero.NameNormalizer.candidateFinder) {
+          var c = Zotero.NameNormalizer.candidateFinder.findPotentialVariants(['Smith', 'Smyth']);
           assert(Array.isArray(c) && c.length > 0, 'Candidate finder returns results');
         }
 
         // Test variant generator
-        if (Zotero.NER.variantGenerator) {
-          var v = Zotero.NER.variantGenerator.generateVariants('Smith');
+        if (Zotero.NameNormalizer.variantGenerator) {
+          var v = Zotero.NameNormalizer.variantGenerator.generateVariants('Smith');
           assert(Array.isArray(v) && v.length > 0, 'Variant generator returns results');
-        }
-
-        // Test NER processor
-        if (Zotero.NER.nerProcessor) {
-          var a = Zotero.NER.nerProcessor.extractAuthors('John Smith and Jane Doe');
-          assert(Array.isArray(a), 'NER processor returns array');
         }
       }
     }
 
     // Run UI suite if available
-    if (typeof ZoteroNERUITests !== 'undefined' && ZoteroNERUITests.runTests) {
-      Zotero.debug('NER Test: Running UI test suite...');
+    if (typeof ZoteroNameNormalizerUITests !== 'undefined' && ZoteroNameNormalizerUITests.runTests) {
+      Zotero.debug('Name Normalizer Test: Running UI test suite...');
       try {
-        const uiResults = await ZoteroNERUITests.runTests();
+        const uiResults = await ZoteroNameNormalizerUITests.runTests();
         results.passed += uiResults.passed || 0;
         results.failed += uiResults.failed || 0;
         if (Array.isArray(uiResults.tests)) {
           results.tests.push(...uiResults.tests);
         }
       } catch (e) {
-        Zotero.debug('NER Test: UI tests failed: ' + e.message);
+        Zotero.debug('Name Normalizer Test: UI tests failed: ' + e.message);
         fail('UI suite: runTests', e.message);
       }
     } else {
-      Zotero.debug('NER Test: UI tests not available');
+      Zotero.debug('Name Normalizer Test: UI tests not available');
     }
 
-    Zotero.debug('NER Test: Complete - ' + results.passed + '/' + (results.passed + results.failed));
+    Zotero.debug('Name Normalizer Test: Complete - ' + results.passed + '/' + (results.passed + results.failed));
 
     results.duration = Date.now() - startTime;
 
@@ -335,12 +329,12 @@ function runTestsAndExit() {
     const paths = getResultsPaths();
     writeResults(results, paths.base);
     // Optional per-suite files for debugging
-    try { writeResults({ suite: 'mocha', ...(typeof ZoteroNERMochaTests !== 'undefined' && ZoteroNERMochaTests.getResults ? ZoteroNERMochaTests.getResults() : {}) }, paths.mocha); } catch (e) {}
-    try { writeResults({ suite: 'ui', ...(typeof ZoteroNERUITests !== 'undefined' && ZoteroNERUITests.getResults ? ZoteroNERUITests.getResults() : {}) }, paths.ui); } catch (e) {}
+    try { writeResults({ suite: 'mocha', ...(typeof ZoteroNameNormalizerMochaTests !== 'undefined' && ZoteroNameNormalizerMochaTests.getResults ? ZoteroNameNormalizerMochaTests.getResults() : {}) }, paths.mocha); } catch (e) {}
+    try { writeResults({ suite: 'ui', ...(typeof ZoteroNameNormalizerUITests !== 'undefined' && ZoteroNameNormalizerUITests.getResults ? ZoteroNameNormalizerUITests.getResults() : {}) }, paths.ui); } catch (e) {}
 
     // Exit Zotero - try multiple methods
     setTimeout(function() {
-      Zotero.debug('NER Test: Exiting Zotero...');
+      Zotero.debug('Name Normalizer Test: Exiting Zotero...');
       try {
         const CiLocal = (typeof Ci !== 'undefined') ? Ci : Components.interfaces;
         // Method 1: Try Services.startup.quit
@@ -348,28 +342,28 @@ function runTestsAndExit() {
           Services.startup.quit(CiLocal.nsIAppStartup.eForceQuit);
         }
       } catch (e) {
-        Zotero.debug('NER Test: quit method 1 failed: ' + e.message);
+        Zotero.debug('Name Normalizer Test: quit method 1 failed: ' + e.message);
       }
     }, 500);
 
     // Backup exit method - force quit after a delay
     setTimeout(function() {
-      Zotero.debug('NER Test: Force exiting Zotero...');
+      Zotero.debug('Name Normalizer Test: Force exiting Zotero...');
       try {
         if (typeof Zotero !== 'undefined' && Zotero.quit) {
           Zotero.quit();
         }
       } catch(e) {
-        Zotero.debug('NER Test: quit method 2 failed: ' + e.message);
+        Zotero.debug('Name Normalizer Test: quit method 2 failed: ' + e.message);
       }
     }, 2000);
   }
 
   // Start tests after a short delay to allow window/UI initialization
-  Zotero.debug('NER Author Name Normalizer: Test mode - scheduling tests');
+  Zotero.debug('Name Normalizer: Test mode - scheduling tests');
   setTimeout(() => {
     runTests().catch(e => {
-      Zotero.debug('NER Test: Unhandled test error: ' + (e && e.message ? e.message : e));
+      Zotero.debug('Name Normalizer Test: Unhandled test error: ' + (e && e.message ? e.message : e));
       const paths = getResultsPaths();
       writeResults({
         passed: 0,
@@ -393,31 +387,31 @@ async function onMainWindowLoad({ window }, _reason) {
   log('onMainWindowLoad called for window: ' + (window ? window.location.href : 'unknown'));
 
   try {
-    if (zoteroNERScope?.ZoteroNER) {
-      window.ZoteroNER = zoteroNERScope.ZoteroNER;
-      log('Shared ZoteroNER bundle with window.');
+    if (zoteroNameNormalizerScope?.ZoteroNameNormalizer) {
+      window.ZoteroNameNormalizer = zoteroNameNormalizerScope.ZoteroNameNormalizer;
+      log('Shared ZoteroNameNormalizer bundle with window.');
     } else {
-      log('ZoteroNER bundle not available during onMainWindowLoad.');
+      log('ZoteroNameNormalizer bundle not available during onMainWindowLoad.');
     }
   } catch (shareError) {
-    log('Failed to expose ZoteroNER to window - ' + shareError);
+    log('Failed to expose ZoteroNameNormalizer to window - ' + shareError);
   }
 
-  // Load zotero-ner.js into the window's scope
+  // Load zotero-name-normalizer.js into the window's scope
   Services.scriptloader.loadSubScript(
     `${registeredRootURI}content/scripts/zotero-ner.js`,
     window,
     'UTF-8',
   );
 
-  if (window.Zotero?.NER?.hooks?.onMainWindowLoad) {
-    log('Calling Zotero.NER.hooks.onMainWindowLoad.');
-    window.Zotero.NER.hooks.onMainWindowLoad(window);
+  if (window.Zotero?.NameNormalizer?.hooks?.onMainWindowLoad) {
+    log('Calling Zotero.NameNormalizer.hooks.onMainWindowLoad.');
+    window.Zotero.NameNormalizer.hooks.onMainWindowLoad(window);
   }
 
   // In test mode, run tests and exit after main window loads
-  if (Zotero.Prefs.get('extensions.zotero-ner.testMode')) {
-    Zotero.debug('NER Author Name Normalizer: Test mode - running tests on main window load');
+  if (Zotero.Prefs.get('extensions.zotero-name-normalizer.testMode')) {
+    Zotero.debug('Name Normalizer: Test mode - running tests on main window load');
     // Run tests and exit
     runTestsAndExit();
   }
@@ -425,13 +419,13 @@ async function onMainWindowLoad({ window }, _reason) {
 
 async function onMainWindowUnload({ window }, _reason) {
   log('onMainWindowUnload called for window: ' + (window ? window.location.href : 'unknown'));
-  if (window.Zotero?.NER?.hooks?.onMainWindowUnload) {
-    log('Calling Zotero.NER.hooks.onMainWindowUnload.');
-    window.Zotero.NER.hooks.onMainWindowUnload(window);
+  if (window.Zotero?.NameNormalizer?.hooks?.onMainWindowUnload) {
+    log('Calling Zotero.NameNormalizer.hooks.onMainWindowUnload.');
+    window.Zotero.NameNormalizer.hooks.onMainWindowUnload(window);
   }
   // Clean up injected properties if necessary
-  delete window.ZoteroNER;
-  delete window.Zotero.__zoteroNERInjected; // Assuming this was used
+  delete window.ZoteroNameNormalizer;
+  delete window.Zotero.__zoteroNameNormalizerInjected;
 }
 
 function uninstall(_data, _reason) {}
@@ -509,7 +503,7 @@ function getDOMWindowFromXUL(xulWindow) {
       .QueryInterface(Components.interfaces.nsIInterfaceRequestor)
       .getInterface(Components.interfaces.nsIDOMWindow);
   } catch (err) {
-    Zotero.debug('NER Author Name Normalizer: Failed to resolve DOM window - ' + err);
+    Zotero.debug('Name Normalizer: Failed to resolve DOM window - ' + err);
     return null;
   }
 }
@@ -525,15 +519,15 @@ function isZoteroMainWindow(win) {
 
 // Export test runner functions for use by test harness
 if (typeof globalThis !== 'undefined') {
-  globalThis.ZoteroNERTests = {
+  globalThis.ZoteroNameNormalizerTests = {
     /**
      * Run a test and return result
      * @param {string} testName - Name of the test to run
      * @returns {Object} Test result
      */
     runTest: function(testName) {
-      if (typeof Zotero === 'undefined' || !Zotero.NER) {
-        return { success: false, error: 'Zotero or Zotero.NER not available' };
+      if (typeof Zotero === 'undefined' || !Zotero.NameNormalizer) {
+        return { success: false, error: 'Zotero or Zotero.NameNormalizer not available' };
       }
 
       try {
@@ -546,20 +540,20 @@ if (typeof globalThis !== 'undefined') {
             };
 
           case 'testExtensionLoaded':
-            const loaded = typeof Zotero !== 'undefined' && Zotero.NER;
+            const loaded = typeof Zotero !== 'undefined' && Zotero.NameNormalizer;
             return {
               success: loaded,
-              initialized: loaded ? Zotero.NER.initialized : false,
-              message: loaded ? 'Extension is loaded' : 'Zotero.NER not defined'
+              initialized: loaded ? Zotero.NameNormalizer.initialized : false,
+              message: loaded ? 'Extension is loaded' : 'Zotero.NameNormalizer not defined'
             };
 
           case 'testLearningEngine':
-            if (!Zotero.NER.learningEngine) {
+            if (!Zotero.NameNormalizer.learningEngine) {
               return { success: false, error: 'Learning engine not initialized' };
             }
             // Test storing and retrieving a mapping
-            Zotero.NER.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
-            const mappings = Zotero.NER.learningEngine.getMapping('Smyth');
+            Zotero.NameNormalizer.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
+            const mappings = Zotero.NameNormalizer.learningEngine.getMapping('Smyth');
             const success = mappings && mappings.normalized === 'Smith';
             return {
               success: success,
@@ -568,7 +562,7 @@ if (typeof globalThis !== 'undefined') {
             };
 
           case 'testNameParser':
-            if (!Zotero.NER.nameParser) {
+            if (!Zotero.NameNormalizer.nameParser) {
               return { success: false, error: 'Name parser not initialized' };
             }
             const testCases = [
@@ -576,7 +570,7 @@ if (typeof globalThis !== 'undefined') {
               { input: 'J. Smith', expected: { firstName: 'J.', lastName: 'Smith' } }
             ];
             const results = testCases.map(tc => {
-              const parsed = Zotero.NER.nameParser.parse(tc.input);
+              const parsed = Zotero.NameNormalizer.nameParser.parse(tc.input);
               return {
                 input: tc.input,
                 parsed: parsed,
@@ -591,11 +585,11 @@ if (typeof globalThis !== 'undefined') {
             };
 
           case 'testCandidateFinder':
-            if (!Zotero.NER.candidateFinder) {
+            if (!Zotero.NameNormalizer.candidateFinder) {
               return { success: false, error: 'Candidate finder not initialized' };
             }
             const surnames = ['Smith', 'Smyth', 'Smythe', 'Johnson', 'Johnsen'];
-            const candidates = Zotero.NER.candidateFinder.findPotentialVariants(surnames);
+            const candidates = Zotero.NameNormalizer.candidateFinder.findPotentialVariants(surnames);
             return {
               success: candidates && candidates.length > 0,
               candidateCount: candidates ? candidates.length : 0,
@@ -603,10 +597,10 @@ if (typeof globalThis !== 'undefined') {
             };
 
           case 'testDBAnalyzer':
-            if (!Zotero.NER.menuIntegration) {
+            if (!Zotero.NameNormalizer.menuIntegration) {
               return { success: false, error: 'Menu integration not initialized' };
             }
-            const dbAnalyzer = Zotero.NER.menuIntegration.zoteroDBAnalyzer;
+            const dbAnalyzer = Zotero.NameNormalizer.menuIntegration.zoteroDBAnalyzer;
             return {
               success: !!dbAnalyzer,
               hasDBAnalyzer: !!dbAnalyzer,
