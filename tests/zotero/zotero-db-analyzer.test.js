@@ -398,4 +398,69 @@ describe('ZoteroDBAnalyzer', () => {
       expect(smythItem.save).toHaveBeenCalled();
     });
   });
+
+  describe('findVariantsEfficiently - diacritic-only normalization', () => {
+    it('should NOT flag surnames that differ by letters (typos)', async () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      // Setup with names that have similar structure but different letters
+      // findVariantsEfficiently expects surnameFrequencies object
+      const surnameFrequencies = {
+        'Dennett': 1,
+        'Bennett': 1,
+        'Smith': 1,
+        'Smyth': 1
+      };
+
+      const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
+
+      // Dennett/Bennett should NOT be flagged (different letters)
+      const denBenn = result.filter(v =>
+        (v.variant1.name === 'Dennett' && v.variant2.name === 'Bennett') ||
+        (v.variant1.name === 'Bennett' && v.variant2.name === 'Dennett')
+      );
+      expect(denBenn.length).toBe(0);
+
+      // Smith/Smyth should NOT be flagged
+      const smithSmyth = result.filter(v =>
+        (v.variant1.name === 'Smith' && v.variant2.name === 'Smyth') ||
+        (v.variant1.name === 'Smyth' && v.variant2.name === 'Smith')
+      );
+      expect(smithSmyth.length).toBe(0);
+    });
+
+    it('should flag surnames differing only by diacritics', async () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const surnameFrequencies = {
+        'Miłkowski': 1,
+        'Milkowski': 1,
+        'Müller': 1,
+        'Mueller': 1
+      };
+
+      const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
+
+      // Helper to normalize names for comparison (same logic as isDiacriticOnlyVariant)
+      const normalize = (str) => {
+        let n = str.toLowerCase();
+        n = n.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue');
+        n = n.replace(/ł/g, 'l');
+        n = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return n;
+      };
+
+      // Miłkowski/Milkowski SHOULD be flagged
+      const milkowski = result.filter(v =>
+        normalize(v.variant1.name).includes('milkowski') &&
+        normalize(v.variant2.name).includes('milkowski')
+      );
+      expect(milkowski.length).toBeGreaterThan(0);
+
+      // Müller/Mueller SHOULD be flagged
+      const mueller = result.filter(v =>
+        normalize(v.variant1.name).includes('mueller') &&
+        normalize(v.variant2.name).includes('mueller')
+      );
+      expect(mueller.length).toBeGreaterThan(0);
+    });
+  });
 });

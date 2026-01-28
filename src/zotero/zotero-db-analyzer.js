@@ -4,7 +4,7 @@
  */
 
 const { NAME_PREFIXES, NAME_SUFFIXES, COMMON_GIVEN_NAME_EQUIVALENTS: SHARED_NAME_EQUIVALENTS } = require('../config/name-constants');
-const { normalizedLevenshtein } = require('../utils/string-distance');
+const { normalizedLevenshtein, isDiacriticOnlyVariant } = require('../utils/string-distance');
 
 const COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
   alex: 'alexander',
@@ -484,7 +484,7 @@ class ZoteroDBAnalyzer {
         // Calculate similarity using normalized Levenshtein
         const similarity = this.calculateStringSimilarity(name1, name2);
 
-        if (similarity >= 0.8) { // 80% similarity threshold
+        if (similarity >= 0.7 && isDiacriticOnlyVariant(name1, name2)) { // 70% similarity threshold + diacritic-only check
           potentialVariants.push({
             variant1: {
               name: name1,

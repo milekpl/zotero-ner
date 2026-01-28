@@ -5,7 +5,8 @@
 
 const {
   levenshteinDistance,
-  normalizedLevenshtein
+  normalizedLevenshtein,
+  isDiacriticOnlyVariant
 } = require('../../src/utils/string-distance');
 
 describe('StringDistance Utils', () => {
@@ -140,6 +141,33 @@ describe('StringDistance Utils', () => {
         const expected = 1 - (distance / maxLength);
         expect(normalizedLevenshtein(str1, str2)).toBeCloseTo(expected, 10);
       }
+    });
+  });
+
+  describe('isDiacriticOnlyVariant', () => {
+    it('should return false for empty strings', () => {
+      expect(isDiacriticOnlyVariant('', '')).toBe(false);
+      expect(isDiacriticOnlyVariant('test', '')).toBe(false);
+      expect(isDiacriticOnlyVariant('', 'test')).toBe(false);
+    });
+
+    it('should return true for names differing only by diacritics', () => {
+      expect(isDiacriticOnlyVariant('Miłkowski', 'Milkowski')).toBe(true);
+      expect(isDiacriticOnlyVariant('Müller', 'Mueller')).toBe(true);
+      expect(isDiacriticOnlyVariant('MÜLLER', 'Mueller')).toBe(true);
+      expect(isDiacriticOnlyVariant('café', 'cafe')).toBe(true);
+      expect(isDiacriticOnlyVariant('José', 'Jose')).toBe(true);
+    });
+
+    it('should return false for names with different letters', () => {
+      expect(isDiacriticOnlyVariant('Dennett', 'Bennett')).toBe(false);
+      expect(isDiacriticOnlyVariant('Smith', 'Smyth')).toBe(false);
+      expect(isDiacriticOnlyVariant('Johnson', 'Johnsen')).toBe(false);
+    });
+
+    it('should be case insensitive', () => {
+      expect(isDiacriticOnlyVariant('MÜLLER', 'mueller')).toBe(true);
+      expect(isDiacriticOnlyVariant('CAFÉ', 'Cafe')).toBe(true);
     });
   });
 

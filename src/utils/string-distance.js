@@ -60,11 +60,41 @@ function normalizedLevenshtein(str1, str2) {
   return 1 - (distance / maxLength);
 }
 
+/**
+ * Check if two names differ only by diacritics or common diacritic-based spellings
+ * @param {string} name1 - First name
+ * @param {string} name2 - Second name
+ * @returns {boolean} True if names differ only by diacritical marks
+ */
+function isDiacriticOnlyVariant(name1, name2) {
+  if (!name1 || !name2) return false;
+
+  const normalizeName = (str) => {
+    let normalized = str.toLowerCase();
+
+    // German umlaut conventions: ue, oe, ae
+    normalized = normalized.replace(/ä/g, 'ae');
+    normalized = normalized.replace(/ö/g, 'oe');
+    normalized = normalized.replace(/ü/g, 'ue');
+
+    // Polish ł → l
+    normalized = normalized.replace(/ł/g, 'l');
+
+    // Remove combining diacritical marks
+    normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    return normalized;
+  };
+
+  return normalizeName(name1) === normalizeName(name2);
+}
+
 // Export for Node.js/CommonJS
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     levenshteinDistance,
-    normalizedLevenshtein
+    normalizedLevenshtein,
+    isDiacriticOnlyVariant
   };
 }
 
@@ -72,6 +102,7 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.StringDistance = {
     levenshteinDistance,
-    normalizedLevenshtein
+    normalizedLevenshtein,
+    isDiacriticOnlyVariant
   };
 }
