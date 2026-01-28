@@ -51,9 +51,6 @@ import ZoteroDBAnalyzer from './zotero/zotero-db-analyzer.js';
 import NormalizerDialog from './ui/normalizer-dialog.js';
 import BatchProcessor from './ui/batch-processor.js';
 
-// Utility modules
-import DynamicVirtualScroll from './utils/virtual-scroll.js';
-
 // Storage modules
 import DataManager from './storage/data-manager.js';
 
@@ -69,7 +66,6 @@ export {
   NormalizerDialog,
   BatchProcessor,
   DataManager,
-  DynamicVirtualScroll
 };
 
 // Create a global namespace for easy access
@@ -84,7 +80,6 @@ const ZoteroNameNormalizer = {
   NormalizerDialog,
   BatchProcessor,
   DataManager,
-  DynamicVirtualScroll
 };
 
 // Make it available globally

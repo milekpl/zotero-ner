@@ -46,10 +46,6 @@ jest.mock('../../src/storage/data-manager.js', () => {
   return jest.fn().mockImplementation(() => ({}));
 });
 
-jest.mock('../../src/utils/virtual-scroll.js', () => {
-  return { DynamicVirtualScroll: jest.fn() };
-});
-
 describe('ZoteroNameNormalizer Index', () => {
   let originalWindow;
   let originalZoteroNameNormalizer;
@@ -86,7 +82,6 @@ describe('ZoteroNameNormalizer Index', () => {
     expect(indexModule).toHaveProperty('NormalizerDialog');
     expect(indexModule).toHaveProperty('BatchProcessor');
     expect(indexModule).toHaveProperty('DataManager');
-    expect(indexModule).toHaveProperty('DynamicVirtualScroll');
 
     // Check that default export is present
     expect(indexModule.default).toBeDefined();
@@ -110,7 +105,6 @@ describe('ZoteroNameNormalizer Index', () => {
     expect(indexModule).toHaveProperty('NormalizerDialog');
     expect(indexModule).toHaveProperty('BatchProcessor');
     expect(indexModule).toHaveProperty('DataManager');
-    expect(indexModule).toHaveProperty('DynamicVirtualScroll');
     expect(indexModule).toHaveProperty('default');
   });
 

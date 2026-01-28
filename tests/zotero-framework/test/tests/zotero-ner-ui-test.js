@@ -100,7 +100,7 @@ async function openDialogWithPayload(payload) {
     const features = 'chrome,modal,resizable=yes,centerscreen';
 
     const dialogWindow = win.openDialog(
-        'chrome://zoteroner/content/dialog.html',
+        'chrome://zoteronamenormalizer/content/dialog.html',
         'zotero-ner-normalization-dialog-test',
         features,
         null,
