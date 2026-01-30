@@ -3,7 +3,7 @@
 <dialog
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
   id="ner-normalizer-dialog"
-  title="NER Author Name Normalization"
+  title="Author Name Normalization"
   buttons="accept,cancel"
   buttonlabelaccept="Normalize"
   buttonlabelcancel="Cancel"

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Background -->
+  <rect width="48" height="48" rx="8" fill="#4d7ea8"/>
+  
+  <!-- Multiple inputs (top) representing variants -->
+  <circle cx="12" cy="12" r="2.5" fill="#ffffff" opacity="0.9"/>
+  <circle cx="24" cy="10" r="2.5" fill="#ffffff" opacity="0.9"/>
+  <circle cx="36" cy="12" r="2.5" fill="#ffffff" opacity="0.9"/>
+  
+  <!-- Converging lines showing unification -->
+  <path d="M12,14 Q12,20 18,24" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M24,13 L24,24" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M36,14 Q36,20 30,24" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
+  
+  <!-- Merge point -->
+  <path d="M18,24 L30,24 L24,30 Z" fill="#ffffff"/>
+  
+  <!-- Single unified output (bottom) -->
+  <circle cx="24" cy="38" r="3" fill="#ffffff"/>
+  <path d="M24,30 L24,35" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

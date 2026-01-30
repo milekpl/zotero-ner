@@ -1,4 +1,4 @@
-name: Zotero NER Tests
+name: Zotero Name Normalization Tests
 
 on:
   push:

@@ -20,6 +20,29 @@ class LearningEngine {
     this.skipStorageKey = 'name_normalizer_skipped_suggestions';
     this.skippedPairs = new Set();
 
+    // Performance optimizations: caching
+    this.canonicalKeyCache = new Map();
+    this.canonicalKeyCacheMaxSize = 10000;
+    this.similarityCache = new Map();
+    this.similarityCacheMaxSize = 5000;
+
+    // Batch storage optimization
+    this.pendingSaves = new Set();
+    this.saveTimeout = null;
+    this.saveDelay = 5000; // 5 seconds
+    this.maxBatchSize = 100;
+    this.isBatchingEnabled = true;
+
+    // Phonetic indexing DISABLED - causes false positives like Chen/Cohen
+    // Only exact character-based matching should be used for names
+    this.phoneticIndex = new Map();
+    this.usePhoneticIndexing = false;
+
+    // Register for shutdown event to ensure data is saved
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => this.forceSave());
+    }
+
     this.loadMappings();
     this.loadSettings();
     this.loadDistinctPairs();
@@ -59,6 +82,13 @@ class LearningEngine {
         const parsed = JSON.parse(stored);
         // Convert back to Map
         this.mappings = new Map(parsed);
+
+        // Build phonetic index for all loaded mappings
+        if (this.usePhoneticIndexing) {
+          for (const [key] of this.mappings) {
+            this.addToPhoneticIndex(key);
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading mappings:', error);
@@ -206,7 +236,7 @@ class LearningEngine {
   async storeMapping(rawName, normalized, confidence = 1.0, context = {}) {
     const canonicalKey = this.createCanonicalKey(rawName);
     const now = Date.now();
-    
+
     // Check if we already have a mapping for this raw name
     if (this.mappings.has(canonicalKey)) {
       const existing = this.mappings.get(canonicalKey);
@@ -228,8 +258,66 @@ class LearningEngine {
         context: context
       });
     }
-    
+
+    // Queue for batch save instead of immediate save
+    if (this.isBatchingEnabled) {
+      this.pendingSaves.add(canonicalKey);
+
+      // Add to phonetic index for new mappings
+      if (!this.mappings.has(canonicalKey)) {
+        this.addToPhoneticIndex(canonicalKey);
+      }
+
+      // Immediate save if batch is large
+      if (this.pendingSaves.size >= this.maxBatchSize) {
+        await this.flushPendingSaves();
+      } else {
+        this.scheduleSave();
+      }
+    } else {
+      // Add to phonetic index for new mappings
+      if (!this.mappings.has(canonicalKey)) {
+        this.addToPhoneticIndex(canonicalKey);
+      }
+      await this.saveMappings();
+    }
+  }
+
+  /**
+   * Schedule a batched save operation
+   * @private
+   */
+  scheduleSave() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    this.saveTimeout = setTimeout(() => {
+      this.flushPendingSaves();
+    }, this.saveDelay);
+  }
+
+  /**
+   * Flush all pending saves to storage
+   * @private
+   */
+  async flushPendingSaves() {
+    if (this.pendingSaves.size === 0) return;
+
+    this.pendingSaves.clear();
     await this.saveMappings();
+  }
+
+  /**
+   * Force immediate save of all pending changes
+   * Call this before shutdown or critical operations
+   */
+  async forceSave() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+    await this.flushPendingSaves();
   }
 
   /**
@@ -239,12 +327,83 @@ class LearningEngine {
   async recordUsage(rawName) {
     const canonicalKey = this.createCanonicalKey(rawName);
     const mapping = this.mappings.get(canonicalKey);
-    
+
     if (mapping) {
       mapping.lastUsed = Date.now();
       mapping.usageCount = (mapping.usageCount || 0) + 1;
-      await this.saveMappings();
+      // Use batch save instead of immediate save
+      if (this.isBatchingEnabled) {
+        this.pendingSaves.add(canonicalKey);
+        this.scheduleSave();
+      } else {
+        await this.saveMappings();
+      }
     }
+  }
+
+  /**
+   * Add a mapping to the phonetic index
+   * @param {string} canonicalKey - Canonical key of the mapping
+   * @private
+   */
+  addToPhoneticIndex(canonicalKey) {
+    if (!this.usePhoneticIndexing) return;
+
+    const { getPhoneticKey, getBucketKey } = require('../utils/phonetic-index');
+
+    const phoneticKey = getPhoneticKey(canonicalKey);
+    const bucketKey = getBucketKey(canonicalKey);
+
+    // Add to phonetic index
+    if (!this.phoneticIndex.has(phoneticKey)) {
+      this.phoneticIndex.set(phoneticKey, new Set());
+    }
+    this.phoneticIndex.get(phoneticKey).add(canonicalKey);
+
+    // Also add to bucket index (first letter + length category)
+    const bucketIndexKey = `bucket:${bucketKey}`;
+    if (!this.phoneticIndex.has(bucketIndexKey)) {
+      this.phoneticIndex.set(bucketIndexKey, new Set());
+    }
+    this.phoneticIndex.get(bucketIndexKey).add(canonicalKey);
+  }
+
+  /**
+   * Get candidate keys from phonetic index
+   * @param {string} query - Query string
+   * @returns {Set} Set of candidate canonical keys
+   * @private
+   */
+  getPhoneticCandidates(query) {
+    if (!this.usePhoneticIndexing) {
+      return new Set(this.mappings.keys());
+    }
+
+    const { getPhoneticKey, getBucketKey, phoneticSimilarity } = require('../utils/phonetic-index');
+
+    const phoneticKey = getPhoneticKey(query);
+    const bucketKey = getBucketKey(query);
+
+    const candidates = new Set();
+
+    // Get candidates with same phonetic key
+    const phoneticMatches = this.phoneticIndex.get(phoneticKey);
+    if (phoneticMatches) {
+      phoneticMatches.forEach(key => candidates.add(key));
+    }
+
+    // Get candidates from same bucket
+    const bucketMatches = this.phoneticIndex.get(`bucket:${bucketKey}`);
+    if (bucketMatches) {
+      bucketMatches.forEach(key => candidates.add(key));
+    }
+
+    // If no candidates found, fall back to all keys
+    if (candidates.size === 0) {
+      return new Set(this.mappings.keys());
+    }
+
+    return candidates;
   }
 
   /**
@@ -329,11 +488,29 @@ class LearningEngine {
     if (name == null) {
       return '';
     }
+
+    // Check cache first
+    if (this.canonicalKeyCache.has(name)) {
+      return this.canonicalKeyCache.get(name);
+    }
+
     // Simple canonicalization - remove spaces, convert to lowercase, remove punctuation
-    return name.trim()
+    const key = name.trim()
       .toLowerCase()
       .replace(/[.,]/g, '')  // Remove common punctuation
       .replace(/\s+/g, ' '); // Normalize whitespace
+
+    // Cache management: simple LRU via size limit
+    if (this.canonicalKeyCache.size >= this.canonicalKeyCacheMaxSize) {
+      const entriesToDelete = Math.floor(this.canonicalKeyCacheMaxSize / 2);
+      const keys = this.canonicalKeyCache.keys();
+      for (let i = 0; i < entriesToDelete; i++) {
+        this.canonicalKeyCache.delete(keys.next().value);
+      }
+    }
+
+    this.canonicalKeyCache.set(name, key);
+    return key;
   }
 
   /**
@@ -344,12 +521,36 @@ class LearningEngine {
   findSimilar(name) {
     const query = this.createCanonicalKey(name);
     const results = [];
-    
-    for (const [key, mapping] of this.mappings) {
-      // Enhanced similarity calculation
+
+    // Get candidate keys from all mappings
+    const candidateKeys = [...this.mappings.keys()];
+
+    for (const key of candidateKeys) {
+      const mapping = this.mappings.get(key);
+      if (!mapping) continue;
+
+      // Use isDiacriticOnlyVariant for strict diacritic-only matching
+      // This prevents false positives like Chen/Cohen, Anderson/Andersen
+      const { isDiacriticOnlyVariant } = require('../utils/string-distance');
+
+      // Check for diacritic-only variant match
+      if (isDiacriticOnlyVariant(query, key)) {
+        // High similarity for diacritic variants
+        const similarity = 0.95;
+
+        if (similarity >= this.settings.confidenceThreshold) {
+          results.push({
+            ...mapping,
+            similarity: similarity
+          });
+        }
+        continue;
+      }
+
+      // For non-diacritic candidates, use full similarity calculation
+      // This handles initial-to-full-name matching like "J. Fodor" -> "Jerry Fodor"
       const similarity = this.calculateSimilarity(query, key);
-      
-      // Apply threshold from settings
+
       if (similarity >= this.settings.confidenceThreshold) {
         results.push({
           ...mapping,
@@ -357,7 +558,7 @@ class LearningEngine {
         });
       }
     }
-    
+
     // Sort by similarity descending, then by usage count
     return results.sort((a, b) => {
       // First by similarity
@@ -376,15 +577,78 @@ class LearningEngine {
    * @returns {number} Similarity score (0-1)
    */
   calculateSimilarity(str1, str2) {
+    // Early exit: exact match
+    if (str1 === str2) return 1.0;
+
+    // Early exit: empty strings
+    if (!str1 || !str2) return 0.0;
+
+    // Check similarity cache
+    const cacheKey = str1 < str2 ? `${str1}|${str2}` : `${str2}|${str1}`;
+    if (this.similarityCache.has(cacheKey)) {
+      return this.similarityCache.get(cacheKey);
+    }
+
+    // Quick pre-filter: length difference check
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const maxLen = Math.max(len1, len2);
+    const minLen = Math.min(len1, len2);
+
+    // If length differs by more than 50%, similarity will be low
+    if (minLen / maxLen < 0.5) {
+      this.setSimilarityCache(cacheKey, 0);
+      return 0;
+    }
+
+    // First character mismatch check (for names, first letter usually matches)
+    if (str1[0]?.toLowerCase() !== str2[0]?.toLowerCase()) {
+      // Still compute but with reduced expectation
+      const jaroWinkler = this.jaroWinklerSimilarity(str1, str2);
+      if (jaroWinkler < 0.5) {
+        const result = jaroWinkler * 0.5;
+        this.setSimilarityCache(cacheKey, result);
+        return result;
+      }
+    }
+
     // Multiple similarity metrics
     const jaroWinkler = this.jaroWinklerSimilarity(str1, str2);
+
+    // Early exit if Jaro-Winkler is already below threshold
+    if (jaroWinkler < 0.3) {
+      const result = jaroWinkler * 0.5;
+      this.setSimilarityCache(cacheKey, result);
+      return result;
+    }
+
     const longestCommonSubsequence = this.lcsSimilarity(str1, str2);
     const initialMatching = this.initialMatchingSimilarity(str1, str2);
 
     // Weighted combination of similarity metrics
-    return (jaroWinkler * LearningEngine.JARO_WINKLER_WEIGHT) +
-           (longestCommonSubsequence * LearningEngine.LCS_WEIGHT) +
-           (initialMatching * LearningEngine.INITIAL_MATCHING_WEIGHT);
+    const result = (jaroWinkler * LearningEngine.JARO_WINKLER_WEIGHT) +
+                   (longestCommonSubsequence * LearningEngine.LCS_WEIGHT) +
+                   (initialMatching * LearningEngine.INITIAL_MATCHING_WEIGHT);
+
+    this.setSimilarityCache(cacheKey, result);
+    return result;
+  }
+
+  /**
+   * Set similarity cache with LRU eviction
+   * @param {string} key - Cache key
+   * @param {number} value - Similarity score
+   */
+  setSimilarityCache(key, value) {
+    // Cache management: simple LRU via size limit
+    if (this.similarityCache.size >= this.similarityCacheMaxSize) {
+      const entriesToDelete = Math.floor(this.similarityCacheMaxSize / 2);
+      const keys = this.similarityCache.keys();
+      for (let i = 0; i < entriesToDelete; i++) {
+        this.similarityCache.delete(keys.next().value);
+      }
+    }
+    this.similarityCache.set(key, value);
   }
 
   /**

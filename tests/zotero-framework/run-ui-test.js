@@ -49,8 +49,8 @@ user_pref("zotero.debug.log", true);
 user_pref("zotero.debug.log.timestamp", true);
 user_pref("extensions.zotero.httpServer.enabled", true);
 user_pref("extensions.zotero.httpServer.port", 23124);
-user_pref("extensions.zotero-ner.testMode", true);
-user_pref("extensions.zotero-ner.developerMode", true);
+user_pref("extensions.zotero-name-normalizer.testMode", true);
+user_pref("extensions.zotero-name-normalizer.developerMode", true);
 `);
 
     const results = {
@@ -242,7 +242,7 @@ user_pref("extensions.zotero-ner.developerMode", true);
     // Test 6: Check for NER extension output
     log('\nTest 6: Extension Initialization');
     const nerOutput = stdout.split('\n').filter(l =>
-        l.includes('NER Author Name Normalizer') ||
+        l.includes('Author Name Normalizer') ||
         l.includes('zotero-ner') ||
         l.includes('ZoteroNER')
     );

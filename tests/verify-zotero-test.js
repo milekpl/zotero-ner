@@ -103,7 +103,7 @@ user_pref("zotero.debug.log.timestamp", true);
      xmlns:em="http://www.mozilla.org/2004/em-rdf#">
   <Description about="urn:mozilla:extension:zotener@zotero-ner.github.com">
     <em:id>zotener@zotero-ner.github.com</em:id>
-    <em:name>Zotero NER Author Name Normalizer</em:name>
+    <em:name>Zotero Author Name Normalizer</em:name>
     <em:version>1.0.0</em:version>
     <em:description>Normalizes author names</em:description>
     <em:targetApplication>

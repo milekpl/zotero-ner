@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <rect width="48" height="48" fill="#4d7ea8"/>
-  <text x="24" y="28" font-family="Arial, sans-serif" font-size="20" fill="white" text-anchor="middle">NER</text>
-  <path d="M12 36 L36 12 M12 12 L36 36" stroke="white" stroke-width="2"/>
-</svg>

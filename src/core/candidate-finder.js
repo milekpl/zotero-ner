@@ -202,6 +202,9 @@ class CandidateFinder {
       byGroup[key].push(name);
     }
 
+    // Import optimized string distance function
+    const { normalizedLevenshtein } = require('../utils/string-distance');
+
     // Only compare names within same group (optimization: O(n²) → O(n² * p))
     for (const key in byGroup) {
       const group = byGroup[key];
@@ -213,13 +216,17 @@ class CandidateFinder {
           const name1 = group[i];
           const name2 = group[j];
 
-          // Calculate similarity using Levenshtein distance
-          const distance = this.calculateLevenshteinDistance(name1, name2);
-          const maxLength = Math.max(name1.length, name2.length);
-          const similarity = maxLength > 0 ? 1 - (distance / maxLength) : 1;
+          // Quick length check before expensive calculation
+          if (Math.abs(name1.length - name2.length) > 3) continue;
+
+          // Use optimized normalized Levenshtein with threshold for early termination
+          const similarity = normalizedLevenshtein(name1, name2, CandidateFinder.FIRST_NAME_SIMILARITY_THRESHOLD);
 
           // Higher threshold for first name/initial similarity since they should be more similar
           if (similarity >= CandidateFinder.FIRST_NAME_SIMILARITY_THRESHOLD) {
+            const maxLength = Math.max(name1.length, name2.length);
+            const distance = Math.floor(maxLength * (1 - similarity));
+
             variantGroups.push({
               surname: creators[0].lastName,
               variant1: {

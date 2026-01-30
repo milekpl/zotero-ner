@@ -9,6 +9,9 @@ class NameParser {
     this.suffixes = NAME_SUFFIXES;
     this.initialPattern = /^[A-Z]\.?$/;
     this.initialsPattern = /^[A-Z]\.[A-Z]\.?$/;
+    // Performance optimization: cache parsed names
+    this.parseCache = new Map();
+    this.cacheMaxSize = 5000;
   }
 
   /**
@@ -17,6 +20,33 @@ class NameParser {
    * @returns {Object} Parsed name components
    */
   parse(rawName) {
+    // Check cache first
+    if (this.parseCache.has(rawName)) {
+      return this.parseCache.get(rawName);
+    }
+
+    const result = this._doParse(rawName);
+
+    // Cache management: simple LRU via size limit
+    if (this.parseCache.size >= this.cacheMaxSize) {
+      const entriesToDelete = Math.floor(this.cacheMaxSize / 2);
+      const keys = this.parseCache.keys();
+      for (let i = 0; i < entriesToDelete; i++) {
+        this.parseCache.delete(keys.next().value);
+      }
+    }
+
+    this.parseCache.set(rawName, result);
+    return result;
+  }
+
+  /**
+   * Internal parse implementation
+   * @param {string} rawName - Raw name string
+   * @returns {Object} Parsed name components
+   * @private
+   */
+  _doParse(rawName) {
     const original = rawName || '';
     let working = (original || '').trim();
 

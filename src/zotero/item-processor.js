@@ -168,28 +168,38 @@ class ItemProcessor {
       }
     }
     
-    // Find potential variants
+    // Find potential variants - ONLY diacritic variants, NOT typos
     const surnames = Object.keys(frequencies);
     const variants = [];
-    
+
+    const { isDiacriticOnlyVariant } = require('../utils/string-distance');
+
+    // Helper to count German umlaut characters that expand (ä, ö, ü)
+    const countUmlauts = (str) => {
+      return (str.match(/[äöü]/gi) || []).length;
+    };
+
     // Compare surnames to find potential variants
     for (let i = 0; i < surnames.length; i++) {
       for (let j = i + 1; j < surnames.length; j++) {
         const name1 = surnames[i];
         const name2 = surnames[j];
-        
-        // Calculate similarity using edit distance
-        const distance = this.calculateLevenshteinDistance(name1, name2);
-        const maxLength = Math.max(name1.length, name2.length);
-        const similarity = maxLength > 0 ? 1 - (distance / maxLength) : 1;
-        
-        if (similarity >= 0.8) { // 80% similarity threshold
+
+        // Only match diacritic variants - Bennett vs Dennett should NOT match
+        // Account for German umlaut expansion: Müller (6) vs Mueller (7)
+        const umlautCount1 = countUmlauts(name1);
+        const umlautCount2 = countUmlauts(name2);
+        const adjustedLen1 = name1.length + umlautCount1;
+        const adjustedLen2 = name2.length + umlautCount2;
+        if (adjustedLen1 !== adjustedLen2) continue;
+
+        if (isDiacriticOnlyVariant(name1, name2)) {
           variants.push({
             name1: name1,
             name2: name2,
             frequency1: frequencies[name1],
             frequency2: frequencies[name2],
-            similarity: similarity
+            similarity: 1.0
           });
         }
       }

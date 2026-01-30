@@ -69,23 +69,31 @@
 
             // Basic checks
             this.assert(typeof Zotero !== 'undefined', "Zotero defined");
-            this.assert(typeof Zotero.NER !== 'undefined', "Zotero.NER defined");
+            this.assert(typeof Zotero.NameNormalizer !== 'undefined', "Zotero.NameNormalizer defined");
+            this.assert(Zotero.NameNormalizer.initialized === true, "Extension initialized");
+            this.assert(typeof ZoteroNameNormalizer !== 'undefined', "ZoteroNameNormalizer bundle available");
 
-            if (typeof Zotero.NER !== 'undefined') {
+            if (typeof Zotero.NameNormalizer !== 'undefined') {
                 var modules = ['nameParser', 'learningEngine', 'candidateFinder',
                                'nerProcessor', 'variantGenerator', 'menuIntegration', 'itemProcessor'];
                 var allPresent = true;
                 for (var i = 0; i < modules.length; i++) {
-                    if (!Zotero.NER[modules[i]]) {
+                    if (!Zotero.NameNormalizer[modules[i]]) {
                         allPresent = false;
                         this.log("  Missing: " + modules[i]);
                     }
                 }
                 this.assert(allPresent, "All modules present");
 
+                // Test ZoteroDBAnalyzer in bundle
+                this.assert(
+                    ZoteroNameNormalizer && ZoteroNameNormalizer.ZoteroDBAnalyzer,
+                    "ZoteroDBAnalyzer in bundle"
+                );
+
                 // Test name parser
-                if (Zotero.NER.nameParser) {
-                    var p = Zotero.NER.nameParser.parse("John Smith");
+                if (Zotero.NameNormalizer.nameParser) {
+                    var p = Zotero.NameNormalizer.nameParser.parse("John Smith");
                     if (p.firstName === "John") this.pass("Name parser: firstName");
                     else this.fail("Name parser: firstName", "Expected John, got " + p.firstName);
 
@@ -96,10 +104,10 @@
                 }
 
                 // Test learning engine
-                if (Zotero.NER.learningEngine) {
+                if (Zotero.NameNormalizer.learningEngine) {
                     var key = "Test_" + Date.now();
-                    Zotero.NER.learningEngine.storeMapping(key, "TestValue", 0.9);
-                    var m = Zotero.NER.learningEngine.getMapping(key);
+                    Zotero.NameNormalizer.learningEngine.storeMapping(key, "TestValue", 0.9);
+                    var m = Zotero.NameNormalizer.learningEngine.getMapping(key);
                     if (m && m.normalized === "TestValue") {
                         this.pass("Learning engine: store/retrieve");
                     } else {

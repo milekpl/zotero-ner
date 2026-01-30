@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>NER Author Name Normalizer</title>
+  <title>Author Name Normalizer</title>
   <style>
     body { 
       font-family: -moz-dialog, Arial, sans-serif; 
@@ -148,11 +148,22 @@
       overflow: hidden;
       border: 1px solid #ccc;
     }
-    .progress-fill { 
-      height: 100%; 
-      background: linear-gradient(90deg, #0066cc, #007acc); 
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0066cc, #007acc);
       transition: width 0.3s ease;
       width: 0%;
+      min-width: 3px; /* Always show at least a small amount for visual feedback */
+    }
+    .progress-fill.indeterminate {
+      background: linear-gradient(90deg, #0066cc 0%, #007acc 50%, #0066cc 100%);
+      background-size: 200% 100%;
+      animation: indeterminate-progress 1.5s ease-in-out infinite;
+      width: 30% !important;
+    }
+    @keyframes indeterminate-progress {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
     }
     .empty-message {
       text-align: center;
@@ -278,15 +289,49 @@
       display: none;
     }
     .variant-detail-items {
-      list-style: disc;
-      padding-left: 18px;
+      list-style: none;
+      padding-left: 0;
       margin: 0;
       max-height: calc(100vh - 320px);
       overflow-y: auto;
     }
     .variant-detail-items li {
-      margin: 4px 0;
-      line-height: 1.35;
+      margin: 6px 0;
+      line-height: 1.4;
+      padding: 4px 6px;
+      border-radius: 3px;
+      background: #fafbfc;
+    }
+    .variant-detail-items li:hover {
+      background: #f0f4f8;
+    }
+    .item-author {
+      color: #6a737e;
+      font-size: 0.9em;
+      font-weight: 500;
+    }
+    .item-title {
+      color: #24292e;
+    }
+    .item-year {
+      color: #6a737e;
+      font-size: 0.9em;
+    }
+    .item-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .item-details .item-author {
+      flex: 0 0 auto;
+    }
+    .item-details .item-title {
+      flex: 1 1 auto;
+      min-width: 150px;
+    }
+    .item-details .item-year {
+      flex: 0 0 auto;
     }
     @media (max-width: 960px) {
       #variant-layout {
@@ -300,7 +345,7 @@
   </style>
 </head>
 <body>
-  <h1>NER Author Name Normalizer</h1>
+  <h1>Author Name Normalizer</h1>
   <p>Review and apply author name normalizations for your library.</p>
 
   <!-- Summary header for full-library analysis -->
@@ -355,7 +400,7 @@
     <button id="cancel-button">Cancel</button>
   </div>
 
-  <script type="application/javascript" src="chrome://zoteronamenormalizer/content/scripts/zotero-name-normalizer-bundled.js"></script>
+  <script type="application/javascript" src="chrome://zoteronamenormalizer/content/scripts/zotero-ner-bundled.js"></script>
   <script type="application/javascript">
     /* global Zotero, ZoteroNER */
 
@@ -728,6 +773,13 @@
           this.log('No analysis results found');
           this.showEmptyState('No analysis results were provided to the dialog.');
           this.updateProgress();
+          return;
+        }
+        
+        // Check if this is a loading state
+        if (analysisResults.loading === true) {
+          this.log('Dialog opened in loading state');
+          this.showLoadingState();
           return;
         }
 
@@ -1122,7 +1174,7 @@
           } else {
             items.forEach(item => {
               const li = document.createElement('li');
-              li.textContent = this.formatItemSummary(item);
+              li.innerHTML = this.formatItemSummaryHTML(item);
               listEl.appendChild(li);
             });
 
@@ -1165,9 +1217,52 @@
         }
 
         const title = item.title || 'Untitled';
-        const trimmedTitle = title.length > 80 ? title.slice(0, 77) + '…' : title;
         const year = item.year || item.date || '';
-        return year ? `${trimmedTitle} (${year})` : trimmedTitle;
+        const author = item.author || '';
+
+        // Build display: Author - Title (Year) or Title (Year) if no author
+        const yearStr = year ? ` (${year})` : '';
+        const authorStr = author ? `${author} — ` : '';
+
+        // Truncate title if too long
+        const maxTitleLength = 100;
+        const trimmedTitle = title.length > maxTitleLength ? title.slice(0, maxTitleLength) + '…' : title;
+
+        return authorStr + trimmedTitle + yearStr;
+      },
+
+      formatItemSummaryHTML: function(item) {
+        if (!item) {
+          return '<span class="item-title">Untitled item</span>';
+        }
+
+        const title = item.title || 'Untitled';
+        const year = item.year || item.date || '';
+        const author = item.author || '';
+
+        // Truncate title if too long
+        const maxTitleLength = 100;
+        const trimmedTitle = title.length > maxTitleLength ? title.slice(0, maxTitleLength) + '…' : title;
+
+        // Escape HTML for safe rendering
+        const safeTitle = this.escapeHTML(trimmedTitle);
+        const safeAuthor = this.escapeHTML(author);
+        const safeYear = this.escapeHTML(year);
+
+        let html = '<div class="item-details">';
+
+        if (safeAuthor) {
+          html += `<span class="item-author">${safeAuthor}</span>`;
+        }
+
+        html += `<span class="item-title">${safeTitle}</span>`;
+
+        if (safeYear) {
+          html += `<span class="item-year">(${safeYear})</span>`;
+        }
+
+        html += '</div>';
+        return html;
       },
 
       buildSelectionControls: function(index, suggestion) {
@@ -1695,7 +1790,7 @@
         });
 
         if (preparedSuggestions.length === 0 && declinedSuggestions.length === 0) {
-          this.alert('NER Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
+          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
           return;
         }
 
@@ -1724,18 +1819,18 @@
             // Fallback: instantiate in dialog context (will fail if Zotero is undefined)
             this.dbAnalyzer = new ZoteroNER.ZoteroDBAnalyzer();
             if (!this.dbAnalyzer || typeof this.dbAnalyzer.applyNormalizationSuggestions !== 'function') {
-              throw new Error('Zotero NER database analyzer is not available in this context.');
+              throw new Error('Zotero database analyzer is not available in this context.');
             }
             results = await this.dbAnalyzer.applyNormalizationSuggestions(preparedSuggestions, false, {
               declinedSuggestions,
               progressCallback: (event) => this.handleApplyProgress(event)
             });
           } else {
-            throw new Error('Zotero NER database analyzer is not available in this context.');
+            throw new Error('Zotero database analyzer is not available in this context.');
           }
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
-            this.alert('NER Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');
+            this.alert('Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');
           } else {
             const summary = [
               'Suggestions reviewed: ' + results.totalSuggestions,
@@ -1752,7 +1847,7 @@
               summary.push('Errors: ' + results.errors);
             }
 
-            this.alert('NER Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
+            this.alert('Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
           }
 
         } catch (error) {
@@ -1767,6 +1862,84 @@
             window.close();
           }
         }
+      },
+      
+      showLoadingState: function() {
+        this.log('Showing loading state');
+        
+        // Hide empty message, show progress
+        ZoteroNER_HTMLUtils.setHidden('empty-message', true);
+        ZoteroNER_HTMLUtils.setHidden('summary-group', true);
+        ZoteroNER_HTMLUtils.setHidden('variant-section', true);
+        ZoteroNER_HTMLUtils.setHidden('progress-container', false);
+        
+        // Set initial loading message
+        ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
+        ZoteroNER_HTMLUtils.updateProgressBar(0);
+        
+        this.setApplyEnabled(false);
+      },
+      
+      handleAnalysisProgress: function(progress) {
+        if (!progress) return;
+
+        this.log('Analysis progress: ' + JSON.stringify(progress));
+
+        let message = 'Analyzing library...';
+        let percent = 0;
+        let isIndeterminate = false;
+
+        if (progress.stage === 'filtering_items') {
+          message = `Loading items... (${progress.processed || 0} of ${progress.total || '?'})`;
+          percent = progress.percent || 0;
+        } else if (progress.stage === 'analyzing_surnames') {
+          if (progress.total) {
+            message = `Analyzing surnames... (${progress.processed || 0} of ${progress.total})`;
+            percent = progress.percent || 0;
+          } else {
+            message = `Analyzing surnames... (${progress.processed || 0} comparisons)`;
+            isIndeterminate = true;
+          }
+        } else if (progress.stage === 'generating_suggestions') {
+          message = 'Generating normalization suggestions...';
+          percent = 95;
+        }
+
+        ZoteroNER_HTMLUtils.updateProgressLabel(message);
+
+        // Update progress bar with visual feedback
+        const fill = document.getElementById('progress-fill');
+        if (fill) {
+          if (isIndeterminate) {
+            fill.classList.add('indeterminate');
+          } else {
+            fill.classList.remove('indeterminate');
+            fill.style.width = Math.max(percent, 3) + '%'; // Min 3% for visibility
+          }
+        }
+      },
+      
+      updateAnalysisResults: function(analysisResults) {
+        if (!analysisResults) {
+          this.showEmptyState('Analysis completed but no results were returned.');
+          return;
+        }
+        
+        this.log('Updating dialog with analysis results');
+        this.log('Results contain: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 0) + ' suggestions');
+        
+        this.analysisResults = analysisResults;
+        this.resetSelections();
+        this.clearVariantDetails();
+        
+        // Show the variant section
+        ZoteroNER_HTMLUtils.setHidden('variant-section', false);
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        
+        this.updateSummaryHeader();
+        this.populateVariantGroupList();
+        this.refreshApplyButtonState();
+        this.updateProgress();
       }
     };
 
@@ -1778,6 +1951,9 @@
     document.getElementById('cancel-button').addEventListener('click', function() {
       window.close();
     });
+
+    // Expose controller globally so parent window can call it
+    window.ZoteroNERController = ZoteroNER_NormalizationDialog;
 
     // Start
     ZoteroNER_NormalizationDialog.init();

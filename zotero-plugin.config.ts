@@ -1,13 +1,28 @@
 import { defineConfig } from "zotero-plugin-scaffold";
+import path from "path";
 import pkg from "./package.json";
+import fs from "fs";
+
+const projectRoot = path.resolve(__dirname);
+
+// Custom post-build hook to copy bundled script to source directory for development
+function setupDevEnvironment() {
+  const sourceBundledPath = path.join(projectRoot, 'content', 'scripts', 'zotero-ner-bundled.js');
+  const buildBundledPath = path.join(projectRoot, 'build', 'addon', 'content', 'scripts', 'zotero-ner-bundled.js');
+  
+  if (fs.existsSync(buildBundledPath)) {
+    fs.copyFileSync(buildBundledPath, sourceBundledPath);
+    console.log('Copied bundled script to content/scripts for development');
+  }
+}
 
 export default defineConfig({
   source: ["src"],
   dist: "build",
   name: pkg.description,
-  id: "zotero-ner-author-normalizer@marcinmilkowski.pl",
-  namespace: "zoteroNER",
-  
+  id: "zotero-name-normalizer@marcinmilkowski.pl",
+  namespace: "ZoteroNameNormalizer",
+
   build: {
     assets: [
       "bootstrap.js",
@@ -23,7 +38,7 @@ export default defineConfig({
       buildTime: "{{buildTime}}",
     },
     prefs: {
-      prefix: "extensions.zotero-ner",
+      prefix: "extensions.zotero-name-normalizer",
     },
     esbuildOptions: [
       {
@@ -33,7 +48,7 @@ export default defineConfig({
         },
         bundle: true,
         target: "firefox115",
-        outfile: "build/content/scripts/zotero-ner-bundled.js",
+        outfile: "addon/content/scripts/zotero-ner-bundled.js",
         banner: {
           js: `// Console polyfill for Zotero 8
 if (typeof console === 'undefined') {
@@ -44,17 +59,42 @@ if (typeof console === 'undefined') {
     info: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer INFO: ' + Array.prototype.join.call(arguments, ' ')); },
     debug: function() { if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug('NameNormalizer DEBUG: ' + Array.prototype.join.call(arguments, ' ')); }
   };
-}`,
+}
+`,
+        },
+        footer: {
+          js: `
+// Export ZoteroNameNormalizer to scope for loadSubScript
+// bootstrap.js sets __zotero_scope__ before loading this script
+// Check both bare variable (if declared) and window/globalThis properties
+var ZoteroNameNormalizerRef = typeof ZoteroNameNormalizer !== 'undefined'
+  ? ZoteroNameNormalizer
+  : (typeof window !== 'undefined' ? window.ZoteroNameNormalizer : null) ||
+    (typeof globalThis !== 'undefined' ? globalThis.ZoteroNameNormalizer : null);
+
+if (ZoteroNameNormalizerRef) {
+  var targetScope = (typeof __zotero_scope__ !== 'undefined' && __zotero_scope__)
+    ? __zotero_scope__
+    : (typeof globalThis !== 'undefined' ? globalThis.__zotero_scope__ : null);
+  if (targetScope) {
+    targetScope.ZoteroNameNormalizer = ZoteroNameNormalizerRef;
+  }
+}
+`,
         },
       },
     ],
+    async onAfterBuild() {
+      setupDevEnvironment();
+    },
   },
 
   server: {
-    asProxy: false,
+    asProxy: true,
   },
 
   test: {
-    waitForPlugin: "() => typeof Zotero !== 'undefined' && Zotero.ZoteroNER?.initialized",
+    entries: ["test"],
+    waitForPlugin: "() => typeof Zotero !== 'undefined' && Zotero.NameNormalizer?.initialized",
   },
 });

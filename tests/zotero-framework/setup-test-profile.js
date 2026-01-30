@@ -11,7 +11,7 @@ const path = require('path');
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const TEST_PROFILE_DIR = path.join(__dirname, 'profile');
 const EXTENSIONS_DIR = path.join(TEST_PROFILE_DIR, 'extensions');
-const EXTENSION_ID = 'zotero-ner-author-normalizer@marcinmilkowski.pl';
+const EXTENSION_ID = 'zotero-name-normalizer@marcinmilkowski.pl';
 const EXTENSION_PATH = path.join(EXTENSIONS_DIR, EXTENSION_ID);
 
 function log(msg) {
@@ -105,7 +105,7 @@ function setupProfile() {
             iconURL: null,
             icon64URL: null,
             defaultLocale: {
-                name: 'Zotero NER Author Name Normalizer',
+                name: 'Zotero Author Name Normalizer',
                 description: 'NER-based author name normalization for Zotero',
                 creator: 'Marcin Milkowski',
                 homepageURL: 'https://github.com/marcinmilkowski/zotero-ner'

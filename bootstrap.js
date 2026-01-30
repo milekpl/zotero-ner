@@ -77,12 +77,20 @@ async function startup({ resourceURI, rootURI }, reason) {
     zoteroNameNormalizerScope.Cc = Cc;
   }
 
+  // Expose scope as global for the bundled script to use in its footer
+  globalThis.__zotero_scope__ = zoteroNameNormalizerScope;
+
   Services.scriptloader.loadSubScript(
-    `${rootURI}content/scripts/zotero-name-normalizer-bundled.js`,
+    `${rootURI}content/scripts/zotero-ner-bundled.js`,
     zoteroNameNormalizerScope,
     'UTF-8',
   );
-  log('zotero-name-normalizer-bundled.js loaded.');
+  log('zotero-ner-bundled.js loaded.');
+
+  // Debug: check what's in the scope
+  const scopeKeys = Object.keys(zoteroNameNormalizerScope);
+  log('Scope has ' + scopeKeys.length + ' properties');
+  log('ZoteroNameNormalizer in scope: ' + (zoteroNameNormalizerScope.ZoteroNameNormalizer ? 'YES' : 'NO'));
 
   if (zoteroNameNormalizerScope.ZoteroNameNormalizer) {
     globalThis.ZoteroNameNormalizer = zoteroNameNormalizerScope.ZoteroNameNormalizer;
@@ -91,6 +99,8 @@ async function startup({ resourceURI, rootURI }, reason) {
     if (globalThis.ZoteroNameNormalizer.hooks && globalThis.ZoteroNameNormalizer.hooks.onStartup) {
       globalThis.ZoteroNameNormalizer.hooks.onStartup();
     }
+  } else {
+    log('ERROR: ZoteroNameNormalizer NOT found in scope after loading bundled script!');
   }
 
   registerWindowListeners(reason);
@@ -387,6 +397,8 @@ async function onMainWindowLoad({ window }, _reason) {
   log('onMainWindowLoad called for window: ' + (window ? window.location.href : 'unknown'));
 
   try {
+    log('onMainWindowLoad: zoteroNameNormalizerScope exists: ' + (!!zoteroNameNormalizerScope));
+    log('onMainWindowLoad: ZoteroNameNormalizer in scope: ' + (zoteroNameNormalizerScope?.ZoteroNameNormalizer ? 'YES' : 'NO'));
     if (zoteroNameNormalizerScope?.ZoteroNameNormalizer) {
       window.ZoteroNameNormalizer = zoteroNameNormalizerScope.ZoteroNameNormalizer;
       log('Shared ZoteroNameNormalizer bundle with window.');

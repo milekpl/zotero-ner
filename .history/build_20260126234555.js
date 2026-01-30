@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build script for Zotero NER Author Name Normalizer extension (Zotero 7-8 compatible)
+ * Build script for Zotero Author Name Normalizer extension (Zotero 7-8 compatible)
  * Creates a .xpi file by zipping the extension files
  */
 

@@ -23,7 +23,7 @@ user_pref("extensions.lastPlatformVersion", "115.10.0");
 user_pref("extensions.pendingOperations", false);
 user_pref("extensions.signatureCheckpoint", 1);
 user_pref("extensions.systemAddonSet", "{\"schema\":1,\"addons\":{}}");
-user_pref("extensions.webextensions.uuids", "{\"zotero-ner-author-normalizer@marcinmilkowski.pl\":\"b87d065c-edab-42d3-8f35-a09edd8e8a14\"}");
+user_pref("extensions.webextensions.uuids", "{\"zotero-name-normalizer@marcinmilkowski.pl\":\"b87d065c-edab-42d3-8f35-a09edd8e8a14\"}");
 user_pref("extensions.zotero.dataDir", "/Users/marcinmilkowski/Zotero");
 user_pref("extensions.zotero.debug.console", true);
 user_pref("extensions.zotero.debug.logging", true);

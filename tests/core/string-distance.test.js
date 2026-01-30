@@ -165,6 +165,21 @@ describe('StringDistance Utils', () => {
       expect(isDiacriticOnlyVariant('Johnson', 'Johnsen')).toBe(false);
     });
 
+    it('should NOT match Bennett with Dennett (different people)', () => {
+      // These are different surnames, not variants
+      expect(isDiacriticOnlyVariant('Bennett', 'Dennett')).toBe(false);
+      expect(isDiacriticOnlyVariant('bennett', 'dennett')).toBe(false);
+      expect(isDiacriticOnlyVariant('BENNETT', 'DENNETT')).toBe(false);
+    });
+
+    it('should NOT match similar but different surnames', () => {
+      // These look similar but are different names
+      expect(isDiacriticOnlyVariant('Smith', 'Smyth')).toBe(false);
+      expect(isDiacriticOnlyVariant('Johnson', 'Johnsen')).toBe(false);
+      expect(isDiacriticOnlyVariant('Brown', 'Browne')).toBe(false);
+      expect(isDiacriticOnlyVariant('Clark', 'Clarke')).toBe(false);
+    });
+
     it('should be case insensitive', () => {
       expect(isDiacriticOnlyVariant('MÜLLER', 'mueller')).toBe(true);
       expect(isDiacriticOnlyVariant('CAFÉ', 'Cafe')).toBe(true);

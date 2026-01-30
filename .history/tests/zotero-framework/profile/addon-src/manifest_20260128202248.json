@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "Zotero Author Name Normalizer",
+  "version": "1.0.0",
+  "description": "Normalize author names using NER to handle different formats",
+  "homepage_url": "https://github.com/marcinmilkowski/zotero-ner",
+  "author": "Marcin Milkowski",
+  "icons": {
+    "48": "content/icons/icon.svg",
+    "96": "content/icons/icon.svg"
+  },
+  "applications": {
+    "zotero": {
+      "id": "zotero-name-normalizer@marcinmilkowski.pl",
+      "update_url": "https://raw.githubusercontent.com/marcinmilkowski/zotero-ner/main/update.json",
+      "strict_min_version": "7.0",
+      "strict_max_version": "8.*"
+    }
+  }
+}

@@ -1,1 +1,52 @@
-{"schemaVersion":37,"addons":[]}
+{
+  "schemaVersion": 37,
+  "addons": [
+    {
+      "id": "zotero-name-normalizer@marcinmilkowski.pl",
+      "syncGUID": "{4226d01d-6909-4d04-a4fb-3708442ab2c7}",
+      "location": "app-profile",
+      "version": "1.0.0",
+      "type": "extension",
+      "internalName": null,
+      "updateURL": null,
+      "updateKey": null,
+      "optionsURL": null,
+      "optionsType": null,
+      "aboutURL": null,
+      "iconURL": null,
+      "icon64URL": null,
+      "defaultLocale": {
+        "name": "Zotero Author Name Normalizer",
+        "description": "NER-based author name normalization for Zotero",
+        "creator": "Marcin Milkowski",
+        "homepageURL": "https://github.com/marcinmilkowski/zotero-ner"
+      },
+      "visible": true,
+      "active": true,
+      "userDisabled": false,
+      "appDisabled": false,
+      "pendingUninstall": false,
+      "installedFromAddonsManager": true,
+      "responsibilities": null,
+      "responsibilitiesIndexed": null,
+      "seeing": true,
+      "targetApplications": [
+        {
+          "id": "zotero",
+          "minVersion": "6.999",
+          "maxVersion": "8.*",
+          "exists": true
+        }
+      ],
+      "targetPlatforms": [],
+      "mulet": false,
+      "languages": {},
+      "converter": false,
+      "signer": null,
+      "hasBinaryComponents": false,
+      "requiresDependencies": false,
+      "dependencies": [],
+      "hasEmbeddedWebExtension": false
+    }
+  ]
+}

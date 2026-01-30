@@ -399,11 +399,9 @@ describe('ZoteroDBAnalyzer', () => {
     });
   });
 
-  describe('findVariantsEfficiently - diacritic-only normalization', () => {
-    it('should NOT flag surnames that differ by letters (typos)', async () => {
+  describe('findVariantsEfficiently - STRICT diacritic-only normalization', () => {
+    it('should return EMPTY array for non-diacritic similar names', async () => {
       const analyzer = new ZoteroDBAnalyzer();
-      // Setup with names that have similar structure but different letters
-      // findVariantsEfficiently expects surnameFrequencies object
       const surnameFrequencies = {
         'Dennett': 1,
         'Bennett': 1,
@@ -413,19 +411,59 @@ describe('ZoteroDBAnalyzer', () => {
 
       const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
 
-      // Dennett/Bennett should NOT be flagged (different letters)
-      const denBenn = result.filter(v =>
-        (v.variant1.name === 'Dennett' && v.variant2.name === 'Bennett') ||
-        (v.variant1.name === 'Bennett' && v.variant2.name === 'Dennett')
-      );
-      expect(denBenn.length).toBe(0);
+      // MUST return empty array - no variants found
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
+    });
 
-      // Smith/Smyth should NOT be flagged
-      const smithSmyth = result.filter(v =>
-        (v.variant1.name === 'Smith' && v.variant2.name === 'Smyth') ||
-        (v.variant1.name === 'Smyth' && v.variant2.name === 'Smith')
-      );
-      expect(smithSmyth.length).toBe(0);
+    it('CRITICAL: Bennett and Dennett are DIFFERENT people - NO MATCHING', async () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const surnameFrequencies = {
+        'Bennett': 5,
+        'Dennett': 3
+      };
+
+      const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
+
+      // ABSOLUTELY MUST return empty array
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
+    });
+
+    it('CRITICAL: Anderson and Andersen are DIFFERENT people - NO MATCHING', async () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const surnameFrequencies = {
+        'Anderson': 5,
+        'Andersen': 3
+      };
+
+      const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
+
+      // ABSOLUTELY MUST return empty array
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
+    });
+
+    it('should NOT flag any similar but different surnames', async () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const surnameFrequencies = {
+        'Johnson': 5,
+        'Johnsen': 3,
+        'Brown': 4,
+        'Browne': 2,
+        'Clark': 3,
+        'Clarke': 2,
+        'Smith': 10,
+        'Smyth': 5,
+        'Miller': 8,
+        'Millar': 3
+      };
+
+      const result = await analyzer.findVariantsEfficiently(surnameFrequencies);
+
+      // MUST return empty array - none of these are diacritic variants
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
     });
 
     it('should flag surnames differing only by diacritics', async () => {
@@ -461,6 +499,207 @@ describe('ZoteroDBAnalyzer', () => {
         normalize(v.variant2.name).includes('mueller')
       );
       expect(mueller.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('AVOID MIXING AUTHORS - critical regression tests', () => {
+    describe('findItemsBySurname - exact surname matching only', () => {
+      it('should NOT mix items from different authors with similar surnames', () => {
+        const analyzer = new ZoteroDBAnalyzer();
+        const itemsByFullAuthor = {
+          'C. B.|Martin': [{ id: 1, title: 'Book 1', author: 'C. B. Martin' }],
+          'Rod|Martin': [{ id: 2, title: 'Book 2', author: 'Rod Martin' }],
+          'John|Martin': [{ id: 3, title: 'Book 3', author: 'John Martin' }],
+          'José|Martín': [{ id: 4, title: 'Libro', author: 'José Martín' }],
+          // These should NOT match "Martin"
+          'J.|Martinez': [{ id: 5, title: 'Book 5', author: 'J. Martinez' }],
+          'M.|Martini': [{ id: 6, title: 'Book 6', author: 'M. Martini' }]
+        };
+
+        // When searching for "Martin", should only get items from authors with exact surname "Martin"
+        const martinItems = analyzer.findItemsBySurname(itemsByFullAuthor, 'Martin');
+        const martinItemIds = martinItems.map(item => item.id).sort((a, b) => a - b);
+
+        // Should get items from C. B. Martin, Rod Martin, John Martin
+        expect(martinItemIds).toEqual([1, 2, 3]);
+        // Should NOT include Martinez or Martini items
+        expect(martinItemIds).not.toContain(5);
+        expect(martinItemIds).not.toContain(6);
+      });
+
+      it('should find items for diacritic variant Martín separately from Martin', () => {
+        const analyzer = new ZoteroDBAnalyzer();
+        const itemsByFullAuthor = {
+          'C. B.|Martin': [{ id: 1, title: 'Book 1', author: 'C. B. Martin' }],
+          'José|Martín': [{ id: 2, title: 'Libro', author: 'José Martín' }],
+          'María|Martín': [{ id: 3, title: 'Otro Libro', author: 'María Martín' }]
+        };
+
+        const martinItems = analyzer.findItemsBySurname(itemsByFullAuthor, 'Martin');
+        const martinItemsIds = martinItems.map(item => item.id);
+
+        // Should ONLY get C. B. Martin, NOT José Martín or María Martín
+        expect(martinItemsIds).toEqual([1]);
+        expect(martinItemsIds).not.toContain(2);
+        expect(martinItemsIds).not.toContain(3);
+      });
+
+      it('should handle empty or null inputs gracefully', () => {
+        const analyzer = new ZoteroDBAnalyzer();
+
+        expect(analyzer.findItemsBySurname({}, 'Martin')).toEqual([]);
+        expect(analyzer.findItemsBySurname(null, 'Martin')).toEqual([]);
+        expect(analyzer.findItemsBySurname({}, null)).toEqual([]);
+        expect(analyzer.findItemsBySurname({}, '')).toEqual([]);
+      });
+
+      it('should be case-insensitive for surname matching', () => {
+        const analyzer = new ZoteroDBAnalyzer();
+        const itemsByFullAuthor = {
+          'John|SMITH': [{ id: 1, title: 'Book 1', author: 'John SMITH' }],
+          'Jane|smith': [{ id: 2, title: 'Book 2', author: 'Jane smith' }]
+        };
+
+        const items = analyzer.findItemsBySurname(itemsByFullAuthor, 'smith');
+        const itemIds = items.map(item => item.id).sort((a, b) => a - b);
+
+        expect(itemIds).toEqual([1, 2]);
+      });
+
+      it('should return items sorted by author name for consistent display', () => {
+        const analyzer = new ZoteroDBAnalyzer();
+        const itemsByFullAuthor = {
+          'John|Martin': [{ id: 3, title: 'Book 3', author: 'John Martin' }],
+          'C. B.|Martin': [{ id: 1, title: 'Book 1', author: 'C. B. Martin' }],
+          'Rod|Martin': [{ id: 2, title: 'Book 2', author: 'Rod Martin' }]
+        };
+
+        const martinItems = analyzer.findItemsBySurname(itemsByFullAuthor, 'Martin');
+        const authors = martinItems.map(item => item.author);
+
+        // Should be sorted alphabetically by author name
+        expect(authors).toEqual(['C. B. Martin', 'John Martin', 'Rod Martin']);
+      });
+    });
+
+    describe('analyzeCreators - items tracked by full author name', () => {
+      it('should NOT mix items from different authors with same surname', async () => {
+        const analyzer = new ZoteroDBAnalyzer();
+
+        // Create creators with items - different authors with surname "Martin"
+        // NOTE: For diacritic detection to work, the names must have the same normalized length
+        // 'Martin' and 'Martin' are same, but for diacritic variants we need:
+        // - 'Martin' (6 chars) vs 'Martín' (6 chars with acute on i = same length)
+        // The acute accent on 'í' in 'Martin' vs 'í' in 'Martín' normalizes correctly
+        const creators = [
+          {
+            firstName: 'C. B.',
+            lastName: 'Martin',
+            count: 5,
+            parsedName: analyzer.parseName('C. B. Martin'),
+            items: [
+              { id: 1, title: 'The Ontological Turn', author: 'C. B. Martin', year: '1999' },
+              { id: 2, title: 'Remembering', author: 'C. B. Martin', year: '1966' }
+            ]
+          },
+          {
+            firstName: 'Rod',
+            lastName: 'Martin',
+            count: 8,
+            parsedName: analyzer.parseName('Rod Martin'),
+            items: [
+              { id: 3, title: 'The psychology of humour', author: 'Rod Martin', year: '2007' }
+            ]
+          },
+          // Use 'Martín' with acute accent on 'i' - this should match 'Martin' as diacritic variant
+          // 'Martin' (6) normalizes to 'martin' (6)
+          // 'Martín' (6 with combining acute on i) normalizes to 'martin' (6)
+          {
+            firstName: 'José',
+            lastName: 'Martín',
+            count: 2,
+            parsedName: analyzer.parseName('José Martín'),
+            items: [
+              { id: 4, title: 'Beyond error-correction', author: 'José Martín', year: '2012' }
+            ]
+          }
+        ];
+
+        const result = await analyzer.analyzeCreators(creators);
+
+        // Find surname variant suggestion for Martin vs Martín
+        const surnameSuggestion = result.suggestions.find(
+          s => s.type === 'surname' && s.variants.some(v => v.name.toLowerCase() === 'martin' || v.name.toLowerCase() === 'martín')
+        );
+
+        expect(surnameSuggestion).toBeDefined();
+
+        // Get the two variants (Martin and Martín)
+        const variants = surnameSuggestion.variants.filter(v =>
+          v.name.toLowerCase() === 'martin' || v.name.toLowerCase() === 'martín'
+        );
+
+        expect(variants.length).toBe(2);
+
+        // Identify which is which
+        const martinVariant = variants.find(v => v.name.toLowerCase() === 'martin');
+        const martinVariantItems = variants.find(v => v.name.toLowerCase() === 'martín');
+
+        expect(martinVariant).toBeDefined();
+        expect(martinVariantItems).toBeDefined();
+
+        // Martin variant items should only include C. B. Martin and Rod Martin, NOT José Martín
+        const martinItemAuthors = martinVariant.items.map(item => item.author);
+        expect(martinItemAuthors).toContain('C. B. Martin');
+        expect(martinItemAuthors).toContain('Rod Martin');
+        expect(martinItemAuthors).not.toContain('José Martín');
+
+        // Martín variant items should only include José Martín
+        const martinVariantItemAuthors = martinVariantItems.items.map(item => item.author);
+        expect(martinVariantItemAuthors).toContain('José Martín');
+        expect(martinVariantItemAuthors).not.toContain('C. B. Martin');
+        expect(martinVariantItemAuthors).not.toContain('Rod Martin');
+      });
+
+      it('should preserve first names and initials in item author display', async () => {
+        const analyzer = new ZoteroDBAnalyzer();
+
+        const creators = [
+          {
+            firstName: 'J.',
+            lastName: 'Smith',
+            count: 3,
+            parsedName: analyzer.parseName('J. Smith'),
+            items: [
+              { id: 1, title: 'Paper 1', authorFirstName: 'J.', authorLastName: 'Smith', author: 'J. Smith' }
+            ]
+          },
+          {
+            firstName: 'John',
+            lastName: 'Smith',
+            count: 5,
+            parsedName: analyzer.parseName('John Smith'),
+            items: [
+              { id: 2, title: 'Paper 2', authorFirstName: 'John', authorLastName: 'Smith', author: 'John Smith' }
+            ]
+          }
+        ];
+
+        const result = await analyzer.analyzeCreators(creators);
+
+        // Find the surname variant suggestion
+        const surnameSuggestion = result.suggestions.find(s => s.type === 'surname');
+
+        if (surnameSuggestion) {
+          const smithVariant = surnameSuggestion.variants.find(v => v.name === 'Smith');
+          if (smithVariant) {
+            const authorNames = smithVariant.items.map(item => item.author);
+            // Both J. Smith and John Smith should be present with their correct first names/initials
+            expect(authorNames).toContain('J. Smith');
+            expect(authorNames).toContain('John Smith');
+          }
+        }
+      });
     });
   });
 });
