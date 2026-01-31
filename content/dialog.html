@@ -313,6 +313,17 @@
     .item-title {
       color: #24292e;
     }
+    .item-link {
+      color: #005a9c;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .item-link:visited {
+      color: #005a9c;
+    }
+    .item-link:hover {
+      text-decoration: underline;
+    }
     .item-year {
       color: #6a737e;
       font-size: 0.9em;
@@ -326,9 +337,14 @@
     .item-details .item-author {
       flex: 0 0 auto;
     }
-    .item-details .item-title {
+    .item-details .item-link {
       flex: 1 1 auto;
       min-width: 150px;
+      color: #005a9c;
+      text-decoration: none;
+    }
+    .item-details .item-link:hover {
+      text-decoration: underline;
     }
     .item-details .item-year {
       flex: 0 0 auto;
@@ -396,6 +412,7 @@
 
   <!-- Action buttons -->
   <div style="text-align: right; margin-top: 20px;">
+    <button id="apply-all-button" disabled style="margin-right: 10px;">Apply All Selected</button>
     <button id="apply-button" disabled>Apply Selected</button>
     <button id="cancel-button">Cancel</button>
   </div>
@@ -454,12 +471,72 @@
     filterText: '',
     currentProgressState: null,
 
+      // File-based logger for debugging
+      fileLogger: {
+        logPath: '/tmp/zotero-normalizer.log',
+        log: function(msg) {
+          try {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const line = timestamp + ' ' + msg + '\n';
+            if (typeof Components !== 'undefined') {
+              // Firefox/XUL context - use nsIFileOutputStream
+              const file = Components.classes['@mozilla.org/file/directory_service;1']
+                .getService(Components.interfaces.nsIProperties)
+                .get('TmpD', Components.interfaces.nsIFile);
+              file.append('zotero-normalizer.log');
+              const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
+                .createInstance(Components.interfaces.nsIFileOutputStream);
+              fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0);
+              const data = new TextEncoder().encode(line);
+              fos.write(line, data.length);
+              fos.close();
+            }
+            // Also log to console for immediate feedback
+            console.log('NER-LOG: ' + msg);
+          } catch(e) {
+            console.log('NER-LOG: ' + msg);
+          }
+        }
+      },
+
       init: function() {
         console.log('Dialog initialization started');
+        this.fileLogger.log('=== Dialog init started ===');
         this.userSelections = new Map();
         this.variantDetailState = null;
         this.filterText = '';
-  this.currentProgressState = null;
+        this.currentProgressState = null;
+
+        // Set up event delegation for clickable item links
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest('.item-link');
+          if (link) {
+            event.preventDefault();
+            const itemKey = link.getAttribute('data-item-key');
+            // Show debug in the detail panel
+            const debugEl = document.getElementById('variant-detail-items');
+            if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+              debugEl.firstChild.textContent = 'DEBUG: Clicked itemKey=' + itemKey;
+            }
+            if (itemKey) {
+              // Dispatch custom event to the opener window
+              const opener = window.opener;
+              if (opener) {
+                const customEvent = new CustomEvent('zotero-ner-select-item', {
+                  detail: { itemKey: itemKey },
+                  bubbles: false,
+                  cancelable: true
+                });
+                opener.dispatchEvent(customEvent);
+              } else {
+                if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+                  debugEl.firstChild.textContent = 'DEBUG: No opener window';
+                }
+              }
+            }
+          }
+        });
+
         this.setupFilterInput();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
@@ -671,12 +748,48 @@
       
       initialize: async function() {
         this.log('Dialog initialize started');
+        this.fileLogger.log('=== Dialog initialize ===');
+
+        // Track when analysis is complete (set by updateAnalysisResults)
+        this.analysisComplete = false;
+
+        // DEBUG: Set timeout to detect if analysis never starts
+        const analysisStartTime = Date.now();
+        const self = this;
+        this.checkAnalysisInterval = setInterval(() => {
+          // Check if analysis completed (flag set by updateAnalysisResults)
+          if (self.analysisComplete) {
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            const suggestionCount = (self.analysisResults && self.analysisResults.suggestions) ? self.analysisResults.suggestions.length : 0;
+            self.fileLogger.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
+          } else if (Date.now() - analysisStartTime > 10000) {
+            // 10 seconds passed, no valid results
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            self.fileLogger.log('ERROR: Timeout waiting for analysis results after 10s');
+            self.fileLogger.log('  this.analysisResults: ' + (self.analysisResults ? 'SET' : 'NULL'));
+            self.fileLogger.log('  this.analysisComplete: ' + self.analysisComplete);
+            if (self.analysisResults) {
+              self.fileLogger.log('  suggestions: ' + (self.analysisResults.suggestions ? self.analysisResults.suggestions.length : 'NULL'));
+            }
+            self.showEmptyState('Analysis timed out. The analysis may have failed to run properly.');
+          }
+        }, 500);
 
         let params = null;
 
         try {
           if (typeof window.arguments !== 'undefined' && window.arguments.length > 0) {
             params = window.arguments[0];
+            this.fileLogger.log('window.arguments[0] type: ' + (params ? typeof params : 'NULL'));
+            this.fileLogger.log('window.arguments[0] loading: ' + (params && params.loading === true ? 'TRUE' : 'FALSE/NULL'));
+            this.fileLogger.log('window.arguments[0] has analysisResults: ' + (params && params.analysisResults ? 'TRUE' : 'FALSE'));
+            if (params && params.analysisResults) {
+              this.fileLogger.log('  params.analysisResults.suggestions: ' + (params.analysisResults.suggestions ? params.analysisResults.suggestions.length : 'NULL'));
+            }
+          } else {
+            this.fileLogger.log('window.arguments is undefined or empty');
           }
         } catch (err) {
           this.log('Unable to read window arguments: ' + err.message);
@@ -730,55 +843,116 @@
           }
         }
 
+        // DEBUG: Log params status
+        this.fileLogger.log('params is ' + (params ? 'SET' : 'NULL'));
+        this.fileLogger.log('window.opener is ' + (window.opener ? 'SET' : 'NULL'));
+        if (window.opener) {
+          this.fileLogger.log('opener.ZoteroNERDialogParams is ' + (window.opener.ZoteroNERDialogParams ? 'SET' : 'NULL'));
+          this.fileLogger.log('opener.ZoteroNERAnalysisResultsJSON is ' + (window.opener.ZoteroNERAnalysisResultsJSON ? 'SET' : 'NULL'));
+          this.fileLogger.log('opener.ZoteroNERAnalysisResults is ' + (window.opener.ZoteroNERAnalysisResults ? 'SET' : 'NULL'));
+        }
+        this.fileLogger.log('window.ZoteroNERDialogParams is ' + (window.ZoteroNERDialogParams ? 'SET' : 'NULL'));
+        this.fileLogger.log('window.ZoteroNERAnalysisResultsJSON is ' + (window.ZoteroNERAnalysisResultsJSON ? 'SET' : 'NULL'));
+        this.fileLogger.log('window.ZoteroNERAnalysisResults is ' + (window.ZoteroNERAnalysisResults ? 'SET' : 'NULL'));
+
         let analysisResults = null;
+
+        // DEBUG: Log all potential sources
+        this.fileLogger.log('Checking for params/analysisResults...');
+        this.fileLogger.log('  window.arguments[0]: ' + (typeof window.arguments !== 'undefined' && window.arguments.length > 0 ? 'EXISTS' : 'NULL/EMPTY'));
+        this.fileLogger.log('  window.ZoteroNERDialogParams: ' + (window.ZoteroNERDialogParams ? 'EXISTS' : 'NULL'));
+        this.fileLogger.log('  window.ZoteroNERAnalysisResults: ' + (window.ZoteroNERAnalysisResults ? 'EXISTS' : 'NULL'));
+        if (window.ZoteroNERAnalysisResults) {
+          this.fileLogger.log('    window.ZoteroNERAnalysisResults.suggestions: ' + (window.ZoteroNERAnalysisResults.suggestions ? window.ZoteroNERAnalysisResults.suggestions.length : 'NULL'));
+        }
+        this.fileLogger.log('  window.opener.ZoteroNERDialogParams: ' + (window.opener && window.opener.ZoteroNERDialogParams ? 'EXISTS' : 'NULL'));
+        this.fileLogger.log('  window.opener.ZoteroNERAnalysisResults: ' + (window.opener && window.opener.ZoteroNERAnalysisResults ? 'EXISTS' : 'NULL'));
+        if (window.opener && window.opener.ZoteroNERAnalysisResults) {
+          this.fileLogger.log('    opener.analysisResults.suggestions: ' + (window.opener.ZoteroNERAnalysisResults.suggestions ? window.opener.ZoteroNERAnalysisResults.suggestions.length : 'NULL'));
+        }
+
         if (params) {
-          // First try resolving known analysisResults properties
-          analysisResults = this.resolveAnalysisResults(params, 'dialog params');
-
-          // If resolution failed, but the params object itself looks like the analysis results,
-          // attempt to sanitize it directly. This covers callers that passed the plain object
-          // as the params bag instead of under the analysisResults key.
-          if (!analysisResults) {
-            const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
-            if (direct) {
-              analysisResults = direct;
-              this.analysisResultsSource = 'dialog params direct';
+          params = this.unwrapDialogParams(params);
+          this.fileLogger.log('  params after unwrap: ' + (params ? 'EXISTS' : 'NULL'));
+          if (params) {
+            this.fileLogger.log('    params.analysisResults: ' + (params.analysisResults ? 'EXISTS' : 'NULL'));
+            this.fileLogger.log('    params.analysisResultsJSON: ' + (params.analysisResultsJSON ? 'EXISTS' : 'NULL'));
+            if (params.analysisResults) {
+              this.fileLogger.log('    params.analysisResults.suggestions: ' + (params.analysisResults.suggestions ? params.analysisResults.suggestions.length : 'NULL'));
             }
-          }
-
-          if (params.items) {
-            this.items = params.items;
           }
         }
 
+        // Try to resolve analysisResults from params
+        if (params) {
+          analysisResults = this.resolveAnalysisResults(params, 'dialog params');
+          this.fileLogger.log('resolveAnalysisResults from params: ' + (analysisResults ? 'EXISTS' : 'NULL'));
+        }
 
-            this.resetSelections();
+        // Try other sources if needed
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
+          this.fileLogger.log('Trying opener.ZoteroNERAnalysisResultsJSON...');
           analysisResults = this.safeParseJSON(window.opener.ZoteroNERAnalysisResultsJSON, 'opener.ZoteroNERAnalysisResultsJSON');
         }
 
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResults) {
+          this.fileLogger.log('Trying opener.ZoteroNERAnalysisResults...');
           analysisResults = this.sanitizeAnalysisResults(window.opener.ZoteroNERAnalysisResults, 'opener.ZoteroNERAnalysisResults direct');
         }
 
         if (!analysisResults && window.ZoteroNERAnalysisResultsJSON) {
+          this.fileLogger.log('Trying window.ZoteroNERAnalysisResultsJSON...');
           analysisResults = this.safeParseJSON(window.ZoteroNERAnalysisResultsJSON, 'window.ZoteroNERAnalysisResultsJSON');
         }
 
         if (!analysisResults && window.ZoteroNERAnalysisResults) {
+          this.fileLogger.log('Trying window.ZoteroNERAnalysisResults...');
           analysisResults = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults direct');
+        }
+
+        // If still no results but params looks like results itself
+        if (!analysisResults && params && typeof params === 'object' && !params.loading) {
+          this.fileLogger.log('Trying params as direct results...');
+          const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
+          if (direct) {
+            analysisResults = direct;
+            this.analysisResultsSource = 'dialog params direct';
+          }
+        }
+
+        if (params && params.items) {
+          this.items = params.items;
+        }
+
+        // Log what we found
+        this.fileLogger.log('Final analysisResults: ' + (analysisResults ? 'EXISTS' : 'NULL'));
+        if (analysisResults) {
+          this.fileLogger.log('  suggestions count: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 'NULL'));
+          this.fileLogger.log('  totalUniqueSurnames: ' + (analysisResults.totalUniqueSurnames || 'NULL'));
+          if (analysisResults.suggestions && analysisResults.suggestions.length > 0) {
+            const sample = analysisResults.suggestions.slice(0, 3).map(s => s.primary || s.surname || '?').join(', ');
+            this.fileLogger.log('  Sample suggestions: ' + sample);
+          }
         }
 
         if (!analysisResults) {
           this.log('No analysis results found');
+          this.fileLogger.log('ERROR: No analysis results found - showing empty state');
           this.showEmptyState('No analysis results were provided to the dialog.');
           this.updateProgress();
           return;
         }
-        
-        // Check if this is a loading state
-        if (analysisResults.loading === true) {
-          this.log('Dialog opened in loading state');
+
+        // Check if this is a loading state OR if suggestions are NULL (stale cached data)
+        // We need fresh analysis if:
+        // 1. loading === true (explicitly waiting for analysis)
+        // 2. suggestions is NULL (stale cached data with no results)
+        if (analysisResults.loading === true || analysisResults.suggestions === null) {
+          const reason = analysisResults.loading === true ? 'loading=true' : 'suggestions=NULL';
+          this.log('Dialog opened in loading state (' + reason + ')');
+          this.fileLogger.log('Loading state (' + reason + ') - will wait for updateAnalysisResults');
+          // Update loading message to show we're waiting
+          ZoteroNER_HTMLUtils.updateProgressLabel('Waiting for analysis to complete...');
           this.showLoadingState();
           return;
         }
@@ -873,13 +1047,15 @@
         }
 
         if (!this.userSelections.has(index)) {
+          // Default to NOT applying - user must explicitly select a normalization
+          // This prevents accidental bulk changes to the library
           const defaultValue = this.getDefaultNormalizationValue(suggestion);
           this.userSelections.set(index, {
             mode: 'primary',
             value: defaultValue,
             variantIndex: null,
             customValue: defaultValue,
-            apply: true
+            apply: false  // Changed from true to require explicit opt-in
           });
         }
 
@@ -1029,9 +1205,10 @@
           return `${this.titleCase(name)}${frequency}`;
         }
 
+        // Preserve original casing of the variant name - don't title-case it
         const surnameDisplay = typeof variant.name === 'string'
-          ? this.titleCase(variant.name)
-          : this.titleCase(this.formatNameString(variant.name));
+          ? variant.name
+          : this.formatNameString(variant.name);
         return `${surnameDisplay}${frequency}`;
       },
 
@@ -1046,9 +1223,10 @@
           return `Normalize to ${this.titleCase(variant.firstName || variant.name || '')} (${occurrences})`;
         }
 
+        // Preserve original casing for surname variants
         const variantSurname = typeof variant.name === 'string'
-          ? this.titleCase(variant.name)
-          : this.titleCase(this.formatNameString(variant.name));
+          ? variant.name
+          : this.formatNameString(variant.name);
         return `Normalize to ${variantSurname} (${occurrences})`;
       },
 
@@ -1119,12 +1297,26 @@
       },
 
       showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
+        const variant = suggestion.variants[variantIndex];
+        const items = Array.isArray(variant?.items) ? variant.items : [];
+
+        // Debug info for troubleshooting
+        const authorInfo = suggestion.authorInfo || {};
+        const lookupKey = `${authorInfo.firstName || ''}|${variant.name || ''}`;
+        // Debug: show first 3 items if any
+        let debugInfo = `lookupKey=[${lookupKey}], items.length=${items.length}`;
+        if (items.length > 0) {
+          const sampleKeys = items.slice(0, 3).map(i => i.key).join(', ');
+          debugInfo += `, sampleKeys=[${sampleKeys}]`;
+        }
+        console.error('DEBUG: ' + debugInfo);
+        // Remaining dump() calls removed - they don't work in Zotero context
+
         if (!suggestion || !Array.isArray(suggestion.variants)) {
           this.clearVariantDetails();
           return;
         }
 
-        const variant = suggestion.variants[variantIndex];
         if (!variant) {
           this.clearVariantDetails();
           return;
@@ -1166,15 +1358,25 @@
         if (listEl) {
           listEl.innerHTML = '';
           const items = Array.isArray(variant.items) ? variant.items : [];
+          const authorInfo = suggestion.authorInfo || {};
+          const lookupKey = `${authorInfo.firstName || ''}|${variant.name || ''}`;
 
           if (items.length === 0) {
             const emptyLi = document.createElement('li');
-            emptyLi.textContent = 'No sample items available for this variant.';
+            emptyLi.innerHTML = `<span style="color:red;">No items found. lookupKey=[${lookupKey}]</span>`;
             listEl.appendChild(emptyLi);
           } else {
+            // Add debug info element at the top
+            const debugLi = document.createElement('li');
+            debugLi.className = 'debug-info';
+            debugLi.style.cssText = 'color:#666;font-size:0.8em;padding:2px 0;';
+            debugLi.textContent = 'DEBUG: ' + items.length + ' items loaded';
+            listEl.appendChild(debugLi);
+
             items.forEach(item => {
               const li = document.createElement('li');
-              li.innerHTML = this.formatItemSummaryHTML(item);
+              const html = this.formatItemSummaryHTML(item);
+              li.innerHTML = html;
               listEl.appendChild(li);
             });
 
@@ -1239,6 +1441,7 @@
         const title = item.title || 'Untitled';
         const year = item.year || item.date || '';
         const author = item.author || '';
+        const itemKey = item.key || '';
 
         // Truncate title if too long
         const maxTitleLength = 100;
@@ -1255,7 +1458,12 @@
           html += `<span class="item-author">${safeAuthor}</span>`;
         }
 
-        html += `<span class="item-title">${safeTitle}</span>`;
+        // Make title clickable with zotero://select/ URL
+        if (itemKey) {
+          html += `<a href="#" class="item-link" data-item-key="${this.escapeHTML(itemKey)}">${safeTitle}</a>`;
+        } else {
+          html += `<span class="item-title">${safeTitle}</span>`;
+        }
 
         if (safeYear) {
           html += `<span class="item-year">(${safeYear})</span>`;
@@ -1589,7 +1797,9 @@
 
       setApplyEnabled: function(enabled) {
         const applyButton = ZoteroNER_HTMLUtils.getElement('apply-button');
+        const applyAllButton = ZoteroNER_HTMLUtils.getElement('apply-all-button');
         if (applyButton) applyButton.disabled = !enabled || this.isProcessing;
+        if (applyAllButton) applyAllButton.disabled = !enabled || this.isProcessing;
       },
 
       setDialogBusy: function(isBusy) {
@@ -1597,7 +1807,9 @@
         ZoteroNER_HTMLUtils.setHidden('progress-container', !isBusy);
 
         const applyButton = ZoteroNER_HTMLUtils.getElement('apply-button');
+        const applyAllButton = ZoteroNER_HTMLUtils.getElement('apply-all-button');
         if (applyButton) applyButton.disabled = isBusy;
+        if (applyAllButton) applyAllButton.disabled = isBusy;
 
         this.updateProgress();
       },
@@ -1863,7 +2075,39 @@
           }
         }
       },
-      
+
+      applyAllSelected: async function() {
+        // Count how many normalizations are selected
+        let selectedCount = 0;
+        for (const [index, selection] of this.userSelections) {
+          if (selection.apply !== false && selection.mode !== 'keep') {
+            selectedCount++;
+          }
+        }
+
+        if (selectedCount === 0) {
+          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Select at least one normalization to apply.');
+          return;
+        }
+
+        // Show confirmation dialog for bulk operations
+        const confirmed = this.confirm(
+          'Apply Multiple Normalizations',
+          `You are about to apply ${selectedCount} normalization(s) to your library.\n\n` +
+          `This will modify author names in ${selectedCount} item(s).\n\n` +
+          `Are you sure you want to continue?`
+        );
+
+        if (!confirmed) {
+          this.log('User cancelled Apply All operation');
+          return;
+        }
+
+        // Proceed with applying all selected normalizations
+        this.log('User confirmed Apply All for ' + selectedCount + ' normalizations');
+        await this.applySelected();
+      },
+
       showLoadingState: function() {
         this.log('Showing loading state');
         
@@ -1881,9 +2125,14 @@
       },
       
       handleAnalysisProgress: function(progress) {
-        if (!progress) return;
+        if (!progress) {
+          return;
+        }
 
-        this.log('Analysis progress: ' + JSON.stringify(progress));
+        // Log debug messages to file
+        if (progress.stage === 'debug' && progress.message) {
+          this.fileLogger.log('ANALYZER: ' + progress.message);
+        }
 
         let message = 'Analyzing library...';
         let percent = 0;
@@ -1903,6 +2152,9 @@
         } else if (progress.stage === 'generating_suggestions') {
           message = 'Generating normalization suggestions...';
           percent = 95;
+        } else if (progress.stage === 'debug') {
+          message = progress.message || 'Analyzing...';
+          percent = progress.percent || 0;
         }
 
         ZoteroNER_HTMLUtils.updateProgressLabel(message);
@@ -1920,14 +2172,30 @@
       },
       
       updateAnalysisResults: function(analysisResults) {
+        this.fileLogger.log('updateAnalysisResults called with ' + (analysisResults ? 'data' : 'NULL'));
+        if (analysisResults) {
+          this.fileLogger.log('  suggestions count: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 0));
+          this.fileLogger.log('  totalUniqueSurnames: ' + (analysisResults.totalUniqueSurnames || 'undefined'));
+        }
+
+        // Mark analysis as complete to prevent timeout error
+        this.analysisComplete = true;
+        
+        // Clear the timeout interval if it's still running
+        if (this.checkAnalysisInterval) {
+          clearInterval(this.checkAnalysisInterval);
+          this.checkAnalysisInterval = null;
+        }
+
         if (!analysisResults) {
+          this.fileLogger.log('ERROR: updateAnalysisResults received NULL');
           this.showEmptyState('Analysis completed but no results were returned.');
           return;
         }
-        
+
         this.log('Updating dialog with analysis results');
         this.log('Results contain: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 0) + ' suggestions');
-        
+
         this.analysisResults = analysisResults;
         this.resetSelections();
         this.clearVariantDetails();
@@ -1946,6 +2214,10 @@
     // Event listeners
     document.getElementById('apply-button').addEventListener('click', function() {
       ZoteroNER_NormalizationDialog.applySelected();
+    });
+
+    document.getElementById('apply-all-button').addEventListener('click', function() {
+      ZoteroNER_NormalizationDialog.applyAllSelected();
     });
 
     document.getElementById('cancel-button').addEventListener('click', function() {

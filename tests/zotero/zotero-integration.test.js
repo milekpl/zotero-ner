@@ -47,7 +47,13 @@ const mockNameParserInstance = {};
 const mockLearningEngineInstance = {};
 const mockNormalizerDialogInstance = {};
 const mockItemProcessorInstance = {};
-const mockZoteroDBAnalyzerInstance = {};
+const mockZoteroDBAnalyzerInstance = {
+  analyzeFullLibrary: jest.fn().mockResolvedValue({
+    suggestions: [],
+    totalUniqueSurnames: 0,
+    totalVariantGroups: 0
+  })
+};
 const mockMenuIntegrationInstance = {};
 
 global.ZoteroNameNormalizer.NameParser = jest.fn(() => mockNameParserInstance);

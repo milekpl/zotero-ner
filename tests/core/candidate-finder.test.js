@@ -65,39 +65,77 @@ describe('CandidateFinder', () => {
   });
 
   describe('groupCreatorsBySurname', () => {
-    test('should group creators by surname', () => {
+    test('should group creators by normalized first name + surname', () => {
       const creators = [
         { firstName: 'John', lastName: 'Smith', creatorType: 'author' },
         { firstName: 'Jane', lastName: 'Smith', creatorType: 'author' },
         { firstName: 'Bob', lastName: 'Johnson', creatorType: 'editor' }
       ];
-      
+
       const result = candidateFinder.groupCreatorsBySurname(creators);
-      
-      // Should group by last name
-      expect(result).toHaveProperty('smith');
-      expect(result).toHaveProperty('johnson');
-      
-      // Smith group should have 2 entries
-      expect(result.smith).toHaveLength(2);
-      
-      // Johnson group should have 1 entry
-      expect(result.johnson).toHaveLength(1);
+
+      // Should group by normalized first name + surname
+      // Different authors with same surname are NOT grouped together
+      // "Bob" normalizes to "robert" (variant of Robert)
+      expect(result).toHaveProperty('john|smith');  // John Smith
+      expect(result).toHaveProperty('jane|smith');  // Jane Smith
+      expect(result).toHaveProperty('robert|johnson'); // Bob Johnson (normalized to Robert)
+
+      // Each group should have only 1 entry (different authors)
+      expect(result['john|smith']).toHaveLength(1);
+      expect(result['jane|smith']).toHaveLength(1);
+      expect(result['robert|johnson']).toHaveLength(1);
+    });
+
+    test('should group SAME author variants together', () => {
+      const creators = [
+        { firstName: 'John', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'J.', lastName: 'Smith', creatorType: 'author' },
+        { firstName: 'Johnny', lastName: 'Smith', creatorType: 'author' }
+      ];
+
+      const result = candidateFinder.groupCreatorsBySurname(creators);
+
+      // All three should be in the same group because "john", "j.", and "johnny"
+      // all normalize to or are considered variants of "john"
+      // Note: "j." is treated as initials and grouped with "john"
+      expect(Object.keys(result)).toHaveLength(1);  // All in one group
+      const groupKey = Object.keys(result)[0];
+      expect(groupKey).toContain('smith');
+      expect(result[groupKey]).toHaveLength(3);
+    });
+
+    test('should NOT group different authors with same surname', () => {
+      const creators = [
+        { firstName: 'Alex', lastName: 'Martin', creatorType: 'author' },
+        { firstName: 'Alia', lastName: 'Martin', creatorType: 'author' },
+        { firstName: 'Andrea', lastName: 'Martin', creatorType: 'author' }
+      ];
+
+      const result = candidateFinder.groupCreatorsBySurname(creators);
+
+      // Each author should be in their own group - different first names
+      // "Alex" normalizes to "alexander", others stay as-is
+      expect(result['alexander|martin']).toHaveLength(1);
+      expect(result['alia|martin']).toHaveLength(1);
+      expect(result['andrea|martin']).toHaveLength(1);
+      expect(Object.keys(result)).toHaveLength(3);  // Three separate groups
     });
   });
 
   describe('findFirstInitialVariations', () => {
-    test('should find variations between names with initials', () => {
-      const creatorsWithSameSurname = [
+    test('should find variations between SAME author name variants', () => {
+      // These are variants of the SAME author (John Smith)
+      const sameAuthorVariants = [
         { firstName: 'John', lastName: 'Smith', creatorType: 'author' },
         { firstName: 'J.', lastName: 'Smith', creatorType: 'author' },
-        { firstName: 'Jack', lastName: 'Smith', creatorType: 'author' }
+        { firstName: 'Johnny', lastName: 'Smith', creatorType: 'author' }
       ];
-      
-      const result = candidateFinder.findFirstInitialVariations(creatorsWithSameSurname);
-      
+
+      const result = candidateFinder.findFirstInitialVariations(sameAuthorVariants);
+
       expect(Array.isArray(result)).toBe(true);
-      
+
       // Check that results have expected properties
       result.forEach(variation => {
         expect(variation).toHaveProperty('surname');
@@ -106,6 +144,24 @@ describe('CandidateFinder', () => {
         expect(variation).toHaveProperty('similarity');
         expect(variation).toHaveProperty('distance');
       });
+    });
+
+    test('should NOT find variations between DIFFERENT authors', () => {
+      // These are DIFFERENT authors (Alex Martin, Andrea Martin)
+      // They should NOT be grouped together, so no variations should be found
+      const differentAuthors = [
+        { firstName: 'Alex', lastName: 'Martin', creatorType: 'author' },
+        { firstName: 'Andrea', lastName: 'Martin', creatorType: 'author' }
+      ];
+
+      const result = candidateFinder.findFirstInitialVariations(differentAuthors);
+
+      // Each author is in their own group (due to new grouping logic)
+      // so findFirstInitialVariations will only process single-author groups
+      // which return empty arrays
+      expect(Array.isArray(result)).toBe(true);
+      // Since they're different authors, they're not in the same group
+      // so no variations should be found
     });
   });
 

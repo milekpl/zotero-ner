@@ -130,25 +130,116 @@ class CandidateFinder {
   }
 
   /**
-   * Group creators by surname
+   * Group creators by normalized first name + surname
+   * This ensures only the SAME author (same first name variant) is grouped together
+   * Different authors with the same surname (e.g., "Alex Martin" vs "Andrea Martin") are NOT grouped
+   * Initial-only names are grouped with full names that match their first letter
    * @param {Array} creators - Array of creator objects
-   * @returns {Object} Object with surnames as keys and creator arrays as values
+   * @returns {Object} Object with group keys and creator arrays as values
    */
   groupCreatorsBySurname(creators) {
     const grouped = {};
+    const initialGroups = {}; // Track initial-only names separately
 
     for (const creator of creators) {
       const parsed = this.nameParser.parse(`${creator.firstName || ''} ${creator.lastName || ''}`.trim());
-      if (parsed.lastName) {
-        const lastNameKey = parsed.lastName.toLowerCase().trim();
-        if (!grouped[lastNameKey]) {
-          grouped[lastNameKey] = [];
+      if (!parsed.lastName) {
+        continue;
+      }
+
+      const firstName = (creator.firstName || '').trim();
+      const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
+      const lastNameKey = parsed.lastName.toLowerCase().trim();
+
+      if (normalizedFirst.startsWith('init:')) {
+        // Initial-only: track separately by surname
+        if (!initialGroups[lastNameKey]) {
+          initialGroups[lastNameKey] = [];
         }
-        grouped[lastNameKey].push(creator);
+        initialGroups[lastNameKey].push({ creator, normalizedFirst });
+      } else {
+        // Full name: group by normalized first name + surname
+        const groupKey = `${normalizedFirst}|${lastNameKey}`;
+        if (!grouped[groupKey]) {
+          grouped[groupKey] = [];
+        }
+        grouped[groupKey].push(creator);
+      }
+    }
+
+    // Second pass: assign initial-only names to matching full name groups
+    for (const [surname, initials] of Object.entries(initialGroups)) {
+      for (const { creator, normalizedFirst } of initials) {
+        // Get the first letter of the initial
+        const firstLetter = normalizedFirst.slice(5).charAt(0).toLowerCase();
+
+        // Look for a full name group with the same first letter
+        const matchingKey = Object.keys(grouped).find(key => {
+          const [normFirst] = key.split('|');
+          return normFirst.startsWith(firstLetter) && key.endsWith(`|${surname}`);
+        });
+
+        if (matchingKey) {
+          // Add to the matching full name group
+          grouped[matchingKey].push(creator);
+        } else {
+          // No matching full name found, create a separate group
+          const groupKey = `${normalizedFirst}|${surname}`;
+          if (!grouped[groupKey]) {
+            grouped[groupKey] = [];
+          }
+          grouped[groupKey].push(creator);
+        }
       }
     }
 
     return grouped;
+  }
+
+  /**
+   * Normalize first name for grouping purposes
+   * Handles initials and uses name variants from COMMON_GIVEN_NAME_EQUIVALENTS
+   * @param {string} firstName - The first name to normalize
+   * @returns {string} Normalized first name for grouping
+   */
+  normalizeFirstNameForGrouping(firstName) {
+    if (!firstName || !firstName.trim()) {
+      return 'unknown';  // Handle cases with no first name
+    }
+
+    const cleaned = firstName.toLowerCase().trim();
+    const tokens = cleaned.split(/[\s.-]+/).filter(Boolean);
+    const baseWord = tokens[0] || '';
+
+    // First, check if it's a known name or variant (before checking for initials)
+    // COMMON_GIVEN_NAME_EQUIVALENTS is {CanonicalName: [Variants]}
+    try {
+      const { COMMON_GIVEN_NAME_EQUIVALENTS } = require('../config/name-constants.js');
+      for (const [canonical, variants] of Object.entries(COMMON_GIVEN_NAME_EQUIVALENTS)) {
+        if (canonical.toLowerCase() === baseWord ||
+            (variants && variants.some(v => v.toLowerCase() === baseWord))) {
+          return canonical.toLowerCase();
+        }
+      }
+    } catch (e) {
+      // If constants can't be loaded, continue with basic normalization
+    }
+
+    // Check if this looks like an initial-only name:
+    // - Single token that is short (1-3 letters) AND not a known name variant
+    // - OR multiple tokens that are all single letters
+    const allTokensAreInitials = tokens.length > 0 && tokens.every(t => t.length === 1);
+
+    if (tokens.length === 1 && tokens[0].length <= 3) {
+      // Single short token like "J", "J.", "A" - treat as initial
+      return `init:${tokens[0]}`;
+    } else if (allTokensAreInitials) {
+      // Multiple single-letter tokens like "J A", "J.A.B." - treat as initial sequence
+      return `init:${cleaned.replace(/\./g, '')}`;
+    }
+
+    // If no match in variants and not an initial, use the base word as normalized form
+    return baseWord || cleaned;
   }
 
   /**
@@ -388,6 +479,70 @@ class CandidateFinder {
   async getAllVariations(name) {
     const parsed = this.nameParser.parse(name);
     return this.variantGenerator.generateVariants(parsed);
+  }
+
+  /**
+   * Find potential name variants from a list of surnames (simple synchronous version)
+   * Used for testing and UI purposes
+   * @param {Array} surnames - Array of surname strings to check for variants
+   * @returns {Array} Array of potential variant pairs with similarity scores
+   */
+  findPotentialVariants(surnames) {
+    const results = [];
+    const threshold = CandidateFinder.FIRST_NAME_SIMILARITY_THRESHOLD;
+
+    for (let i = 0; i < surnames.length; i++) {
+      for (let j = i + 1; j < surnames.length; j++) {
+        const name1 = surnames[i];
+        const name2 = surnames[j];
+
+        // Skip if they're identical
+        if (name1.toLowerCase() === name2.toLowerCase()) continue;
+
+        // Calculate similarity
+        const maxLen = Math.max(name1.length, name2.length);
+        if (maxLen === 0) continue;
+
+        const distance = this.calculateLevenshteinDistance(name1, name2);
+        const similarity = 1 - (distance / maxLen);
+
+        if (similarity >= threshold) {
+          results.push({
+            name1: name1,
+            name2: name2,
+            similarity: similarity,
+            isDiacriticOnlyVariant: this.isDiacriticOnlyVariant(name1, name2)
+          });
+        }
+      }
+    }
+
+    // Sort by similarity (highest first)
+    results.sort((a, b) => b.similarity - a.similarity);
+
+    return results;
+  }
+
+  /**
+   * Check if two names differ only by diacritics
+   * @param {string} name1 - First name
+   * @param {string} name2 - Second name
+   * @returns {boolean} True if names differ only by diacritics
+   */
+  isDiacriticOnlyVariant(name1, name2) {
+    if (!name1 || !name2) return false;
+
+    const normalize = (str) => {
+      return str.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
+        .replace(/ä/g, 'ae')
+        .replace(/ö/g, 'oe')
+        .replace(/ü/g, 'ue')
+        .replace(/ł/g, 'l');
+    };
+
+    return normalize(name1) === normalize(name2);
   }
 }
 

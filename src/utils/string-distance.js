@@ -95,12 +95,17 @@ function normalizedLevenshtein(str1, str2, threshold = 0) {
 
 /**
  * Normalize a name by removing diacritics and converting common variants
+ * Also strips common name particles (von, de, la, van, and, etc.) for grouping purposes
  * @param {string} str - Name to normalize
  * @returns {string} Normalized name
  */
 function normalizeName(str) {
   if (!str) return '';
   let normalized = str.toLowerCase();
+
+  // Strip common name particles at the start (e.g., "von", "de", "la", "van", "and", "of", "du")
+  // These are not significant for grouping similar surnames
+  normalized = normalized.replace(/^\s*(von|van|de|la|du|and|of|le|da|di)\s+/i, '');
 
   // German umlaut conventions: ue, oe, ae
   normalized = normalized.replace(/ä/g, 'ae');

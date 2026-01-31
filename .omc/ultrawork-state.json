@@ -1,7 +1,7 @@
 {
   "active": true,
-  "started_at": "2026-01-29T22:14:56.635Z",
-  "original_prompt": "Please let the critic review the proposed solution. Ultrawork",
-  "reinforcement_count": 7,
-  "last_checked_at": "2026-01-30T13:35:45.743Z"
+  "started_at": "2026-01-31T09:17:48.435Z",
+  "original_prompt": "Not exactly ;) @FRISTON-2.png -- notice the count, increased to \"2\". You must have something else than normalization for the second key, since with normalization both variants would display the same thing. Since we have 164 occurrences for \"Karl J. Friston\", I cannot say whether \"and Friston\" ends up there as well (you truncate the list). In the future, we will make these items clickable (using zotero://select URL), to make it easier to fix awkward issues in the library. But to make this work, we need unfiltered, unadorned, non-normalized items selected through the raw data for author names. Use ralph and ultrawork to solve this.",
+  "reinforcement_count": 10,
+  "last_checked_at": "2026-01-31T10:12:18.587Z"
 }

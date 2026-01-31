@@ -295,7 +295,7 @@ function runTestsAndExit() {
         if (Zotero.NameNormalizer.learningEngine) {
           var testKey = 'Test_' + Date.now();
           Zotero.NameNormalizer.learningEngine.storeMapping(testKey, 'TestValue', 0.9);
-          var m = Zotero.NameNormalizer.learningEngine.getMapping(testKey);
+          var m = Zotero.NameNormalizer.learningEngine.getMappingDetails(testKey);
           assert(m !== null && m.normalized === 'TestValue', 'Learning engine: store/retrieve');
         }
 

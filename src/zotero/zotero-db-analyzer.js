@@ -4,7 +4,36 @@
  */
 
 const { NAME_PREFIXES, NAME_SUFFIXES, COMMON_GIVEN_NAME_EQUIVALENTS: SHARED_NAME_EQUIVALENTS } = require('../config/name-constants');
-const { normalizedLevenshtein, isDiacriticOnlyVariant } = require('../utils/string-distance');
+const { normalizedLevenshtein, isDiacriticOnlyVariant, normalizeName } = require('../utils/string-distance');
+
+// File-based logger for debugging (writes to /tmp/zotero-normalizer.log)
+function fileLog(msg) {
+  try {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    const line = timestamp + ' [db-analyzer] ' + msg + '\n';
+    if (typeof Components !== 'undefined') {
+      // Firefox/XUL context - use nsIFileOutputStream
+      const file = Components.classes['@mozilla.org/file/directory_service;1']
+        .getService(Components.interfaces.nsIProperties)
+        .get('TmpD', Components.interfaces.nsIFile);
+      file.append('zotero-normalizer.log');
+      const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
+        .createInstance(Components.interfaces.nsIFileOutputStream);
+      fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0); // WRONLY | CREATE | APPEND
+      fos.write(line, line.length);
+      fos.close();
+    }
+    // Also log to Zotero.debug
+    if (typeof Zotero !== 'undefined' && Zotero.debug) {
+      Zotero.debug('NER-DB: ' + msg);
+    }
+  } catch (e) {
+    // Fallback to console
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('NER-DB: ' + msg);
+    }
+  }
+}
 
 const COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
   alex: 'alexander',
@@ -135,9 +164,20 @@ class ZoteroDBAnalyzer {
    * @returns {Promise<Object>} Analysis results
    */
   async analyzeFullLibrary(progressCallback = null, shouldCancel = null) {
-    Zotero.debug('ZoteroDBAnalyzer: analyzeFullLibrary started');
+    const DEBUG = true;
+    const log = (msg) => {
+      if (DEBUG) {
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const line = timestamp + ' ANALYZER: ' + msg;
+        console.error(line);
+      }
+    };
+
+    fileLog('analyzeFullLibrary started');
+    log('analyzeFullLibrary started');
     if (typeof Zotero === 'undefined') {
-      Zotero.debug('ZoteroDBAnalyzer: Zotero undefined, throwing error');
+      log('ERROR: Zotero is undefined');
+      fileLog('ERROR: Zotero is undefined');
       throw new Error('This method must be run in the Zotero context');
     }
 
@@ -145,16 +185,20 @@ class ZoteroDBAnalyzer {
 
     try {
       // Use Zotero.Search API to get all items with creators
-      Zotero.debug('ZoteroDBAnalyzer: Creating search for libraryID: ' + Zotero.Libraries.userLibraryID);
+      const libraryID = Zotero.Libraries.userLibraryID;
+      fileLog('Creating search for libraryID: ' + libraryID);
+      log('Creating search for libraryID: ' + libraryID);
       const search = new Zotero.Search();
-      search.addCondition('libraryID', 'is', Zotero.Libraries.userLibraryID);
+      search.addCondition('libraryID', 'is', libraryID);
 
       const itemIDs = await search.search();
-      Zotero.debug('ZoteroDBAnalyzer: Search returned ' + (itemIDs ? itemIDs.length : 0) + ' item IDs');
+      fileLog('Search returned ' + (itemIDs ? itemIDs.length : 0) + ' item IDs');
+      log('Search returned ' + (itemIDs ? itemIDs.length : 0) + ' item IDs');
       console.log(`Found ${itemIDs.length} total items in library`);
 
       if (!itemIDs || itemIDs.length === 0) {
         console.log('No items found in library');
+        fileLog('No items found in library - returning empty');
         return {
           surnameFrequencies: {},
           potentialVariants: [],
@@ -209,6 +253,7 @@ class ZoteroDBAnalyzer {
       }
 
       Zotero.debug('ZoteroDBAnalyzer: Filtering complete, items with creators: ' + itemsWithCreators.length);
+      fileLog('Filtering complete: itemsWithCreators=' + itemsWithCreators.length + ', creatorsMap keys=' + Object.keys(creatorsMap).length);
       console.log(`Found ${itemsWithCreators.length} items with valid creators`);
 
       if (itemsWithCreators.length === 0) {
@@ -261,9 +306,28 @@ class ZoteroDBAnalyzer {
       }
 
       Zotero.debug('ZoteroDBAnalyzer: Starting analyzeCreators with ' + creators.length + ' creators');
+      fileLog('Calling analyzeCreators with ' + creators.length + ' creators');
+
+      // Check learning engine state
+      if (this.learningEngine) {
+        fileLog('LearningEngine distinctPairs size: ' + (this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : 'unknown'));
+        try {
+          const distinctCount = this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : 0;
+          fileLog('Distinct pairs in learning engine: ' + distinctCount);
+          if (distinctCount > 0) {
+            fileLog('Sample distinct pairs: ' + JSON.stringify([...this.learningEngine.distinctPairs.keys()].slice(0, 5)));
+          }
+        } catch(e) {
+          fileLog('Error checking distinctPairs: ' + e.message);
+        }
+      } else {
+        fileLog('LearningEngine is NULL');
+      }
+
       // Analyze creators for surname frequencies and variants
       const results = await this.analyzeCreators(creators, progressCallback, shouldCancel);
       Zotero.debug('ZoteroDBAnalyzer: analyzeCreators completed, suggestions count: ' + (results.suggestions ? results.suggestions.length : 0));
+      fileLog('analyzeCreators complete: suggestions=' + (results.suggestions ? results.suggestions.length : 0) + ', totalUniqueSurnames=' + results.totalUniqueSurnames);
 
       console.log(`Analysis complete: processed ${creators.length} unique creator entries`);
       return results;
@@ -411,6 +475,51 @@ class ZoteroDBAnalyzer {
     return items;
   }
 
+  /**
+   * Find items for a specific author (firstName + lastName)
+   * Used for surname variant suggestions to avoid mixing different authors
+   * Case-insensitive matching for robustness
+   * @param {Object} itemsByFullAuthor - Items keyed by "firstName|lastName"
+   * @param {string} firstName - The author's first name
+   * @param {string} lastName - The author's last name
+   * @returns {Array} Array of items from this specific author
+   */
+  findItemsByFullAuthorName(itemsByFullAuthor, firstName, lastName) {
+    if (!firstName || !lastName || !itemsByFullAuthor) {
+      return [];
+    }
+
+    const normalizedFirst = firstName.trim().toLowerCase();
+    // Use exact raw lastName for lookup (don't normalize)
+    const variantLastName = lastName.trim();
+
+    // Find the matching key with exact lastName match (case-insensitive)
+    for (const [authorKey, authorItems] of Object.entries(itemsByFullAuthor)) {
+      const keyParts = authorKey.split('|');
+      if (keyParts.length >= 2) {
+        const storedFirst = keyParts[0].trim().toLowerCase();
+        const storedLastRaw = keyParts[keyParts.length - 1].trim();
+        // Case-insensitive comparison for last name
+        const storedLastLower = storedLastRaw.toLowerCase();
+        const searchLastLower = variantLastName.toLowerCase();
+
+        if (storedFirst === normalizedFirst && storedLastLower === searchLastLower) {
+          if (Array.isArray(authorItems)) {
+            // Sort items by author name for consistent display
+            return authorItems.slice().sort((a, b) => {
+              const authorA = (a.author || '').toLowerCase();
+              const authorB = (b.author || '').toLowerCase();
+              return authorA.localeCompare(authorB);
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    return [];
+  }
+
   extractYear(dateValue) {
     if (!dateValue || typeof dateValue !== 'string') {
       return '';
@@ -427,19 +536,59 @@ class ZoteroDBAnalyzer {
    */
   async analyzeCreators(creators, progressCallback = null, shouldCancel = null) {
     Zotero.debug('ZoteroDBAnalyzer: analyzeCreators started with ' + (creators ? creators.length : 0) + ' creators');
-    const surnameFrequencies = {};
-    const itemsByFullAuthor = {}; // Key: "firstName|lastName", Value: items array
 
-    // Process each creator to extract surname frequencies and track items by full author
+    // Track occurrences per unique author (firstName + lastName)
+    // This prevents different authors with the same surname from being aggregated together
+    const authorOccurrences = {}; // Key: "normalizedFirst|normalizedLast", Value: { count, lastName, firstName, surnameVariants }
+    const itemsByFullAuthor = {}; // Key: "firstName|rawLastName", Value: items array
+
+    // Process each creator
     for (const creator of creators) {
       const fullName = `${creator.firstName} ${creator.lastName}`.trim();
       const parsed = this.parseName(fullName);
+      const rawLastName = (creator.lastName || '').trim();
 
-      if (parsed.lastName) {
-        const lastNameKey = parsed.lastName.toLowerCase().trim();
-        surnameFrequencies[lastNameKey] = (surnameFrequencies[lastNameKey] || 0) + (creator.count || 1);
+      if (parsed.lastName || rawLastName) {
+        const firstName = (creator.firstName || '').trim();
+        const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
+        // Use parsed.lastName for grouping (to detect diacritic variants within same author)
+        const normalizedLast = (parsed.lastName || rawLastName).toLowerCase().trim();
 
-        // Store items keyed by full author name, not just surname
+        // Key for tracking this specific author
+        const authorKey = `${normalizedFirst}|${normalizedLast}`;
+
+        if (!authorOccurrences[authorKey]) {
+          authorOccurrences[authorKey] = {
+            count: 0,
+            firstName: firstName,
+            lastName: parsed.lastName || rawLastName, // Keep parsed last name if available, else raw
+            originalLastName: rawLastName, // Keep the raw lastName from the creator (before parsing)
+            normalizedFirst,
+            normalizedLast,
+            surnameVariants: {} // Track all surname variations for this author
+          };
+        }
+        authorOccurrences[authorKey].count += (creator.count || 1);
+
+        // Track the creator's surname variant (preserve original casing for diacritic detection)
+        // Use the original raw lastName so "and Friston" and "Friston" are tracked separately
+        authorOccurrences[authorKey].surnameVariants[rawLastName] =
+          (authorOccurrences[authorKey].surnameVariants[rawLastName] || 0) + (creator.count || 1);
+
+        // Also track surname variants from items (items might have different author names)
+        if (creator.items && creator.items.length > 0) {
+          for (const item of creator.items) {
+            // Preserve original casing for diacritic detection
+            const itemLastName = (item.authorLastName || rawLastName || '').trim();
+            if (itemLastName) {
+              authorOccurrences[authorKey].surnameVariants[itemLastName] =
+                (authorOccurrences[authorKey].surnameVariants[itemLastName] || 0) + 1;
+            }
+          }
+        }
+
+        // Store items keyed by full author name (firstName|rawLastName)
+        // Use the raw lastName so each surname variant has its own items
         const fullAuthorKey = `${creator.firstName || ''}|${creator.lastName || ''}`;
         if (creator.items && creator.items.length > 0) {
           itemsByFullAuthor[fullAuthorKey] = creator.items;
@@ -447,12 +596,38 @@ class ZoteroDBAnalyzer {
       }
     }
 
+    // Build surname frequencies from author occurrences (one entry per unique author)
+    // Use lowercase keys for consistency
+    const surnameFrequencies = {};
+    for (const [authorKey, data] of Object.entries(authorOccurrences)) {
+      const lastNameKey = (data.lastName || data.originalLastName || '').toLowerCase().trim();
+      surnameFrequencies[lastNameKey] = (surnameFrequencies[lastNameKey] || 0) + data.count;
+    }
+
     const surnames = Object.keys(surnameFrequencies);
     Zotero.debug('ZoteroDBAnalyzer: Found ' + surnames.length + ' unique surnames');
     console.log(`Analyzing ${surnames.length} unique surnames for variants...`);
 
-    // Use more efficient variant detection
-    const potentialVariants = this.findVariantsEfficiently(surnameFrequencies, progressCallback, shouldCancel);
+    // DEBUG: Log progress via callback
+    if (progressCallback) {
+      progressCallback({
+        stage: 'debug',
+        message: 'Found ' + surnames.length + ' unique surnames',
+        percent: 30
+      });
+    }
+
+    // Find diacritic variants within each author's surname variations
+    const potentialVariants = this.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback, shouldCancel);
+
+    // DEBUG
+    if (progressCallback) {
+      progressCallback({
+        stage: 'debug',
+        message: 'Found ' + potentialVariants.length + ' potential variants',
+        percent: 50
+      });
+    }
 
     // Sort variants by combined frequency (prioritize more common surnames)
     potentialVariants.sort((a, b) => {
@@ -463,6 +638,15 @@ class ZoteroDBAnalyzer {
 
     const creatorsBySurname = this.groupCreatorsBySurnameForVariants(creators);
     const givenNameVariantGroups = this.findGivenNameVariantGroups(creatorsBySurname);
+
+    // DEBUG
+    if (progressCallback) {
+      progressCallback({
+        stage: 'debug',
+        message: 'Given name variant groups: ' + givenNameVariantGroups.length,
+        percent: 70
+      });
+    }
 
     // Report progress: generating suggestions
     if (progressCallback) {
@@ -480,6 +664,15 @@ class ZoteroDBAnalyzer {
       givenNameVariantGroups,
       itemsByFullAuthor
     );
+
+    // DEBUG
+    if (progressCallback) {
+      progressCallback({
+        stage: 'debug',
+        message: 'Generated ' + suggestions.length + ' suggestions',
+        percent: 95
+      });
+    }
 
     return {
       surnameFrequencies,
@@ -560,23 +753,245 @@ class ZoteroDBAnalyzer {
     return potentialVariants;
   }
 
+  /**
+   * Find diacritic variants within the same author's surname variations
+   * This ensures only the SAME author (same first name) can have surname variants detected
+   * @param {Object} authorOccurrences - Object keyed by "normalizedFirst|normalizedLast" with author data including surnameVariants
+   * @param {Function} progressCallback - Optional progress callback
+   * @param {Function} shouldCancel - Optional cancellation check
+   * @returns {Array} Array of variant pairs
+   */
+  findDiacriticVariantsByAuthor(authorOccurrences, progressCallback = null, shouldCancel = null) {
+    const { normalizeName, isDiacriticOnlyVariant } = require('../utils/string-distance.js');
+    const potentialVariants = [];
+
+    Zotero.debug('ZoteroDBAnalyzer: findDiacriticVariantsByAuthor called with ' + Object.keys(authorOccurrences).length + ' authors');
+
+    const authorKeys = Object.keys(authorOccurrences);
+    const totalAuthors = authorKeys.length;
+    const threshold = Math.max(50, Math.ceil(totalAuthors * 0.05));
+
+    // For each author, check if they have diacritic variants in their surname variations
+    for (let i = 0; i < authorKeys.length; i++) {
+      const authorKey = authorKeys[i];
+      const data = authorOccurrences[authorKey];
+
+      // Progress reporting
+      if (progressCallback && (i === 0 || i === totalAuthors - 1 || i % threshold === 0)) {
+        progressCallback({
+          stage: 'analyzing_surnames',
+          processed: i + 1,
+          total: totalAuthors,
+          percent: Math.round(((i + 1) / totalAuthors) * 80)
+        });
+      }
+      // Check for cancellation
+      if (shouldCancel && shouldCancel()) {
+        throw new Error('Analysis cancelled');
+      }
+
+      const surnameVariants = data.surnameVariants || {};
+      const variantNames = Object.keys(surnameVariants);
+
+      Zotero.debug('ZoteroDBAnalyzer: Checking author ' + authorKey + ' with variants: ' + JSON.stringify(surnameVariants));
+
+      // Need at least 2 different surname spellings for diacritic detection
+      if (variantNames.length < 2) {
+        Zotero.debug('ZoteroDBAnalyzer: Skipping - only ' + variantNames.length + ' variant(s)');
+        continue;
+      }
+
+      // Group surname variants by their normalized (diacritic-agnostic) form
+      const normalizedVariantGroups = new Map(); // normalizedKey -> [{name, count}]
+
+      for (const [name, count] of Object.entries(surnameVariants)) {
+        const normalizedKey = normalizeName(name);
+        Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '"');
+
+        if (!normalizedVariantGroups.has(normalizedKey)) {
+          normalizedVariantGroups.set(normalizedKey, []);
+        }
+        normalizedVariantGroups.get(normalizedKey).push({ name, count });
+      }
+
+      // If we have multiple variants that normalize to the same key, these are diacritic variants
+      if (normalizedVariantGroups.size >= 1) {
+        // Collect all variants and their counts
+        const allVariants = [];
+        for (const [normalizedKey, variants] of normalizedVariantGroups) {
+          for (const v of variants) {
+            allVariants.push({ name: v.name, count: v.count, normalizedKey });
+          }
+        }
+
+        // If we have only one variant form (all normalize to same), no diacritic issue
+        if (allVariants.length < 2) {
+          continue;
+        }
+
+        // Sort by frequency to determine recommended form
+        allVariants.sort((a, b) => b.count - a.count);
+        const recommended = allVariants[0].name;
+
+        // Calculate total count for the recommended form (sum of all variants that normalize to it)
+        const recommendedNormalized = normalizeName(recommended);
+        const recommendedGroup = normalizedVariantGroups.get(recommendedNormalized);
+        const recommendedCount = recommendedGroup.reduce((sum, v) => sum + v.count, 0);
+
+        // Get author info for filtering items
+        const authorFirstName = data.firstName || '';
+        const authorLastName = data.originalLastName || data.lastName || '';
+
+        // Create pairs between the recommended form and other variants (skip the first one which is recommended)
+        for (let i = 1; i < allVariants.length; i++) {
+          const v = allVariants[i];
+          potentialVariants.push({
+            variant1: {
+              name: recommended,
+              frequency: recommendedCount
+            },
+            variant2: {
+              name: v.name,
+              frequency: v.count
+            },
+            similarity: 1.0,
+            recommendedNormalization: recommended,
+            // Include author info for filtering items
+            authorInfo: {
+              firstName: authorFirstName,
+              lastName: authorLastName
+            }
+          });
+        }
+      }
+    }
+
+    Zotero.debug('ZoteroDBAnalyzer: Author diacritic variant detection complete, found ' + potentialVariants.length + ' variant groups');
+
+    // Final progress update - ensure we signal completion of this phase
+    if (progressCallback && totalAuthors > 0) {
+      progressCallback({
+        stage: 'analyzing_surnames',
+        processed: totalAuthors,
+        total: totalAuthors,
+        percent: 80
+      });
+    }
+
+    return potentialVariants;
+  }
+
+  /**
+   * Group creators by normalized first name + surname
+   * This ensures only the SAME author (same first name variant) is grouped together
+   * Different authors with the same surname (e.g., "Alex Martin" vs "Andrea Martin") are NOT grouped
+   * Initial-only names are grouped with full names that match their first letter
+   * @param {Array} creators - Array of creator objects
+   * @returns {Object} Object with group keys and creator arrays as values
+   */
   groupCreatorsBySurnameForVariants(creators) {
     const surnameGroups = {};
+    const initialGroups = {}; // Track initial-only names separately
 
+    // First pass: group full names by (normalized first name + surname)
     for (const creator of creators) {
       if (!creator || !creator.lastName) {
         continue;
       }
 
+      const firstName = (creator.firstName || '').trim();
+      const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
       const lastNameKey = (creator.lastName || '').toLowerCase().trim();
-      if (!surnameGroups[lastNameKey]) {
-        surnameGroups[lastNameKey] = [];
-      }
 
-      surnameGroups[lastNameKey].push(creator);
+      if (normalizedFirst.startsWith('init:')) {
+        // Initial-only: track separately by surname
+        if (!initialGroups[lastNameKey]) {
+          initialGroups[lastNameKey] = [];
+        }
+        initialGroups[lastNameKey].push({ creator, normalizedFirst });
+      } else {
+        // Full name: group by normalized first name + surname
+        const groupKey = `${normalizedFirst}|${lastNameKey}`;
+        if (!surnameGroups[groupKey]) {
+          surnameGroups[groupKey] = [];
+        }
+        surnameGroups[groupKey].push(creator);
+      }
+    }
+
+    // Second pass: assign initial-only names to matching full name groups
+    for (const [surname, initials] of Object.entries(initialGroups)) {
+      for (const { creator, normalizedFirst } of initials) {
+        // Get the first letter of the initial
+        const firstLetter = normalizedFirst.slice(5).charAt(0).toLowerCase();
+
+        // Look for a full name group with the same first letter
+        // Try to find a group where the normalized first name starts with this letter
+        const matchingKey = Object.keys(surnameGroups).find(key => {
+          const [normalizedFirst] = key.split('|');
+          return normalizedFirst.startsWith(firstLetter) && key.endsWith(`|${surname}`);
+        });
+
+        if (matchingKey) {
+          // Add to the matching full name group
+          surnameGroups[matchingKey].push(creator);
+        } else {
+          // No matching full name found, create a separate group
+          const groupKey = `${normalizedFirst}|${surname}`;
+          if (!surnameGroups[groupKey]) {
+            surnameGroups[groupKey] = [];
+          }
+          surnameGroups[groupKey].push(creator);
+        }
+      }
     }
 
     return surnameGroups;
+  }
+
+  /**
+   * Normalize first name for grouping purposes
+   * Handles initials and uses name variants from COMMON_GIVEN_NAME_EQUIVALENTS
+   * @param {string} firstName - The first name to normalize
+   * @returns {string} Normalized first name for grouping
+   */
+  normalizeFirstNameForGrouping(firstName) {
+    if (!firstName || !firstName.trim()) {
+      return 'unknown';  // Handle cases with no first name
+    }
+
+    const cleaned = firstName.toLowerCase().trim();
+
+    // Check if it's an initial sequence (e.g., "J.", "J.A.", "A.B.C.")
+    // First, extract the base word (first non-initial word)
+    const tokens = cleaned.split(/[\s.-]+/).filter(Boolean);
+    const baseWord = tokens[0] || '';
+
+    // Check if this looks like an initial-only name:
+    // - Single token that is short (1-3 letters)
+    // - OR multiple tokens that are all single letters
+    const withoutDots = cleaned.replace(/\./g, '');
+    const allTokensAreInitials = tokens.length > 0 && tokens.every(t => t.length === 1);
+
+    if (tokens.length === 1 && tokens[0].length <= 3) {
+      // Single short token like "J", "J.", "A" - treat as initial
+      return `init:${tokens[0]}`;
+    } else if (allTokensAreInitials) {
+      // Multiple single-letter tokens like "J A", "J.A.B." - treat as initial sequence
+      return `init:${withoutDots}`;
+    }
+
+    // Not an initial sequence - normalize the base word
+    // Use name variants to normalize
+    // COMMON_GIVEN_NAME_EQUIVALENTS in this file is {Variant: Canonical}
+    // Simple lookup to get the canonical form
+    if (COMMON_GIVEN_NAME_EQUIVALENTS && COMMON_GIVEN_NAME_EQUIVALENTS[baseWord]) {
+      return COMMON_GIVEN_NAME_EQUIVALENTS[baseWord];
+    }
+
+    // If no match in variants, use the base word as the normalized form
+    // This ensures "Fred", "Fred.", "Fred R. E. D." all group under "fred"
+    return baseWord || cleaned;
   }
 
   parseGivenNameTokens(name) {
@@ -933,11 +1348,19 @@ class ZoteroDBAnalyzer {
   findGivenNameVariantGroups(creatorsBySurname) {
     const groups = [];
 
-    for (const [surname, creators] of Object.entries(creatorsBySurname)) {
-      if (!creators || creators.length < 2) {
+    for (const [groupKey, creators] of Object.entries(creatorsBySurname)) {
+      // Skip groups with fewer than 2 creators UNLESS it's an initial-only group
+      // Initial-only groups (with just initials) should be included for merging with full names
+      if (!creators || creators.length < 1) {
         continue;
       }
 
+      // Extract surname from the group key (format: "normalizedFirst|surname" or "init:|surname")
+      const lastPipeIndex = groupKey.lastIndexOf('|');
+      const surname = lastPipeIndex > 0 ? groupKey.slice(lastPipeIndex + 1) : groupKey;
+
+      // For initial-only groups with just 1 creator, still process them
+      // They might merge with full name groups later
       const results = this.findGivenNameVariantsForSurname(surname, creators);
       if (results.length > 0) {
         groups.push(...results);
@@ -1383,7 +1806,16 @@ class ZoteroDBAnalyzer {
    * @returns {Array} Array of normalization suggestions
    */
   generateNormalizationSuggestions(variants, givenNameVariantGroups = [], itemsByFullAuthor = {}) {
-    Zotero.debug('ZoteroDBAnalyzer: generateNormalizationSuggestions called with ' + (variants ? variants.length : 0) + ' surname variants and ' + (givenNameVariantGroups ? givenNameVariantGroups.length : 0) + ' given-name groups');
+    const DEBUG = true;
+    const log = (msg) => {
+      if (DEBUG) {
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const line = timestamp + ' SUGGEST: ' + msg;
+        console.error(line);
+      }
+    };
+
+    log('generateNormalizationSuggestions called with ' + (variants ? variants.length : 0) + ' variants, ' + (givenNameVariantGroups ? givenNameVariantGroups.length : 0) + ' given-name groups');
     const suggestions = [];
     const processedSurnames = new Set();
 
@@ -1393,8 +1825,13 @@ class ZoteroDBAnalyzer {
 
       if (!processedSurnames.has(norm1) && !processedSurnames.has(norm2)) {
         // Find items for each surname variant by looking up full author names
-        const items1 = this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
-        const items2 = this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+        // Filter by author info if available to avoid mixing different authors
+        const items1 = variant.authorInfo
+          ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant1.name)
+          : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
+        const items2 = variant.authorInfo
+          ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant2.name)
+          : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
 
         const suggestion = {
           type: 'surname',
@@ -1417,7 +1854,10 @@ class ZoteroDBAnalyzer {
 
         this.enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups);
 
-        if (this.shouldSkipSuggestionFromLearning(suggestion)) {
+        const shouldSkip = this.shouldSkipSuggestionFromLearning(suggestion);
+        log('Checking suggestion: ' + norm1 + ' vs ' + norm2 + ' -> shouldSkip=' + shouldSkip);
+
+        if (shouldSkip) {
           processedSurnames.add(norm1);
           processedSurnames.add(norm2);
           continue;
@@ -1429,6 +1869,8 @@ class ZoteroDBAnalyzer {
         processedSurnames.add(norm2);
       }
     }
+
+    log('generateNormalizationSuggestions complete: suggestions=' + suggestions.length + ' of ' + (variants ? variants.length : 0) + ' variants');
 
     for (const group of givenNameVariantGroups || []) {
       if (!group || !group.surname || !Array.isArray(group.variants) || group.variants.length < 2) {
@@ -1442,7 +1884,8 @@ class ZoteroDBAnalyzer {
           && s.normalizedGivenNameKey === group.normalizedKey
       );
       const variantDatasets = group.variants.map(variant => {
-        const lastNameDisplay = this.toTitleCase(variant.lastName || group.surname);
+        // Preserve original casing of the surname - don't title-case it
+        const lastNameDisplay = variant.lastName || group.surname;
         return {
           name: `${variant.firstName} ${lastNameDisplay}`.trim(),
           firstName: variant.firstName,

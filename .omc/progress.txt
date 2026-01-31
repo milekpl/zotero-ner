@@ -1,0 +1,31 @@
+# Ralph Progress Log
+Started: 2026-01-31T00:00:00.000Z
+
+## Codebase Patterns
+
+### Progress Callback Pattern
+The codebase uses progress callbacks with the following structure:
+```javascript
+progressCallback({
+  stage: 'analyzing_surnames',
+  processed: number,
+  total: number,
+  percent: number  // 0-100
+})
+```
+
+### Existing Progress Callbacks
+- `analyzeFullLibrary` at `zotero-db-analyzer.js:201-205`
+- `findVariantsEfficiently` at `zotero-db-analyzer.js:616-623`
+- `analyzeCreators` at `zotero-db-analyzer.js:561-568`
+
+### Key Files
+- `src/zotero/zotero-db-analyzer.js` - Main implementation (lines 664-755 for findDiacriticVariantsByAuthor)
+- `tests/zotero/zotero-db-analyzer.test.js` - Test file to add tests to
+- `content/dialog.html` - UI that consumes progress updates (handleAnalysisProgress at line 1973-2010)
+
+### Test Framework
+- Uses Jest for unit testing
+- Mock Zotero environment for tests
+
+---

@@ -54,20 +54,39 @@ import BatchProcessor from './ui/batch-processor.js';
 // Storage modules
 import DataManager from './storage/data-manager.js';
 
-// Create a global namespace
-// Using a function call to ensure ZoteroNameNormalizer is assigned to a global
-// that the footer can access after the IIFE runs
-(function(global) {
-  global.ZoteroNameNormalizer = {
-    NameParser,
-    VariantGenerator,
-    LearningEngine,
-    CandidateFinder,
-    ItemProcessor,
-    MenuIntegration,
-    ZoteroDBAnalyzer,
-    NormalizerDialog,
-    BatchProcessor,
-    DataManager,
-  };
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+// Create the ZoteroNameNormalizer namespace
+const ZoteroNameNormalizer = {
+  NameParser,
+  VariantGenerator,
+  LearningEngine,
+  CandidateFinder,
+  ItemProcessor,
+  MenuIntegration,
+  ZoteroDBAnalyzer,
+  NormalizerDialog,
+  BatchProcessor,
+  DataManager,
+};
+
+// Export modules for use in other modules
+export {
+  NameParser,
+  VariantGenerator,
+  LearningEngine,
+  CandidateFinder,
+  ItemProcessor,
+  MenuIntegration,
+  ZoteroDBAnalyzer,
+  NormalizerDialog,
+  BatchProcessor,
+  DataManager,
+};
+
+export default ZoteroNameNormalizer;
+
+// Also expose on window/global for non-module contexts
+if (typeof window !== 'undefined') {
+  window.ZoteroNameNormalizer = ZoteroNameNormalizer;
+} else if (typeof globalThis !== 'undefined') {
+  globalThis.ZoteroNameNormalizer = ZoteroNameNormalizer;
+}

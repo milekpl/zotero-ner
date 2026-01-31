@@ -50,3 +50,7 @@ junit.xml
 *.crx
 *.zip
 *.tar.gz
+FODOR-BUG.png
+FRISTON.png
+.gitignore
+FRISTON-2.png

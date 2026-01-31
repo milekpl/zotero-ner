@@ -242,7 +242,7 @@ if (typeof console === 'undefined') {
   var require_name_parser = __commonJS({
     "src/core/name-parser.js"(exports, module) {
       var { NAME_PREFIXES, NAME_SUFFIXES } = require_name_constants();
-      var NameParser = class {
+      var NameParser2 = class {
         constructor() {
           this.prefixes = NAME_PREFIXES;
           this.suffixes = NAME_SUFFIXES;
@@ -390,7 +390,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = NameParser;
+        module.exports = NameParser2;
       }
     }
   });
@@ -398,7 +398,7 @@ if (typeof console === 'undefined') {
   // src/core/variant-generator.js
   var require_variant_generator = __commonJS({
     "src/core/variant-generator.js"(exports, module) {
-      var VariantGenerator = class {
+      var VariantGenerator2 = class {
         constructor() {
           this.variationPatterns = [
             this.fullForm,
@@ -516,7 +516,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = VariantGenerator;
+        module.exports = VariantGenerator2;
       }
     }
   });
@@ -680,6 +680,7 @@ if (typeof console === 'undefined') {
       function normalizeName(str) {
         if (!str) return "";
         let normalized = str.toLowerCase();
+        normalized = normalized.replace(/^\s*(von|van|de|la|du|and|of|le|da|di)\s+/i, "");
         normalized = normalized.replace(/ä/g, "ae");
         normalized = normalized.replace(/ö/g, "oe");
         normalized = normalized.replace(/ü/g, "ue");
@@ -713,7 +714,7 @@ if (typeof console === 'undefined') {
   // src/core/learning-engine.js
   var require_learning_engine = __commonJS({
     "src/core/learning-engine.js"(exports, module) {
-      var LearningEngine = class _LearningEngine {
+      var LearningEngine2 = class _LearningEngine {
         // Constants for similarity calculations
         static get CONFIDENCE_THRESHOLD() {
           return 0.8;
@@ -1620,7 +1621,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = LearningEngine;
+        module.exports = LearningEngine2;
       }
     }
   });
@@ -1628,7 +1629,7 @@ if (typeof console === 'undefined') {
   // src/core/candidate-finder.js
   var require_candidate_finder = __commonJS({
     "src/core/candidate-finder.js"(exports, module) {
-      var CandidateFinder = class _CandidateFinder {
+      var CandidateFinder2 = class _CandidateFinder {
         // Constants for name matching
         static get FIRST_NAME_SIMILARITY_THRESHOLD() {
           return 0.6;
@@ -1643,8 +1644,8 @@ if (typeof console === 'undefined') {
          */
         get learningEngine() {
           if (!this._learningEngine) {
-            const LearningEngine = require_learning_engine();
-            this._learningEngine = new LearningEngine();
+            const LearningEngine2 = require_learning_engine();
+            this._learningEngine = new LearningEngine2();
           }
           return this._learningEngine;
         }
@@ -1653,8 +1654,8 @@ if (typeof console === 'undefined') {
          */
         get nameParser() {
           if (!this._nameParser) {
-            const NameParser = require_name_parser();
-            this._nameParser = new NameParser();
+            const NameParser2 = require_name_parser();
+            this._nameParser = new NameParser2();
           }
           return this._nameParser;
         }
@@ -1663,8 +1664,8 @@ if (typeof console === 'undefined') {
          */
         get variantGenerator() {
           if (!this._variantGenerator) {
-            const VariantGenerator = require_variant_generator();
-            this._variantGenerator = new VariantGenerator();
+            const VariantGenerator2 = require_variant_generator();
+            this._variantGenerator = new VariantGenerator2();
           }
           return this._variantGenerator;
         }
@@ -1735,23 +1736,86 @@ if (typeof console === 'undefined') {
           }
         }
         /**
-         * Group creators by surname
+         * Group creators by normalized first name + surname
+         * This ensures only the SAME author (same first name variant) is grouped together
+         * Different authors with the same surname (e.g., "Alex Martin" vs "Andrea Martin") are NOT grouped
+         * Initial-only names are grouped with full names that match their first letter
          * @param {Array} creators - Array of creator objects
-         * @returns {Object} Object with surnames as keys and creator arrays as values
+         * @returns {Object} Object with group keys and creator arrays as values
          */
         groupCreatorsBySurname(creators) {
           const grouped = {};
+          const initialGroups = {};
           for (const creator of creators) {
             const parsed = this.nameParser.parse(`${creator.firstName || ""} ${creator.lastName || ""}`.trim());
-            if (parsed.lastName) {
-              const lastNameKey = parsed.lastName.toLowerCase().trim();
-              if (!grouped[lastNameKey]) {
-                grouped[lastNameKey] = [];
+            if (!parsed.lastName) {
+              continue;
+            }
+            const firstName = (creator.firstName || "").trim();
+            const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
+            const lastNameKey = parsed.lastName.toLowerCase().trim();
+            if (normalizedFirst.startsWith("init:")) {
+              if (!initialGroups[lastNameKey]) {
+                initialGroups[lastNameKey] = [];
               }
-              grouped[lastNameKey].push(creator);
+              initialGroups[lastNameKey].push({ creator, normalizedFirst });
+            } else {
+              const groupKey = `${normalizedFirst}|${lastNameKey}`;
+              if (!grouped[groupKey]) {
+                grouped[groupKey] = [];
+              }
+              grouped[groupKey].push(creator);
+            }
+          }
+          for (const [surname, initials] of Object.entries(initialGroups)) {
+            for (const { creator, normalizedFirst } of initials) {
+              const firstLetter = normalizedFirst.slice(5).charAt(0).toLowerCase();
+              const matchingKey = Object.keys(grouped).find((key) => {
+                const [normFirst] = key.split("|");
+                return normFirst.startsWith(firstLetter) && key.endsWith(`|${surname}`);
+              });
+              if (matchingKey) {
+                grouped[matchingKey].push(creator);
+              } else {
+                const groupKey = `${normalizedFirst}|${surname}`;
+                if (!grouped[groupKey]) {
+                  grouped[groupKey] = [];
+                }
+                grouped[groupKey].push(creator);
+              }
             }
           }
           return grouped;
+        }
+        /**
+         * Normalize first name for grouping purposes
+         * Handles initials and uses name variants from COMMON_GIVEN_NAME_EQUIVALENTS
+         * @param {string} firstName - The first name to normalize
+         * @returns {string} Normalized first name for grouping
+         */
+        normalizeFirstNameForGrouping(firstName) {
+          if (!firstName || !firstName.trim()) {
+            return "unknown";
+          }
+          const cleaned = firstName.toLowerCase().trim();
+          const tokens = cleaned.split(/[\s.-]+/).filter(Boolean);
+          const baseWord = tokens[0] || "";
+          try {
+            const { COMMON_GIVEN_NAME_EQUIVALENTS } = require_name_constants();
+            for (const [canonical, variants] of Object.entries(COMMON_GIVEN_NAME_EQUIVALENTS)) {
+              if (canonical.toLowerCase() === baseWord || variants && variants.some((v) => v.toLowerCase() === baseWord)) {
+                return canonical.toLowerCase();
+              }
+            }
+          } catch (e) {
+          }
+          const allTokensAreInitials = tokens.length > 0 && tokens.every((t) => t.length === 1);
+          if (tokens.length === 1 && tokens[0].length <= 3) {
+            return `init:${tokens[0]}`;
+          } else if (allTokensAreInitials) {
+            return `init:${cleaned.replace(/\./g, "")}`;
+          }
+          return baseWord || cleaned;
         }
         /**
          * Find first name/initial variations within a surname group
@@ -1941,9 +2005,53 @@ if (typeof console === 'undefined') {
           const parsed = this.nameParser.parse(name);
           return this.variantGenerator.generateVariants(parsed);
         }
+        /**
+         * Find potential name variants from a list of surnames (simple synchronous version)
+         * Used for testing and UI purposes
+         * @param {Array} surnames - Array of surname strings to check for variants
+         * @returns {Array} Array of potential variant pairs with similarity scores
+         */
+        findPotentialVariants(surnames) {
+          const results = [];
+          const threshold = _CandidateFinder.FIRST_NAME_SIMILARITY_THRESHOLD;
+          for (let i = 0; i < surnames.length; i++) {
+            for (let j = i + 1; j < surnames.length; j++) {
+              const name1 = surnames[i];
+              const name2 = surnames[j];
+              if (name1.toLowerCase() === name2.toLowerCase()) continue;
+              const maxLen = Math.max(name1.length, name2.length);
+              if (maxLen === 0) continue;
+              const distance = this.calculateLevenshteinDistance(name1, name2);
+              const similarity = 1 - distance / maxLen;
+              if (similarity >= threshold) {
+                results.push({
+                  name1,
+                  name2,
+                  similarity,
+                  isDiacriticOnlyVariant: this.isDiacriticOnlyVariant(name1, name2)
+                });
+              }
+            }
+          }
+          results.sort((a, b) => b.similarity - a.similarity);
+          return results;
+        }
+        /**
+         * Check if two names differ only by diacritics
+         * @param {string} name1 - First name
+         * @param {string} name2 - Second name
+         * @returns {boolean} True if names differ only by diacritics
+         */
+        isDiacriticOnlyVariant(name1, name2) {
+          if (!name1 || !name2) return false;
+          const normalize = (str) => {
+            return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ł/g, "l");
+          };
+          return normalize(name1) === normalize(name2);
+        }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = CandidateFinder;
+        module.exports = CandidateFinder2;
       }
     }
   });
@@ -1951,7 +2059,7 @@ if (typeof console === 'undefined') {
   // src/zotero/item-processor.js
   var require_item_processor = __commonJS({
     "src/zotero/item-processor.js"(exports, module) {
-      var ItemProcessor = class {
+      var ItemProcessor2 = class {
         constructor() {
           this.nameParser = new (require_name_parser())();
           this.variantGenerator = new (require_variant_generator())();
@@ -2146,7 +2254,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = ItemProcessor;
+        module.exports = ItemProcessor2;
       }
     }
   });
@@ -2155,7 +2263,28 @@ if (typeof console === 'undefined') {
   var require_zotero_db_analyzer = __commonJS({
     "src/zotero/zotero-db-analyzer.js"(exports, module) {
       var { NAME_PREFIXES, NAME_SUFFIXES, COMMON_GIVEN_NAME_EQUIVALENTS: SHARED_NAME_EQUIVALENTS } = require_name_constants();
-      var { normalizedLevenshtein, isDiacriticOnlyVariant } = require_string_distance();
+      var { normalizedLevenshtein, isDiacriticOnlyVariant, normalizeName } = require_string_distance();
+      function fileLog(msg) {
+        try {
+          const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[1].split(".")[0];
+          const line = timestamp + " [db-analyzer] " + msg + "\n";
+          if (typeof Components !== "undefined") {
+            const file = Components.classes["@mozilla.org/file/directory_service;1"].getService(Components.interfaces.nsIProperties).get("TmpD", Components.interfaces.nsIFile);
+            file.append("zotero-normalizer.log");
+            const fos = Components.classes["@mozilla.org/network/file-output-stream;1"].createInstance(Components.interfaces.nsIFileOutputStream);
+            fos.init(file, 2 | 8 | 16, 420, 0);
+            fos.write(line, line.length);
+            fos.close();
+          }
+          if (typeof Zotero !== "undefined" && Zotero.debug) {
+            Zotero.debug("NER-DB: " + msg);
+          }
+        } catch (e) {
+          if (typeof console !== "undefined" && console.log) {
+            console.log("NER-DB: " + msg);
+          }
+        }
+      }
       var COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
         alex: "alexander",
         alexander: "alexander",
@@ -2273,7 +2402,7 @@ if (typeof console === 'undefined') {
         willie: "william",
         william: "william"
       });
-      var ZoteroDBAnalyzer = class {
+      var ZoteroDBAnalyzer2 = class {
         constructor() {
           this.candidateFinder = new (require_candidate_finder())();
           this.learningEngine = new (require_learning_engine())();
@@ -2284,21 +2413,35 @@ if (typeof console === 'undefined') {
          * @returns {Promise<Object>} Analysis results
          */
         async analyzeFullLibrary(progressCallback = null, shouldCancel = null) {
-          Zotero.debug("ZoteroDBAnalyzer: analyzeFullLibrary started");
+          const DEBUG = true;
+          const log = (msg) => {
+            if (DEBUG) {
+              const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[1].split(".")[0];
+              const line = timestamp + " ANALYZER: " + msg;
+              console.error(line);
+            }
+          };
+          fileLog("analyzeFullLibrary started");
+          log("analyzeFullLibrary started");
           if (typeof Zotero === "undefined") {
-            Zotero.debug("ZoteroDBAnalyzer: Zotero undefined, throwing error");
+            log("ERROR: Zotero is undefined");
+            fileLog("ERROR: Zotero is undefined");
             throw new Error("This method must be run in the Zotero context");
           }
           console.log("Starting full library analysis...");
           try {
-            Zotero.debug("ZoteroDBAnalyzer: Creating search for libraryID: " + Zotero.Libraries.userLibraryID);
+            const libraryID = Zotero.Libraries.userLibraryID;
+            fileLog("Creating search for libraryID: " + libraryID);
+            log("Creating search for libraryID: " + libraryID);
             const search = new Zotero.Search();
-            search.addCondition("libraryID", "is", Zotero.Libraries.userLibraryID);
+            search.addCondition("libraryID", "is", libraryID);
             const itemIDs = await search.search();
-            Zotero.debug("ZoteroDBAnalyzer: Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
+            fileLog("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
+            log("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
             console.log(`Found ${itemIDs.length} total items in library`);
             if (!itemIDs || itemIDs.length === 0) {
               console.log("No items found in library");
+              fileLog("No items found in library - returning empty");
               return {
                 surnameFrequencies: {},
                 potentialVariants: [],
@@ -2343,6 +2486,7 @@ if (typeof console === 'undefined') {
               }
             }
             Zotero.debug("ZoteroDBAnalyzer: Filtering complete, items with creators: " + itemsWithCreators.length);
+            fileLog("Filtering complete: itemsWithCreators=" + itemsWithCreators.length + ", creatorsMap keys=" + Object.keys(creatorsMap).length);
             console.log(`Found ${itemsWithCreators.length} items with valid creators`);
             if (itemsWithCreators.length === 0) {
               console.log("WARNING: No items with valid creators found!");
@@ -2386,8 +2530,24 @@ if (typeof console === 'undefined') {
               console.log("WARNING: No creators found! This indicates an issue with creator extraction.");
             }
             Zotero.debug("ZoteroDBAnalyzer: Starting analyzeCreators with " + creators.length + " creators");
+            fileLog("Calling analyzeCreators with " + creators.length + " creators");
+            if (this.learningEngine) {
+              fileLog("LearningEngine distinctPairs size: " + (this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : "unknown"));
+              try {
+                const distinctCount = this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : 0;
+                fileLog("Distinct pairs in learning engine: " + distinctCount);
+                if (distinctCount > 0) {
+                  fileLog("Sample distinct pairs: " + JSON.stringify([...this.learningEngine.distinctPairs.keys()].slice(0, 5)));
+                }
+              } catch (e) {
+                fileLog("Error checking distinctPairs: " + e.message);
+              }
+            } else {
+              fileLog("LearningEngine is NULL");
+            }
             const results = await this.analyzeCreators(creators, progressCallback, shouldCancel);
             Zotero.debug("ZoteroDBAnalyzer: analyzeCreators completed, suggestions count: " + (results.suggestions ? results.suggestions.length : 0));
+            fileLog("analyzeCreators complete: suggestions=" + (results.suggestions ? results.suggestions.length : 0) + ", totalUniqueSurnames=" + results.totalUniqueSurnames);
             console.log(`Analysis complete: processed ${creators.length} unique creator entries`);
             return results;
           } catch (error) {
@@ -2511,6 +2671,42 @@ if (typeof console === 'undefined') {
           });
           return items;
         }
+        /**
+         * Find items for a specific author (firstName + lastName)
+         * Used for surname variant suggestions to avoid mixing different authors
+         * Case-insensitive matching for robustness
+         * @param {Object} itemsByFullAuthor - Items keyed by "firstName|lastName"
+         * @param {string} firstName - The author's first name
+         * @param {string} lastName - The author's last name
+         * @returns {Array} Array of items from this specific author
+         */
+        findItemsByFullAuthorName(itemsByFullAuthor, firstName, lastName) {
+          if (!firstName || !lastName || !itemsByFullAuthor) {
+            return [];
+          }
+          const normalizedFirst = firstName.trim().toLowerCase();
+          const variantLastName = lastName.trim();
+          for (const [authorKey, authorItems] of Object.entries(itemsByFullAuthor)) {
+            const keyParts = authorKey.split("|");
+            if (keyParts.length >= 2) {
+              const storedFirst = keyParts[0].trim().toLowerCase();
+              const storedLastRaw = keyParts[keyParts.length - 1].trim();
+              const storedLastLower = storedLastRaw.toLowerCase();
+              const searchLastLower = variantLastName.toLowerCase();
+              if (storedFirst === normalizedFirst && storedLastLower === searchLastLower) {
+                if (Array.isArray(authorItems)) {
+                  return authorItems.slice().sort((a, b) => {
+                    const authorA = (a.author || "").toLowerCase();
+                    const authorB = (b.author || "").toLowerCase();
+                    return authorA.localeCompare(authorB);
+                  });
+                }
+                break;
+              }
+            }
+          }
+          return [];
+        }
         extractYear(dateValue) {
           if (!dateValue || typeof dateValue !== "string") {
             return "";
@@ -2525,24 +2721,70 @@ if (typeof console === 'undefined') {
          */
         async analyzeCreators(creators, progressCallback = null, shouldCancel = null) {
           Zotero.debug("ZoteroDBAnalyzer: analyzeCreators started with " + (creators ? creators.length : 0) + " creators");
-          const surnameFrequencies = {};
+          const authorOccurrences = {};
           const itemsByFullAuthor = {};
           for (const creator of creators) {
             const fullName = `${creator.firstName} ${creator.lastName}`.trim();
             const parsed = this.parseName(fullName);
-            if (parsed.lastName) {
-              const lastNameKey = parsed.lastName.toLowerCase().trim();
-              surnameFrequencies[lastNameKey] = (surnameFrequencies[lastNameKey] || 0) + (creator.count || 1);
+            const rawLastName = (creator.lastName || "").trim();
+            if (parsed.lastName || rawLastName) {
+              const firstName = (creator.firstName || "").trim();
+              const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
+              const normalizedLast = (parsed.lastName || rawLastName).toLowerCase().trim();
+              const authorKey = `${normalizedFirst}|${normalizedLast}`;
+              if (!authorOccurrences[authorKey]) {
+                authorOccurrences[authorKey] = {
+                  count: 0,
+                  firstName,
+                  lastName: parsed.lastName || rawLastName,
+                  // Keep parsed last name if available, else raw
+                  originalLastName: rawLastName,
+                  // Keep the raw lastName from the creator (before parsing)
+                  normalizedFirst,
+                  normalizedLast,
+                  surnameVariants: {}
+                  // Track all surname variations for this author
+                };
+              }
+              authorOccurrences[authorKey].count += creator.count || 1;
+              authorOccurrences[authorKey].surnameVariants[rawLastName] = (authorOccurrences[authorKey].surnameVariants[rawLastName] || 0) + (creator.count || 1);
+              if (creator.items && creator.items.length > 0) {
+                for (const item of creator.items) {
+                  const itemLastName = (item.authorLastName || rawLastName || "").trim();
+                  if (itemLastName) {
+                    authorOccurrences[authorKey].surnameVariants[itemLastName] = (authorOccurrences[authorKey].surnameVariants[itemLastName] || 0) + 1;
+                  }
+                }
+              }
               const fullAuthorKey = `${creator.firstName || ""}|${creator.lastName || ""}`;
               if (creator.items && creator.items.length > 0) {
                 itemsByFullAuthor[fullAuthorKey] = creator.items;
               }
             }
           }
+          const surnameFrequencies = {};
+          for (const [authorKey, data] of Object.entries(authorOccurrences)) {
+            const lastNameKey = (data.lastName || data.originalLastName || "").toLowerCase().trim();
+            surnameFrequencies[lastNameKey] = (surnameFrequencies[lastNameKey] || 0) + data.count;
+          }
           const surnames = Object.keys(surnameFrequencies);
           Zotero.debug("ZoteroDBAnalyzer: Found " + surnames.length + " unique surnames");
           console.log(`Analyzing ${surnames.length} unique surnames for variants...`);
-          const potentialVariants = this.findVariantsEfficiently(surnameFrequencies, progressCallback, shouldCancel);
+          if (progressCallback) {
+            progressCallback({
+              stage: "debug",
+              message: "Found " + surnames.length + " unique surnames",
+              percent: 30
+            });
+          }
+          const potentialVariants = this.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback, shouldCancel);
+          if (progressCallback) {
+            progressCallback({
+              stage: "debug",
+              message: "Found " + potentialVariants.length + " potential variants",
+              percent: 50
+            });
+          }
           potentialVariants.sort((a, b) => {
             const totalFreqA = a.variant1.frequency + a.variant2.frequency;
             const totalFreqB = b.variant1.frequency + b.variant2.frequency;
@@ -2550,6 +2792,13 @@ if (typeof console === 'undefined') {
           });
           const creatorsBySurname = this.groupCreatorsBySurnameForVariants(creators);
           const givenNameVariantGroups = this.findGivenNameVariantGroups(creatorsBySurname);
+          if (progressCallback) {
+            progressCallback({
+              stage: "debug",
+              message: "Given name variant groups: " + givenNameVariantGroups.length,
+              percent: 70
+            });
+          }
           if (progressCallback) {
             progressCallback({
               stage: "generating_suggestions",
@@ -2563,6 +2812,13 @@ if (typeof console === 'undefined') {
             givenNameVariantGroups,
             itemsByFullAuthor
           );
+          if (progressCallback) {
+            progressCallback({
+              stage: "debug",
+              message: "Generated " + suggestions.length + " suggestions",
+              percent: 95
+            });
+          }
           return {
             surnameFrequencies,
             potentialVariants,
@@ -2575,14 +2831,14 @@ if (typeof console === 'undefined') {
         findVariantsEfficiently(surnameFrequencies, progressCallback = null, shouldCancel = null) {
           const surnames = Object.keys(surnameFrequencies);
           const potentialVariants = [];
-          const { normalizeName } = require_string_distance();
+          const { normalizeName: normalizeName2 } = require_string_distance();
           const normalizedGroups = /* @__PURE__ */ new Map();
           for (let i = 0; i < surnames.length; i++) {
             if (shouldCancel && shouldCancel()) {
               throw new Error("Analysis cancelled");
             }
             const name = surnames[i];
-            const normalizedKey = normalizeName(name);
+            const normalizedKey = normalizeName2(name);
             if (!normalizedGroups.has(normalizedKey)) {
               normalizedGroups.set(normalizedKey, []);
             }
@@ -2624,19 +2880,176 @@ if (typeof console === 'undefined') {
           console.log(`Found ${potentialVariants.length} diacritic variant pairs`);
           return potentialVariants;
         }
+        /**
+         * Find diacritic variants within the same author's surname variations
+         * This ensures only the SAME author (same first name) can have surname variants detected
+         * @param {Object} authorOccurrences - Object keyed by "normalizedFirst|normalizedLast" with author data including surnameVariants
+         * @param {Function} progressCallback - Optional progress callback
+         * @param {Function} shouldCancel - Optional cancellation check
+         * @returns {Array} Array of variant pairs
+         */
+        findDiacriticVariantsByAuthor(authorOccurrences, progressCallback = null, shouldCancel = null) {
+          const { normalizeName: normalizeName2, isDiacriticOnlyVariant: isDiacriticOnlyVariant2 } = require_string_distance();
+          const potentialVariants = [];
+          Zotero.debug("ZoteroDBAnalyzer: findDiacriticVariantsByAuthor called with " + Object.keys(authorOccurrences).length + " authors");
+          const authorKeys = Object.keys(authorOccurrences);
+          const totalAuthors = authorKeys.length;
+          const threshold = Math.max(50, Math.ceil(totalAuthors * 0.05));
+          for (let i = 0; i < authorKeys.length; i++) {
+            const authorKey = authorKeys[i];
+            const data = authorOccurrences[authorKey];
+            if (progressCallback && (i === 0 || i === totalAuthors - 1 || i % threshold === 0)) {
+              progressCallback({
+                stage: "analyzing_surnames",
+                processed: i + 1,
+                total: totalAuthors,
+                percent: Math.round((i + 1) / totalAuthors * 80)
+              });
+            }
+            if (shouldCancel && shouldCancel()) {
+              throw new Error("Analysis cancelled");
+            }
+            const surnameVariants = data.surnameVariants || {};
+            const variantNames = Object.keys(surnameVariants);
+            Zotero.debug("ZoteroDBAnalyzer: Checking author " + authorKey + " with variants: " + JSON.stringify(surnameVariants));
+            if (variantNames.length < 2) {
+              Zotero.debug("ZoteroDBAnalyzer: Skipping - only " + variantNames.length + " variant(s)");
+              continue;
+            }
+            const normalizedVariantGroups = /* @__PURE__ */ new Map();
+            for (const [name, count] of Object.entries(surnameVariants)) {
+              const normalizedKey = normalizeName2(name);
+              Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '"');
+              if (!normalizedVariantGroups.has(normalizedKey)) {
+                normalizedVariantGroups.set(normalizedKey, []);
+              }
+              normalizedVariantGroups.get(normalizedKey).push({ name, count });
+            }
+            if (normalizedVariantGroups.size >= 1) {
+              const allVariants = [];
+              for (const [normalizedKey, variants] of normalizedVariantGroups) {
+                for (const v of variants) {
+                  allVariants.push({ name: v.name, count: v.count, normalizedKey });
+                }
+              }
+              if (allVariants.length < 2) {
+                continue;
+              }
+              allVariants.sort((a, b) => b.count - a.count);
+              const recommended = allVariants[0].name;
+              const recommendedNormalized = normalizeName2(recommended);
+              const recommendedGroup = normalizedVariantGroups.get(recommendedNormalized);
+              const recommendedCount = recommendedGroup.reduce((sum, v) => sum + v.count, 0);
+              const authorFirstName = data.firstName || "";
+              const authorLastName = data.originalLastName || data.lastName || "";
+              for (let i2 = 1; i2 < allVariants.length; i2++) {
+                const v = allVariants[i2];
+                potentialVariants.push({
+                  variant1: {
+                    name: recommended,
+                    frequency: recommendedCount
+                  },
+                  variant2: {
+                    name: v.name,
+                    frequency: v.count
+                  },
+                  similarity: 1,
+                  recommendedNormalization: recommended,
+                  // Include author info for filtering items
+                  authorInfo: {
+                    firstName: authorFirstName,
+                    lastName: authorLastName
+                  }
+                });
+              }
+            }
+          }
+          Zotero.debug("ZoteroDBAnalyzer: Author diacritic variant detection complete, found " + potentialVariants.length + " variant groups");
+          if (progressCallback && totalAuthors > 0) {
+            progressCallback({
+              stage: "analyzing_surnames",
+              processed: totalAuthors,
+              total: totalAuthors,
+              percent: 80
+            });
+          }
+          return potentialVariants;
+        }
+        /**
+         * Group creators by normalized first name + surname
+         * This ensures only the SAME author (same first name variant) is grouped together
+         * Different authors with the same surname (e.g., "Alex Martin" vs "Andrea Martin") are NOT grouped
+         * Initial-only names are grouped with full names that match their first letter
+         * @param {Array} creators - Array of creator objects
+         * @returns {Object} Object with group keys and creator arrays as values
+         */
         groupCreatorsBySurnameForVariants(creators) {
           const surnameGroups = {};
+          const initialGroups = {};
           for (const creator of creators) {
             if (!creator || !creator.lastName) {
               continue;
             }
+            const firstName = (creator.firstName || "").trim();
+            const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
             const lastNameKey = (creator.lastName || "").toLowerCase().trim();
-            if (!surnameGroups[lastNameKey]) {
-              surnameGroups[lastNameKey] = [];
+            if (normalizedFirst.startsWith("init:")) {
+              if (!initialGroups[lastNameKey]) {
+                initialGroups[lastNameKey] = [];
+              }
+              initialGroups[lastNameKey].push({ creator, normalizedFirst });
+            } else {
+              const groupKey = `${normalizedFirst}|${lastNameKey}`;
+              if (!surnameGroups[groupKey]) {
+                surnameGroups[groupKey] = [];
+              }
+              surnameGroups[groupKey].push(creator);
             }
-            surnameGroups[lastNameKey].push(creator);
+          }
+          for (const [surname, initials] of Object.entries(initialGroups)) {
+            for (const { creator, normalizedFirst } of initials) {
+              const firstLetter = normalizedFirst.slice(5).charAt(0).toLowerCase();
+              const matchingKey = Object.keys(surnameGroups).find((key) => {
+                const [normalizedFirst2] = key.split("|");
+                return normalizedFirst2.startsWith(firstLetter) && key.endsWith(`|${surname}`);
+              });
+              if (matchingKey) {
+                surnameGroups[matchingKey].push(creator);
+              } else {
+                const groupKey = `${normalizedFirst}|${surname}`;
+                if (!surnameGroups[groupKey]) {
+                  surnameGroups[groupKey] = [];
+                }
+                surnameGroups[groupKey].push(creator);
+              }
+            }
           }
           return surnameGroups;
+        }
+        /**
+         * Normalize first name for grouping purposes
+         * Handles initials and uses name variants from COMMON_GIVEN_NAME_EQUIVALENTS
+         * @param {string} firstName - The first name to normalize
+         * @returns {string} Normalized first name for grouping
+         */
+        normalizeFirstNameForGrouping(firstName) {
+          if (!firstName || !firstName.trim()) {
+            return "unknown";
+          }
+          const cleaned = firstName.toLowerCase().trim();
+          const tokens = cleaned.split(/[\s.-]+/).filter(Boolean);
+          const baseWord = tokens[0] || "";
+          const withoutDots = cleaned.replace(/\./g, "");
+          const allTokensAreInitials = tokens.length > 0 && tokens.every((t) => t.length === 1);
+          if (tokens.length === 1 && tokens[0].length <= 3) {
+            return `init:${tokens[0]}`;
+          } else if (allTokensAreInitials) {
+            return `init:${withoutDots}`;
+          }
+          if (COMMON_GIVEN_NAME_EQUIVALENTS && COMMON_GIVEN_NAME_EQUIVALENTS[baseWord]) {
+            return COMMON_GIVEN_NAME_EQUIVALENTS[baseWord];
+          }
+          return baseWord || cleaned;
         }
         parseGivenNameTokens(name) {
           const trimmed = (name || "").trim();
@@ -2933,10 +3346,12 @@ if (typeof console === 'undefined') {
         }
         findGivenNameVariantGroups(creatorsBySurname) {
           const groups = [];
-          for (const [surname, creators] of Object.entries(creatorsBySurname)) {
-            if (!creators || creators.length < 2) {
+          for (const [groupKey, creators] of Object.entries(creatorsBySurname)) {
+            if (!creators || creators.length < 1) {
               continue;
             }
+            const lastPipeIndex = groupKey.lastIndexOf("|");
+            const surname = lastPipeIndex > 0 ? groupKey.slice(lastPipeIndex + 1) : groupKey;
             const results = this.findGivenNameVariantsForSurname(surname, creators);
             if (results.length > 0) {
               groups.push(...results);
@@ -3268,8 +3683,8 @@ if (typeof console === 'undefined') {
          * @returns {Object} Parsed name components
          */
         parseName(name) {
-          const NameParser = require_name_parser();
-          const parser = new NameParser();
+          const NameParser2 = require_name_parser();
+          const parser = new NameParser2();
           return parser.parse(name);
         }
         /**
@@ -3289,15 +3704,23 @@ if (typeof console === 'undefined') {
          * @returns {Array} Array of normalization suggestions
          */
         generateNormalizationSuggestions(variants, givenNameVariantGroups = [], itemsByFullAuthor = {}) {
-          Zotero.debug("ZoteroDBAnalyzer: generateNormalizationSuggestions called with " + (variants ? variants.length : 0) + " surname variants and " + (givenNameVariantGroups ? givenNameVariantGroups.length : 0) + " given-name groups");
+          const DEBUG = true;
+          const log = (msg) => {
+            if (DEBUG) {
+              const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[1].split(".")[0];
+              const line = timestamp + " SUGGEST: " + msg;
+              console.error(line);
+            }
+          };
+          log("generateNormalizationSuggestions called with " + (variants ? variants.length : 0) + " variants, " + (givenNameVariantGroups ? givenNameVariantGroups.length : 0) + " given-name groups");
           const suggestions = [];
           const processedSurnames = /* @__PURE__ */ new Set();
           for (const variant of variants || []) {
             const norm1 = variant.variant1.name;
             const norm2 = variant.variant2.name;
             if (!processedSurnames.has(norm1) && !processedSurnames.has(norm2)) {
-              const items1 = this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
-              const items2 = this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+              const items1 = variant.authorInfo ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant1.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
+              const items2 = variant.authorInfo ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant2.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
               const suggestion = {
                 type: "surname",
                 primary: variant.recommendedNormalization,
@@ -3317,7 +3740,9 @@ if (typeof console === 'undefined') {
                 surnameKey: (variant.recommendedNormalization || "").toLowerCase()
               };
               this.enrichSuggestionWithGivenNameData(suggestion, givenNameVariantGroups);
-              if (this.shouldSkipSuggestionFromLearning(suggestion)) {
+              const shouldSkip = this.shouldSkipSuggestionFromLearning(suggestion);
+              log("Checking suggestion: " + norm1 + " vs " + norm2 + " -> shouldSkip=" + shouldSkip);
+              if (shouldSkip) {
                 processedSurnames.add(norm1);
                 processedSurnames.add(norm2);
                 continue;
@@ -3327,6 +3752,7 @@ if (typeof console === 'undefined') {
               processedSurnames.add(norm2);
             }
           }
+          log("generateNormalizationSuggestions complete: suggestions=" + suggestions.length + " of " + (variants ? variants.length : 0) + " variants");
           for (const group of givenNameVariantGroups || []) {
             if (!group || !group.surname || !Array.isArray(group.variants) || group.variants.length < 2) {
               continue;
@@ -3336,7 +3762,7 @@ if (typeof console === 'undefined') {
               (s) => s.type === "given-name" && (s.surnameKey || (s.surname || "").toLowerCase()) === groupSurnameKey && s.normalizedGivenNameKey === group.normalizedKey
             );
             const variantDatasets = group.variants.map((variant) => {
-              const lastNameDisplay = this.toTitleCase(variant.lastName || group.surname);
+              const lastNameDisplay = variant.lastName || group.surname;
               return {
                 name: `${variant.firstName} ${lastNameDisplay}`.trim(),
                 firstName: variant.firstName,
@@ -3941,7 +4367,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = ZoteroDBAnalyzer;
+        module.exports = ZoteroDBAnalyzer2;
       }
     }
   });
@@ -3949,7 +4375,7 @@ if (typeof console === 'undefined') {
   // src/ui/normalizer-dialog.js
   var require_normalizer_dialog = __commonJS({
     "src/ui/normalizer-dialog.js"(exports, module) {
-      var NormalizerDialog = class {
+      var NormalizerDialog2 = class {
         constructor() {
           this.learningEngine = new (require_learning_engine())();
           this.variantGenerator = new (require_variant_generator())();
@@ -4104,7 +4530,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = NormalizerDialog;
+        module.exports = NormalizerDialog2;
       }
     }
   });
@@ -4112,7 +4538,7 @@ if (typeof console === 'undefined') {
   // src/zotero/menu-integration.js
   var require_menu_integration = __commonJS({
     "src/zotero/menu-integration.js"(exports, module) {
-      var MenuIntegration = class {
+      var MenuIntegration2 = class {
         constructor() {
           this.itemProcessor = new (require_item_processor())();
           this.zoteroDBAnalyzer = new (require_zotero_db_analyzer())();
@@ -4221,7 +4647,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = MenuIntegration;
+        module.exports = MenuIntegration2;
       }
     }
   });
@@ -4229,7 +4655,7 @@ if (typeof console === 'undefined') {
   // src/ui/batch-processor.js
   var require_batch_processor = __commonJS({
     "src/ui/batch-processor.js"(exports, module) {
-      var BatchProcessor = class {
+      var BatchProcessor2 = class {
         constructor() {
           this.learningEngine = new (require_learning_engine())();
         }
@@ -4264,7 +4690,7 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = BatchProcessor;
+        module.exports = BatchProcessor2;
       }
     }
   });
@@ -4272,7 +4698,7 @@ if (typeof console === 'undefined') {
   // src/storage/data-manager.js
   var require_data_manager = __commonJS({
     "src/storage/data-manager.js"(exports, module) {
-      var DataManager = class {
+      var DataManager2 = class {
         constructor() {
           this.settingsKey = "name_normalizer_settings";
           this.mappingsKey = "name_normalizer_mappings";
@@ -4357,70 +4783,69 @@ if (typeof console === 'undefined') {
         }
       };
       if (typeof module !== "undefined" && module.exports) {
-        module.exports = DataManager;
+        module.exports = DataManager2;
       }
     }
   });
 
   // src/index.js
-  var require_index = __commonJS({
-    "src/index.js"(exports) {
-      var import_name_parser = __toESM(require_name_parser());
-      var import_variant_generator = __toESM(require_variant_generator());
-      var import_learning_engine = __toESM(require_learning_engine());
-      var import_candidate_finder = __toESM(require_candidate_finder());
-      var import_item_processor = __toESM(require_item_processor());
-      var import_menu_integration = __toESM(require_menu_integration());
-      var import_zotero_db_analyzer = __toESM(require_zotero_db_analyzer());
-      var import_normalizer_dialog = __toESM(require_normalizer_dialog());
-      var import_batch_processor = __toESM(require_batch_processor());
-      var import_data_manager = __toESM(require_data_manager());
-      if (typeof console === "undefined") {
-        globalThis.console = {
-          log: function(...args) {
-            if (typeof Zotero !== "undefined" && Zotero.debug) {
-              Zotero.debug("NameNormalizer: " + args.join(" "));
-            }
-          },
-          warn: function(...args) {
-            if (typeof Zotero !== "undefined" && Zotero.debug) {
-              Zotero.debug("NameNormalizer WARN: " + args.join(" "));
-            }
-          },
-          error: function(...args) {
-            if (typeof Zotero !== "undefined" && Zotero.debug) {
-              Zotero.debug("NameNormalizer ERROR: " + args.join(" "));
-            }
-          },
-          info: function(...args) {
-            if (typeof Zotero !== "undefined" && Zotero.debug) {
-              Zotero.debug("NameNormalizer INFO: " + args.join(" "));
-            }
-          },
-          debug: function(...args) {
-            if (typeof Zotero !== "undefined" && Zotero.debug) {
-              Zotero.debug("NameNormalizer DEBUG: " + args.join(" "));
-            }
-          }
-        };
+  var import_name_parser = __toESM(require_name_parser());
+  var import_variant_generator = __toESM(require_variant_generator());
+  var import_learning_engine = __toESM(require_learning_engine());
+  var import_candidate_finder = __toESM(require_candidate_finder());
+  var import_item_processor = __toESM(require_item_processor());
+  var import_menu_integration = __toESM(require_menu_integration());
+  var import_zotero_db_analyzer = __toESM(require_zotero_db_analyzer());
+  var import_normalizer_dialog = __toESM(require_normalizer_dialog());
+  var import_batch_processor = __toESM(require_batch_processor());
+  var import_data_manager = __toESM(require_data_manager());
+  if (typeof console === "undefined") {
+    globalThis.console = {
+      log: function(...args) {
+        if (typeof Zotero !== "undefined" && Zotero.debug) {
+          Zotero.debug("NameNormalizer: " + args.join(" "));
+        }
+      },
+      warn: function(...args) {
+        if (typeof Zotero !== "undefined" && Zotero.debug) {
+          Zotero.debug("NameNormalizer WARN: " + args.join(" "));
+        }
+      },
+      error: function(...args) {
+        if (typeof Zotero !== "undefined" && Zotero.debug) {
+          Zotero.debug("NameNormalizer ERROR: " + args.join(" "));
+        }
+      },
+      info: function(...args) {
+        if (typeof Zotero !== "undefined" && Zotero.debug) {
+          Zotero.debug("NameNormalizer INFO: " + args.join(" "));
+        }
+      },
+      debug: function(...args) {
+        if (typeof Zotero !== "undefined" && Zotero.debug) {
+          Zotero.debug("NameNormalizer DEBUG: " + args.join(" "));
+        }
       }
-      (function(global2) {
-        global2.ZoteroNameNormalizer = {
-          NameParser: import_name_parser.default,
-          VariantGenerator: import_variant_generator.default,
-          LearningEngine: import_learning_engine.default,
-          CandidateFinder: import_candidate_finder.default,
-          ItemProcessor: import_item_processor.default,
-          MenuIntegration: import_menu_integration.default,
-          ZoteroDBAnalyzer: import_zotero_db_analyzer.default,
-          NormalizerDialog: import_normalizer_dialog.default,
-          BatchProcessor: import_batch_processor.default,
-          DataManager: import_data_manager.default
-        };
-      })(typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : exports);
-    }
-  });
-  require_index();
+    };
+  }
+  var ZoteroNameNormalizer = {
+    NameParser: import_name_parser.default,
+    VariantGenerator: import_variant_generator.default,
+    LearningEngine: import_learning_engine.default,
+    CandidateFinder: import_candidate_finder.default,
+    ItemProcessor: import_item_processor.default,
+    MenuIntegration: import_menu_integration.default,
+    ZoteroDBAnalyzer: import_zotero_db_analyzer.default,
+    NormalizerDialog: import_normalizer_dialog.default,
+    BatchProcessor: import_batch_processor.default,
+    DataManager: import_data_manager.default
+  };
+  var index_default = ZoteroNameNormalizer;
+  if (typeof window !== "undefined") {
+    window.ZoteroNameNormalizer = ZoteroNameNormalizer;
+  } else if (typeof globalThis !== "undefined") {
+    globalThis.ZoteroNameNormalizer = ZoteroNameNormalizer;
+  }
 })();
 
 // Export ZoteroNameNormalizer to scope for loadSubScript

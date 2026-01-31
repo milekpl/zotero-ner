@@ -1,0 +1,47 @@
+{
+  "project": "Zotero Name Normalizer - Progress Bar Fix",
+  "branchName": "ralph/fix-progress-bar",
+  "description": "Fix progress bar being stuck at 3% by adding progress callbacks to findDiacriticVariantsByAuthor function",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add progress callbacks to findDiacriticVariantsByAuthor",
+      "description": "As a user, I want to see the progress bar update during surname analysis so that I know the analysis is progressing and not frozen.",
+      "acceptanceCriteria": [
+        "Progress callback is called at start (0%)",
+        "Progress callback is called periodically during analysis",
+        "Progress callback is called at end (~80%)",
+        "Works for small (<50 authors), medium (100-500), and large (1000+) libraries",
+        "Code passes linting (npm run lint)"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "Write unit tests for progress callback",
+      "description": "As a developer, I want unit tests for the progress callback functionality so that I can verify the fix works correctly and prevent regressions.",
+      "acceptanceCriteria": [
+        "Test progress callback is called during analysis",
+        "Test progress percent increases over time",
+        "Test edge cases: empty input (0 authors)",
+        "Test edge cases: small dataset (<50 authors)",
+        "All tests pass (npm test)"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "Verify fix with existing tests",
+      "description": "As a maintainer, I want to ensure the fix doesn't break existing functionality so that the extension continues to work correctly.",
+      "acceptanceCriteria": [
+        "All existing tests pass",
+        "No regressions in zotero-db-analyzer tests",
+        "Integration tests pass if present"
+      ],
+      "priority": 3,
+      "passes": false
+    }
+  ]
+}

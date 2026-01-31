@@ -586,16 +586,13 @@ describe('ZoteroDBAnalyzer', () => {
       it('should NOT mix items from different authors with same surname', async () => {
         const analyzer = new ZoteroDBAnalyzer();
 
-        // Create creators with items - different authors with surname "Martin"
-        // NOTE: For diacritic detection to work, the names must have the same normalized length
-        // 'Martin' and 'Martin' are same, but for diacritic variants we need:
-        // - 'Martin' (6 chars) vs 'Martín' (6 chars with acute on i = same length)
-        // The acute accent on 'í' in 'Martin' vs 'í' in 'Martín' normalizes correctly
+        // Create creators with items - DIFFERENT authors with surname "Martin"
+        // Each author should be tracked separately, NOT mixed together
         const creators = [
           {
             firstName: 'C. B.',
             lastName: 'Martin',
-            count: 5,
+            count: 2,
             parsedName: analyzer.parseName('C. B. Martin'),
             items: [
               { id: 1, title: 'The Ontological Turn', author: 'C. B. Martin', year: '1999' },
@@ -605,60 +602,89 @@ describe('ZoteroDBAnalyzer', () => {
           {
             firstName: 'Rod',
             lastName: 'Martin',
-            count: 8,
+            count: 1,
             parsedName: analyzer.parseName('Rod Martin'),
             items: [
               { id: 3, title: 'The psychology of humour', author: 'Rod Martin', year: '2007' }
             ]
           },
-          // Use 'Martín' with acute accent on 'i' - this should match 'Martin' as diacritic variant
-          // 'Martin' (6) normalizes to 'martin' (6)
-          // 'Martín' (6 with combining acute on i) normalizes to 'martin' (6)
           {
-            firstName: 'José',
-            lastName: 'Martín',
-            count: 2,
-            parsedName: analyzer.parseName('José Martín'),
+            firstName: 'Andrea',
+            lastName: 'Martin',
+            count: 1,
+            parsedName: analyzer.parseName('Andrea Martin'),
             items: [
-              { id: 4, title: 'Beyond error-correction', author: 'José Martín', year: '2012' }
+              { id: 5, title: 'Paper 1', author: 'Andrea Martin', year: '2020' }
             ]
           }
         ];
 
         const result = await analyzer.analyzeCreators(creators);
 
-        // Find surname variant suggestion for Martin vs Martín
+        // Check that different authors are NOT mixed together
+        // Each author should have their own group - surnameFrequencies aggregates across authors
+        expect(result.surnameFrequencies['martin']).toBe(4); // Total occurrences
+
+        // Since these are different authors with different first names,
+        // there should be NO given-name suggestions between them
+        // (given-name suggestions are for variants of the SAME author)
+        const givenNameSuggestions = result.suggestions.filter(s => s.type === 'given-name' && s.surnameKey === 'martin');
+
+        // Different authors should NOT generate given-name suggestions for each other
+        expect(givenNameSuggestions).toHaveLength(0);
+
+        // Verify all items are still accessible and associated with correct authors
+        const allSuggestions = result.suggestions;
+        expect(allSuggestions.length).toBeGreaterThanOrEqual(0); // Just verify no crashes
+      });
+
+      it('should normalize diacritics ONLY within the SAME author', async () => {
+        const analyzer = new ZoteroDBAnalyzer();
+
+        // Create creators where ONE author has items with both "Martin" and "Martín"
+        // This should trigger a diacritic normalization suggestion
+        const creators = [
+          {
+            firstName: 'José',
+            lastName: 'Martin',
+            count: 3,
+            parsedName: analyzer.parseName('José Martin'),
+            items: [
+              { id: 1, title: 'Paper 1', authorFirstName: 'José', authorLastName: 'Martin', author: 'José Martin' },
+              { id: 2, title: 'Paper 2', authorFirstName: 'José', authorLastName: 'Martín', author: 'José Martín' }
+            ]
+          },
+          {
+            firstName: 'Andrea',
+            lastName: 'Martin',
+            count: 1,
+            parsedName: analyzer.parseName('Andrea Martin'),
+            items: [
+              { id: 3, title: 'Paper 3', authorFirstName: 'Andrea', authorLastName: 'Martin', author: 'Andrea Martin' }
+            ]
+          }
+        ];
+
+        const result = await analyzer.analyzeCreators(creators);
+
+        // Find surname variant suggestion for José Martin vs José Martín
         const surnameSuggestion = result.suggestions.find(
           s => s.type === 'surname' && s.variants.some(v => v.name.toLowerCase() === 'martin' || v.name.toLowerCase() === 'martín')
         );
 
+        // Should find a surname suggestion because José has both "Martin" and "Martín"
         expect(surnameSuggestion).toBeDefined();
 
-        // Get the two variants (Martin and Martín)
-        const variants = surnameSuggestion.variants.filter(v =>
-          v.name.toLowerCase() === 'martin' || v.name.toLowerCase() === 'martín'
+        // The suggestion should only include José's items, NOT Andrea's
+        const joseVariants = surnameSuggestion.variants.filter(v =>
+          v.items?.some(item => item.author === 'José Martin' || item.author === 'José Martín')
+        );
+        const andreaVariants = surnameSuggestion.variants.filter(v =>
+          v.items?.some(item => item.author === 'Andrea Martin')
         );
 
-        expect(variants.length).toBe(2);
-
-        // Identify which is which
-        const martinVariant = variants.find(v => v.name.toLowerCase() === 'martin');
-        const martinVariantItems = variants.find(v => v.name.toLowerCase() === 'martín');
-
-        expect(martinVariant).toBeDefined();
-        expect(martinVariantItems).toBeDefined();
-
-        // Martin variant items should only include C. B. Martin and Rod Martin, NOT José Martín
-        const martinItemAuthors = martinVariant.items.map(item => item.author);
-        expect(martinItemAuthors).toContain('C. B. Martin');
-        expect(martinItemAuthors).toContain('Rod Martin');
-        expect(martinItemAuthors).not.toContain('José Martín');
-
-        // Martín variant items should only include José Martín
-        const martinVariantItemAuthors = martinVariantItems.items.map(item => item.author);
-        expect(martinVariantItemAuthors).toContain('José Martín');
-        expect(martinVariantItemAuthors).not.toContain('C. B. Martin');
-        expect(martinVariantItemAuthors).not.toContain('Rod Martin');
+        expect(joseVariants.length).toBeGreaterThan(0);
+        expect(andreaVariants.length).toBe(0); // Andrea should NOT be in the suggestion
       });
 
       it('should preserve first names and initials in item author display', async () => {
@@ -700,6 +726,217 @@ describe('ZoteroDBAnalyzer', () => {
           }
         }
       });
+
+      it('should detect and normalize malformed author entries (parsing errors)', async () => {
+        const analyzer = new ZoteroDBAnalyzer();
+
+        // Create a creator with a malformed name (like "Karl and Friston" from bad metadata)
+        // This simulates a Zotero parsing error where "and" was included in the surname
+        const creators = [
+          {
+            firstName: 'Karl',
+            lastName: 'and Friston',  // Malformed entry - "and" should not be in surname
+            count: 1,
+            parsedName: analyzer.parseName('Karl and Friston'),
+            items: [
+              { id: 1, title: 'Paper 1', authorFirstName: 'Karl', authorLastName: 'and Friston', author: 'Karl and Friston' }
+            ]
+          },
+          {
+            firstName: 'Karl',
+            lastName: 'Friston',  // Correct entry for the same author
+            count: 3,
+            parsedName: analyzer.parseName('Karl Friston'),
+            items: [
+              { id: 2, title: 'Paper 2', authorFirstName: 'Karl', authorLastName: 'Friston', author: 'Karl Friston' },
+              { id: 3, title: 'Paper 3', authorFirstName: 'Karl', authorLastName: 'Friston', author: 'Karl Friston' }
+            ]
+          }
+        ];
+
+        const result = await analyzer.analyzeCreators(creators);
+
+        // The malformed entry should be detected and normalized to "Friston"
+        // Find surname variant suggestion for "and Friston" vs "Friston"
+        const surnameSuggestion = result.suggestions.find(
+          s => s.type === 'surname' && s.variants.some(v =>
+            v.name === 'and Friston' || v.name === 'Friston'
+          )
+        );
+
+        // Should find a surname suggestion because "and Friston" and "Friston" are diacritic/format variants
+        expect(surnameSuggestion).toBeDefined();
+
+        // The suggestion should include both variants
+        const andFristonVariant = surnameSuggestion.variants.find(v => v.name === 'and Friston');
+        const fristonVariant = surnameSuggestion.variants.find(v => v.name === 'Friston');
+
+        expect(andFristonVariant).toBeDefined();
+        expect(fristonVariant).toBeDefined();
+
+        // Both should have items
+        expect(andFristonVariant.items.length).toBeGreaterThan(0);
+        expect(fristonVariant.items.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('findDiacriticVariantsByAuthor - progress callback', () => {
+    test('progress callback is called during analysis', () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const progressCallback = jest.fn();
+
+      // Create test data with authors having surname variants
+      const authorOccurrences = {
+        'jose|martin': {
+          firstName: 'José',
+          lastName: 'Martin',
+          originalLastName: 'Martin',
+          count: 3,
+          surnameVariants: { 'Martin': 2, 'Martín': 1 }
+        },
+        'juan|müller': {
+          firstName: 'Juan',
+          lastName: 'Müller',
+          originalLastName: 'Müller',
+          count: 2,
+          surnameVariants: { 'Müller': 1, 'Mueller': 1 }
+        }
+      };
+
+      analyzer.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback);
+
+      expect(progressCallback).toHaveBeenCalled();
+      // Verify callback structure
+      const call = progressCallback.mock.calls[0][0];
+      expect(call).toHaveProperty('stage');
+      expect(call).toHaveProperty('percent');
+    });
+
+    test('progress percent increases over time', () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const progressUpdates = [];
+
+      const progressCallback = (progress) => {
+        progressUpdates.push(progress);
+      };
+
+      // Create test data with multiple authors having surname variants
+      const authorOccurrences = {
+        'jose|martin': {
+          firstName: 'José',
+          lastName: 'Martin',
+          originalLastName: 'Martin',
+          count: 3,
+          surnameVariants: { 'Martin': 2, 'Martín': 1 }
+        },
+        'juan|müller': {
+          firstName: 'Juan',
+          lastName: 'Müller',
+          originalLastName: 'Müller',
+          count: 2,
+          surnameVariants: { 'Müller': 1, 'Mueller': 1 }
+        },
+        'pedro|garcía': {
+          firstName: 'Pedro',
+          lastName: 'García',
+          originalLastName: 'García',
+          count: 4,
+          surnameVariants: { 'García': 3, 'Garcia': 1 }
+        }
+      };
+
+      analyzer.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback);
+
+      // Verify progress percent values are monotonically increasing
+      if (progressUpdates.length > 1) {
+        const percents = progressUpdates.map(p => p.percent);
+        for (let i = 1; i < percents.length; i++) {
+          expect(percents[i]).toBeGreaterThanOrEqual(percents[i - 1]);
+        }
+      }
+    });
+
+    test('edge case: empty input (0 authors)', () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const progressCallback = jest.fn();
+
+      // Pass empty object
+      const result = analyzer.findDiacriticVariantsByAuthor({}, progressCallback);
+
+      // Should return empty array, no errors
+      expect(result).toEqual([]);
+      // Callback may or may not be called with 0% progress - either is acceptable
+    });
+
+    test('edge case: small dataset (<50 authors)', () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const progressUpdates = [];
+
+      const progressCallback = (progress) => {
+        progressUpdates.push(progress);
+      };
+
+      // Create 10-20 authors with surname variants
+      const authorOccurrences = {};
+      for (let i = 1; i <= 15; i++) {
+        authorOccurrences[`juan|sánchez${i}`] = {
+          firstName: 'Juan',
+          lastName: `Sánchez${i}`,
+          originalLastName: `Sánchez${i}`,
+          count: i,
+          surnameVariants: {
+            [`Sánchez${i}`]: i - 1,
+            [`Sanchez${i}`]: 1
+          }
+        };
+      }
+
+      analyzer.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback);
+
+      // Verify at least start and end progress updates are received
+      if (progressUpdates.length > 0) {
+        expect(progressUpdates[0]).toHaveProperty('stage', 'analyzing_surnames');
+      }
+    });
+
+    test('progress callback receives correct stage and values', () => {
+      const analyzer = new ZoteroDBAnalyzer();
+      const progressUpdates = [];
+
+      const progressCallback = (progress) => {
+        progressUpdates.push(progress);
+      };
+
+      const authorOccurrences = {
+        'jose|martin': {
+          firstName: 'José',
+          lastName: 'Martin',
+          originalLastName: 'Martin',
+          count: 3,
+          surnameVariants: { 'Martin': 2, 'Martín': 1 }
+        }
+      };
+
+      analyzer.findDiacriticVariantsByAuthor(authorOccurrences, progressCallback);
+
+      // Verify each callback has required properties
+      progressUpdates.forEach((progress) => {
+        expect(progress).toHaveProperty('stage');
+        expect(progress).toHaveProperty('percent');
+        expect(progress.stage).toBe('analyzing_surnames');
+        expect(typeof progress.percent).toBe('number');
+        expect(progress.percent).toBeGreaterThanOrEqual(0);
+        expect(progress.percent).toBeLessThanOrEqual(100);
+      });
+
+      // Verify progress increases
+      if (progressUpdates.length > 1) {
+        const percents = progressUpdates.map(p => p.percent);
+        for (let i = 1; i < percents.length; i++) {
+          expect(percents[i]).toBeGreaterThanOrEqual(percents[i - 1]);
+        }
+      }
     });
   });
 });

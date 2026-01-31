@@ -26,7 +26,16 @@ if (typeof Zotero === 'undefined') {
     function getBundle() {
       // Check all possible scopes in order of preference
       const scopes = [
-        { name: 'window', getValue: () => (typeof window !== 'undefined' ? window.ZoteroNameNormalizer : null) },
+        { name: 'window', getValue: () => {
+          // Check window (browser) or global.window (Node.js/Jest)
+          if (typeof window !== 'undefined' && window && window.ZoteroNameNormalizer) {
+            return window.ZoteroNameNormalizer;
+          }
+          if (typeof global !== 'undefined' && global.window && global.window.ZoteroNameNormalizer) {
+            return global.window.ZoteroNameNormalizer;
+          }
+          return null;
+        }},
         { name: 'globalThis', getValue: () => (typeof globalThis !== 'undefined' ? globalThis.ZoteroNameNormalizer : null) },
         { name: 'direct', getValue: () => (typeof ZoteroNameNormalizer !== 'undefined' ? ZoteroNameNormalizer : null) },
         { name: 'zoteroNameNormalizerScope', getValue: () => (typeof zoteroNameNormalizerScope !== 'undefined' ? zoteroNameNormalizerScope.ZoteroNameNormalizer : null) },
@@ -88,6 +97,37 @@ if (typeof Zotero === 'undefined') {
     // Create the Zotero.NameNormalizer object with all modules
     const initializedModules = initializeModules();
 
+    // File-based logger for debugging (writes to /tmp/zotero-normalizer.log)
+    function fileLog(msg) {
+      try {
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const line = timestamp + ' [zotero-ner.js] ' + msg + '\n';
+        if (typeof Components !== 'undefined') {
+          // Firefox/XUL context - use nsIFileOutputStream
+          const file = Components.classes['@mozilla.org/file/directory_service;1']
+            .getService(Components.interfaces.nsIProperties)
+            .get('TmpD', Components.interfaces.nsIFile);
+          file.append('zotero-normalizer.log');
+          const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
+            .createInstance(Components.interfaces.nsIFileOutputStream);
+          fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0); // WRONLY | CREATE | APPEND
+          const encoder = new TextEncoder();
+          const data = encoder.encode(line);
+          fos.write(line, line.length);
+          fos.close();
+        }
+        // Also log to Zotero.debug
+        if (typeof Zotero !== 'undefined' && Zotero.debug) {
+          Zotero.debug('NER-LOG: ' + msg);
+        }
+      } catch (e) {
+        // Fallback to console
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('NER-LOG: ' + msg);
+        }
+      }
+    }
+
     Zotero.NameNormalizer = {
       initialized: false,
       rootURI: null,
@@ -113,6 +153,8 @@ if (typeof Zotero === 'undefined') {
         onMainWindowLoad: function(window) {
           console.log('Name Normalizer: Zotero.NameNormalizer.hooks.onMainWindowLoad called.');
           Zotero.NameNormalizer.init({ rootURI: globalThis.registeredRootURI, window: window });
+          // Set up listener for item selection requests from dialogs
+          Zotero.NameNormalizer.setupDialogItemSelector();
         },
         onMainWindowUnload: function(window) {
           console.log('Name Normalizer: Zotero.NameNormalizer.hooks.onMainWindowUnload called.');
@@ -136,19 +178,17 @@ if (typeof Zotero === 'undefined') {
           this.windowStates.set(targetWindow, { uiInitialized: false });
         }
 
-        if (!this.initialized) {
-          // Re-initialize modules in case bundle wasn't available before
-          const newModules = initializeModules();
-          for (const key of Object.keys(newModules)) {
-            if (newModules[key] && !this[key]) {
-              this[key] = newModules[key];
-            }
+        // Always try to (re)initialize modules in case bundle wasn't available before
+        const newModules = initializeModules();
+        for (const key of Object.keys(newModules)) {
+          if (newModules[key]) {
+            this[key] = newModules[key];
           }
-
-          this.initialized = true;
-          this.log('Extension initialization complete, modules: ' +
-            MODULE_CLASSES.map(m => m.toLowerCase() + ':' + (this[m.toLowerCase()] ? 'yes' : 'no')).join(', '));
         }
+
+        this.initialized = true;
+        this.log('Extension initialization complete, modules: ' +
+          MODULE_CLASSES.map(m => m.toLowerCase() + ':' + (this[m.toLowerCase()] ? 'yes' : 'no')).join(', '));
 
         if (targetWindow) {
           this.addUIElements(targetWindow);
@@ -369,39 +409,61 @@ if (typeof Zotero === 'undefined') {
           // Use setTimeout to let dialog initialize before starting analysis
           const self = this;
           setTimeout(async function() {
+            fileLog('setTimeout callback running');
+            console.log('Name Normalizer: setTimeout callback running');
             try {
+              fileLog('Starting async analysis...');
               self.log('Starting async analysis...');
+              console.log('Name Normalizer: Starting async analysis...');
 
               // Get ZoteroNameNormalizer from the main window (where Zotero is available)
               // Note: ZoteroNameNormalizer is set in main window scope via bootstrap.js
-              const mainWindowZoteroNameNormalizer = window.ZoteroNameNormalizer;
-              self.log('window.ZoteroNameNormalizer: ' + (mainWindowZoteroNameNormalizer ? 'defined' : 'undefined'));
+              const mainWindow = typeof Zotero !== 'undefined' ? Zotero.getMainWindow() : null;
+              fileLog('mainWindow: ' + (mainWindow ? 'EXISTS' : 'NULL'));
+              console.log('Name Normalizer: mainWindow=' + (mainWindow ? 'EXISTS' : 'NULL'));
+              const mainWindowZoteroNameNormalizer = mainWindow ? mainWindow.ZoteroNameNormalizer : null;
+              fileLog('ZoteroNameNormalizer: ' + (mainWindowZoteroNameNormalizer ? 'EXISTS' : 'NULL'));
+              console.log('Name Normalizer: ZoteroNameNormalizer=' + (mainWindowZoteroNameNormalizer ? 'EXISTS' : 'NULL'));
 
               if (mainWindowZoteroNameNormalizer && mainWindowZoteroNameNormalizer.ZoteroDBAnalyzer) {
                 const dbAnalyzer = new mainWindowZoteroNameNormalizer.ZoteroDBAnalyzer();
+                fileLog('ZoteroDBAnalyzer created');
+                console.log('Name Normalizer: ZoteroDBAnalyzer created');
 
                 // Create progress callback to update dialog
                 const progressCallback = (progress) => {
-                  self.log('Progress callback: ' + JSON.stringify(progress));
-                  if (dialogWindow && dialogWindow.ZoteroNERController) {
-                    dialogWindow.ZoteroNERController.handleAnalysisProgress(progress);
+                  // Use Zotero.debug which outputs to stderr in test mode
+                  Zotero.debug('Zotero NER: Progress=' + progress.stage + ' ' + progress.percent + '%');
+
+                  const targetWindow = self.currentDialogWindow;
+                  if (targetWindow && targetWindow.ZoteroNERController) {
+                    targetWindow.ZoteroNERController.handleAnalysisProgress(progress);
                   } else {
-                    self.log('Warning: Dialog window or controller not available for progress update');
+                    Zotero.debug('Zotero NER: ERROR - targetWindow=' + (!!targetWindow) + ' ZoteroNERController=' + !!(targetWindow && targetWindow.ZoteroNERController));
                   }
                 };
 
                 // Perform analysis asynchronously
-                self.log('Calling analyzeFullLibrary...');
+                fileLog('Calling analyzeFullLibrary...');
+                console.log('Name Normalizer: Calling analyzeFullLibrary...');
                 const analysisResults = await dbAnalyzer.analyzeFullLibrary(progressCallback);
+                fileLog('Analysis complete: suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
+                console.log('Name Normalizer: Analysis complete, suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
                 self.log('Analysis complete, updating dialog...');
 
                 // Update dialog with results
                 if (dialogWindow && dialogWindow.ZoteroNERController) {
+                  fileLog('Calling updateAnalysisResults...');
+                  console.log('Name Normalizer: Calling updateAnalysisResults...');
                   dialogWindow.ZoteroNERController.updateAnalysisResults(analysisResults);
+                  fileLog('updateAnalysisResults called');
+                  console.log('Name Normalizer: updateAnalysisResults called');
                 } else {
+                  fileLog('ERROR: dialogWindow or ZoteroNERController not available');
                   self.log('Warning: Dialog window or controller not available for results update');
                 }
               } else {
+                fileLog('ZoteroDBAnalyzer not available');
                 self.log('ZoteroDBAnalyzer not available');
                 if (dialogWindow && dialogWindow.ZoteroNERController) {
                   dialogWindow.ZoteroNERController.showEmptyState('ZoteroDBAnalyzer not available');
@@ -409,6 +471,7 @@ if (typeof Zotero === 'undefined') {
               }
             } catch (asyncError) {
               self.log('Error in async analysis: ' + asyncError.message);
+              fileLog('Async error: ' + asyncError.message);
               if (typeof Zotero !== 'undefined' && typeof Zotero.logError === 'function') {
                 Zotero.logError(asyncError);
               }
@@ -417,22 +480,13 @@ if (typeof Zotero === 'undefined') {
               }
             }
           }, 100); // Give dialog 100ms to initialize
-          
+
         } catch (error) {
-          if (typeof Zotero !== 'undefined') {
-            if (typeof Zotero.logError === 'function') {
-              Zotero.logError(error);
-            }
-            if (typeof Zotero.getMainWindow === 'function') {
-              const mainWindow = Zotero.getMainWindow();
-              if (mainWindow && typeof mainWindow.alert === 'function') {
-                mainWindow.alert('Error', 'Failed to perform full library analysis: ' + error.message);
-              }
-            }
-          } else {
-            console.error(error);
+          fileLog('Error in showDialogForFullLibrary: ' + error.message);
+          if (typeof Zotero !== 'undefined' && typeof Zotero.logError === 'function') {
+            Zotero.logError(error);
           }
-          
+
           // Update dialog with error state
           if (this.currentDialogWindow && this.currentDialogWindow.ZoteroNERController) {
             this.currentDialogWindow.ZoteroNERController.showEmptyState('Analysis failed: ' + error.message);
@@ -443,10 +497,20 @@ if (typeof Zotero === 'undefined') {
       showDialog: function(items, analysisResults) {
         try {
           var mainWindow = Zotero.getMainWindow();
+
+          // Clear cached stale data to force fresh analysis
+          this.log('Clearing cached dialog params');
+          mainWindow.ZoteroNameNormalizerDialogParams = null;
+          mainWindow.ZoteroNameNormalizerAnalysisResults = null;
+          mainWindow.ZoteroNameNormalizerDialogParamsJSON = null;
+          mainWindow.ZoteroNameNormalizerAnalysisResultsJSON = null;
+
           var params = {
             items: items,
             analysisResults: analysisResults
           };
+
+          this.log('showDialog: items=' + (items ? 'SET' : 'NULL') + ', analysisResults=' + (analysisResults ? JSON.stringify(analysisResults).substring(0, 100) : 'NULL'));
 
           var serializedAnalysisResults = null;
           try {
@@ -473,12 +537,12 @@ if (typeof Zotero === 'undefined') {
             }
           }
 
-          // Open the dialog slightly wider so the variant detail panel is visible
-          // Note: Using 'chrome,centerscreen' instead of 'chrome,modal' to allow async updates
+          // Open the dialog as a modeless window (not modal)
+          // Modal dialogs block parent JavaScript and prevent progress updates
           const dialogWindow = mainWindow.openDialog(
             'chrome://zoteronamenormalizer/content/dialog.html',
             'zotero-name-normalizer-dialog',
-            'chrome,centerscreen,resizable=yes,dialog=yes,width=1200,height=700',
+            'chrome,centerscreen,resizable=yes,width=1200,height=700',
             params
           );
           
@@ -514,10 +578,62 @@ if (typeof Zotero === 'undefined') {
           throw new Error('Menu integration not initialized');
         }
         return await this.menuIntegration.applyNormalizationSuggestions(suggestions, autoConfirm, options);
+      },
+
+      /**
+       * Open an item in Zotero by its key
+       * @param {string} itemKey - The item key to open
+       */
+      selectItem: async function(itemKey) {
+        if (!itemKey) return;
+        try {
+          // Use ZoteroPane to select the item
+          if (typeof ZoteroPane !== 'undefined' && ZoteroPane.selectItems) {
+            ZoteroPane.selectItems([itemKey]);
+          } else if (typeof Zotero !== 'undefined' && Zotero.URI && Zotero.Items) {
+            // Alternative: construct URL and use launchURL
+            const item = await Zotero.Items.getAsync(itemKey);
+            if (item) {
+              const itemPath = Zotero.URI.getItemPath(item);
+              const url = 'zotero://select/' + itemPath;
+              Zotero.launchURL(url);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to select item: ' + e.message);
+        }
+      },
+
+      /**
+       * Set up event listener for dialog requests to select items
+       * This is called from the dialog to open items in the main Zotero window
+       */
+      setupDialogItemSelector: function() {
+        if (typeof window !== 'undefined') {
+          window.addEventListener('zotero-ner-select-item', async function(event) {
+            const itemKey = event.detail && event.detail.itemKey;
+            if (!itemKey) return;
+
+            try {
+              if (typeof ZoteroPane !== 'undefined' && ZoteroPane.selectItems) {
+                ZoteroPane.selectItems([itemKey]);
+              } else if (typeof Zotero !== 'undefined' && Zotero.URI && Zotero.Items) {
+                const item = await Zotero.Items.getAsync(itemKey);
+                if (item) {
+                  const itemPath = Zotero.URI.getItemPath(item);
+                  const url = 'zotero://select/' + itemPath;
+                  Zotero.launchURL(url);
+                }
+              }
+            } catch (e) {
+              console.error('Failed to select item from dialog: ' + e.message);
+            }
+          });
+        }
       }
     };
   }
-  
+
   // Backward compatibility alias
   Zotero.NER = Zotero.NameNormalizer;
 }

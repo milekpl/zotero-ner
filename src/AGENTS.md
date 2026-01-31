@@ -56,3 +56,12 @@ Main application source code organized by architectural layer. Contains all core
 - onnxruntime-web - ONNX.js runtime for GLINER (optional)
 
 <!-- MANUAL: -->
+
+### IMPORTANT: Debugging in Zotero
+
+**NEVER use `Zotero.debug()`** - it causes the Zotero dialog to hang.
+
+For debugging:
+- Use `console.error()` for error-level output (goes to browser error console)
+- Use `console.log()` for info-level output
+- Or display debug info directly in the dialog HTML for visual feedback
