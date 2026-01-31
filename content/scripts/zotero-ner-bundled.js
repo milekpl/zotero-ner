@@ -2676,16 +2676,21 @@ if (typeof console === 'undefined') {
          * Used for surname variant suggestions to avoid mixing different authors
          * Case-insensitive matching for robustness
          * @param {Object} itemsByFullAuthor - Items keyed by "firstName|lastName"
-         * @param {string} firstName - The author's first name
+         * @param {string} firstName - The author's first name (can be empty for malformed entries)
          * @param {string} lastName - The author's last name
          * @returns {Array} Array of items from this specific author
          */
         findItemsByFullAuthorName(itemsByFullAuthor, firstName, lastName) {
-          if (!firstName || !lastName || !itemsByFullAuthor) {
+          if (!lastName || !itemsByFullAuthor) {
             return [];
           }
-          const normalizedFirst = firstName.trim().toLowerCase();
+          const normalizedFirst = (firstName || "").trim().toLowerCase();
           const variantLastName = lastName.trim();
+          fileLog('findItemsByFullAuthorName: searching for firstName="' + firstName + '" lastName="' + lastName + '"');
+          fileLog('  normalizedFirst="' + normalizedFirst + '" variantLastName="' + variantLastName + '"');
+          fileLog("  itemsByFullAuthor has " + Object.keys(itemsByFullAuthor).length + " keys");
+          const sampleKeys = Object.keys(itemsByFullAuthor).slice(0, 5);
+          fileLog("  Sample keys: " + JSON.stringify(sampleKeys));
           for (const [authorKey, authorItems] of Object.entries(itemsByFullAuthor)) {
             const keyParts = authorKey.split("|");
             if (keyParts.length >= 2) {
@@ -2694,6 +2699,7 @@ if (typeof console === 'undefined') {
               const storedLastLower = storedLastRaw.toLowerCase();
               const searchLastLower = variantLastName.toLowerCase();
               if (storedFirst === normalizedFirst && storedLastLower === searchLastLower) {
+                fileLog('  MATCH FOUND: authorKey="' + authorKey + '" items=' + (Array.isArray(authorItems) ? authorItems.length : 0));
                 if (Array.isArray(authorItems)) {
                   return authorItems.slice().sort((a, b) => {
                     const authorA = (a.author || "").toLowerCase();
@@ -2705,6 +2711,7 @@ if (typeof console === 'undefined') {
               }
             }
           }
+          fileLog('  NO MATCH FOUND for firstName="' + firstName + '" lastName="' + lastName + '"');
           return [];
         }
         extractYear(dateValue) {
@@ -2743,16 +2750,56 @@ if (typeof console === 'undefined') {
                   normalizedFirst,
                   normalizedLast,
                   surnameVariants: {}
-                  // Track all surname variations for this author
+                  // Track all surname variations for this author: {lastName: {count, firstName, items}}
                 };
               }
               authorOccurrences[authorKey].count += creator.count || 1;
-              authorOccurrences[authorKey].surnameVariants[rawLastName] = (authorOccurrences[authorKey].surnameVariants[rawLastName] || 0) + (creator.count || 1);
+              if (!authorOccurrences[authorKey].surnameVariants[rawLastName]) {
+                authorOccurrences[authorKey].surnameVariants[rawLastName] = {
+                  count: 0,
+                  firstName,
+                  // Store the raw firstName used with this surname variant
+                  items: []
+                  // Store items directly with this variant
+                };
+              }
+              authorOccurrences[authorKey].surnameVariants[rawLastName].count += creator.count || 1;
+              if (creator.items && creator.items.length > 0) {
+                const existingItems = authorOccurrences[authorKey].surnameVariants[rawLastName].items;
+                const limit = 25;
+                for (const item of creator.items) {
+                  if (existingItems.length >= limit) break;
+                  const isDuplicate = existingItems.some((existing) => {
+                    if (item.key && existing.key) return existing.key === item.key;
+                    if (item.id && existing.id) return existing.id === item.id;
+                    return false;
+                  });
+                  if (!isDuplicate) {
+                    existingItems.push(item);
+                  }
+                }
+              }
               if (creator.items && creator.items.length > 0) {
                 for (const item of creator.items) {
                   const itemLastName = (item.authorLastName || rawLastName || "").trim();
-                  if (itemLastName) {
-                    authorOccurrences[authorKey].surnameVariants[itemLastName] = (authorOccurrences[authorKey].surnameVariants[itemLastName] || 0) + 1;
+                  if (itemLastName && itemLastName !== rawLastName) {
+                    if (!authorOccurrences[authorKey].surnameVariants[itemLastName]) {
+                      authorOccurrences[authorKey].surnameVariants[itemLastName] = {
+                        count: 0,
+                        firstName,
+                        items: []
+                      };
+                    }
+                    authorOccurrences[authorKey].surnameVariants[itemLastName].count += 1;
+                    const variantItems = authorOccurrences[authorKey].surnameVariants[itemLastName].items;
+                    const isDuplicateVar = variantItems.some((existing) => {
+                      if (item.key && existing.key) return existing.key === item.key;
+                      if (item.id && existing.id) return existing.id === item.id;
+                      return false;
+                    });
+                    if (variantItems.length < 25 && !isDuplicateVar) {
+                      variantItems.push(item);
+                    }
                   }
                 }
               }
@@ -2917,19 +2964,28 @@ if (typeof console === 'undefined') {
               continue;
             }
             const normalizedVariantGroups = /* @__PURE__ */ new Map();
-            for (const [name, count] of Object.entries(surnameVariants)) {
+            for (const [name, variantData] of Object.entries(surnameVariants)) {
+              const count = typeof variantData === "object" ? variantData.count : variantData;
+              const variantFirstName = typeof variantData === "object" ? variantData.firstName : data.firstName;
+              const variantItems = typeof variantData === "object" ? variantData.items || [] : [];
               const normalizedKey = normalizeName2(name);
-              Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '"');
+              Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '" (items: ' + variantItems.length + ")");
               if (!normalizedVariantGroups.has(normalizedKey)) {
                 normalizedVariantGroups.set(normalizedKey, []);
               }
-              normalizedVariantGroups.get(normalizedKey).push({ name, count });
+              normalizedVariantGroups.get(normalizedKey).push({ name, count, firstName: variantFirstName, items: variantItems });
             }
             if (normalizedVariantGroups.size >= 1) {
               const allVariants = [];
               for (const [normalizedKey, variants] of normalizedVariantGroups) {
                 for (const v of variants) {
-                  allVariants.push({ name: v.name, count: v.count, normalizedKey });
+                  allVariants.push({
+                    name: v.name,
+                    count: v.count,
+                    normalizedKey,
+                    firstName: v.firstName,
+                    items: v.items || []
+                  });
                 }
               }
               if (allVariants.length < 2) {
@@ -2937,27 +2993,34 @@ if (typeof console === 'undefined') {
               }
               allVariants.sort((a, b) => b.count - a.count);
               const recommended = allVariants[0].name;
+              const recommendedFirstName = allVariants[0].firstName || data.firstName || "";
+              const recommendedItems = allVariants[0].items || [];
               const recommendedNormalized = normalizeName2(recommended);
               const recommendedGroup = normalizedVariantGroups.get(recommendedNormalized);
               const recommendedCount = recommendedGroup.reduce((sum, v) => sum + v.count, 0);
-              const authorFirstName = data.firstName || "";
               const authorLastName = data.originalLastName || data.lastName || "";
               for (let i2 = 1; i2 < allVariants.length; i2++) {
                 const v = allVariants[i2];
                 potentialVariants.push({
                   variant1: {
                     name: recommended,
-                    frequency: recommendedCount
+                    frequency: recommendedCount,
+                    firstName: recommendedFirstName,
+                    items: recommendedItems
+                    // Items stored directly, no lookup needed
                   },
                   variant2: {
                     name: v.name,
-                    frequency: v.count
+                    frequency: v.count,
+                    firstName: v.firstName || data.firstName || "",
+                    items: v.items || []
+                    // Items stored directly, no lookup needed
                   },
                   similarity: 1,
                   recommendedNormalization: recommended,
-                  // Include author info for filtering items
+                  // Include author info for display purposes
                   authorInfo: {
-                    firstName: authorFirstName,
+                    firstName: recommendedFirstName,
                     lastName: authorLastName
                   }
                 });
@@ -3719,11 +3782,21 @@ if (typeof console === 'undefined') {
             const norm1 = variant.variant1.name;
             const norm2 = variant.variant2.name;
             if (!processedSurnames.has(norm1) && !processedSurnames.has(norm2)) {
-              const items1 = variant.authorInfo ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant1.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
-              const items2 = variant.authorInfo ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant2.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+              let items1 = variant.variant1.items || [];
+              let items2 = variant.variant2.items || [];
+              if (items1.length === 0) {
+                const firstName1 = variant.variant1.firstName || variant.authorInfo && variant.authorInfo.firstName || "";
+                items1 = firstName1 ? this.findItemsByFullAuthorName(itemsByFullAuthor, firstName1, variant.variant1.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
+              }
+              if (items2.length === 0) {
+                const firstName2 = variant.variant2.firstName || variant.authorInfo && variant.authorInfo.firstName || "";
+                items2 = firstName2 ? this.findItemsByFullAuthorName(itemsByFullAuthor, firstName2, variant.variant2.name) : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+              }
               const suggestion = {
                 type: "surname",
                 primary: variant.recommendedNormalization,
+                // Include authorInfo for display purposes
+                authorInfo: variant.authorInfo || null,
                 variants: [
                   {
                     name: variant.variant1.name,

@@ -519,15 +519,49 @@
               debugEl.firstChild.textContent = 'DEBUG: Clicked itemKey=' + itemKey;
             }
             if (itemKey) {
-              // Dispatch custom event to the opener window
+              // Try to select the item in Zotero using multiple methods
               const opener = window.opener;
               if (opener) {
-                const customEvent = new CustomEvent('zotero-ner-select-item', {
-                  detail: { itemKey: itemKey },
-                  bubbles: false,
-                  cancelable: true
-                });
-                opener.dispatchEvent(customEvent);
+                try {
+                  // Method 1: Use ZoteroPane (internal API, most reliable)
+                  if (opener.ZoteroPane && opener.ZoteroPane.selectItem) {
+                    // Try to resolve key to ID if possible
+                    if (opener.Zotero && opener.Zotero.Items && opener.Zotero.Items.getByLibraryAndKeyAsync) {
+                      const libraryID = opener.Zotero.Libraries.userLibraryID;
+                      opener.Zotero.Items.getByLibraryAndKeyAsync(libraryID, itemKey).then(item => {
+                        if (item && item.id) {
+                          opener.ZoteroPane.selectItem(item.id);
+                        } else {
+                          // Fallback: try with key (may not work)
+                          opener.ZoteroPane.selectItem(itemKey);
+                        }
+                      }).catch(e => {
+                        console.error('Failed to get item by key:', e);
+                      });
+                      return;
+                    } else {
+                      opener.ZoteroPane.selectItem(itemKey);
+                      return;
+                    }
+                  }
+                  // Method 2: Use Zotero.NameNormalizer.selectItem (our helper)
+                  if (opener.Zotero && opener.Zotero.NameNormalizer && opener.Zotero.NameNormalizer.selectItem) {
+                    opener.Zotero.NameNormalizer.selectItem(itemKey);
+                    return;
+                  }
+                  // Method 3: Use Zotero.launchURL with zotero:// URI (least reliable)
+                  if (opener.Zotero && opener.Zotero.launchURL) {
+                    const url = 'zotero://select/library/items/' + itemKey;
+                    opener.Zotero.launchURL(url);
+                    return;
+                  }
+                  console.error('No method available to select item');
+                } catch (e) {
+                  console.error('Failed to select item:', e);
+                  if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+                    debugEl.firstChild.textContent = 'DEBUG: Error selecting item: ' + e.message;
+                  }
+                }
               } else {
                 if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
                   debugEl.firstChild.textContent = 'DEBUG: No opener window';

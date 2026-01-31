@@ -480,18 +480,28 @@ class ZoteroDBAnalyzer {
    * Used for surname variant suggestions to avoid mixing different authors
    * Case-insensitive matching for robustness
    * @param {Object} itemsByFullAuthor - Items keyed by "firstName|lastName"
-   * @param {string} firstName - The author's first name
+   * @param {string} firstName - The author's first name (can be empty for malformed entries)
    * @param {string} lastName - The author's last name
    * @returns {Array} Array of items from this specific author
    */
   findItemsByFullAuthorName(itemsByFullAuthor, firstName, lastName) {
-    if (!firstName || !lastName || !itemsByFullAuthor) {
+    // lastName is required, but firstName can be empty (for malformed entries like "and Friston")
+    if (!lastName || !itemsByFullAuthor) {
       return [];
     }
 
-    const normalizedFirst = firstName.trim().toLowerCase();
+    const normalizedFirst = (firstName || '').trim().toLowerCase();
     // Use exact raw lastName for lookup (don't normalize)
     const variantLastName = lastName.trim();
+    
+    // Debug: Log what we're searching for
+    fileLog('findItemsByFullAuthorName: searching for firstName="' + firstName + '" lastName="' + lastName + '"');
+    fileLog('  normalizedFirst="' + normalizedFirst + '" variantLastName="' + variantLastName + '"');
+    fileLog('  itemsByFullAuthor has ' + Object.keys(itemsByFullAuthor).length + ' keys');
+    
+    // Debug: Log first few keys to see the format
+    const sampleKeys = Object.keys(itemsByFullAuthor).slice(0, 5);
+    fileLog('  Sample keys: ' + JSON.stringify(sampleKeys));
 
     // Find the matching key with exact lastName match (case-insensitive)
     for (const [authorKey, authorItems] of Object.entries(itemsByFullAuthor)) {
@@ -504,6 +514,7 @@ class ZoteroDBAnalyzer {
         const searchLastLower = variantLastName.toLowerCase();
 
         if (storedFirst === normalizedFirst && storedLastLower === searchLastLower) {
+          fileLog('  MATCH FOUND: authorKey="' + authorKey + '" items=' + (Array.isArray(authorItems) ? authorItems.length : 0));
           if (Array.isArray(authorItems)) {
             // Sort items by author name for consistent display
             return authorItems.slice().sort((a, b) => {
@@ -517,6 +528,7 @@ class ZoteroDBAnalyzer {
       }
     }
 
+    fileLog('  NO MATCH FOUND for firstName="' + firstName + '" lastName="' + lastName + '"');
     return [];
   }
 
@@ -565,29 +577,70 @@ class ZoteroDBAnalyzer {
             originalLastName: rawLastName, // Keep the raw lastName from the creator (before parsing)
             normalizedFirst,
             normalizedLast,
-            surnameVariants: {} // Track all surname variations for this author
+            surnameVariants: {} // Track all surname variations for this author: {lastName: {count, firstName, items}}
           };
         }
         authorOccurrences[authorKey].count += (creator.count || 1);
 
         // Track the creator's surname variant (preserve original casing for diacritic detection)
         // Use the original raw lastName so "and Friston" and "Friston" are tracked separately
-        authorOccurrences[authorKey].surnameVariants[rawLastName] =
-          (authorOccurrences[authorKey].surnameVariants[rawLastName] || 0) + (creator.count || 1);
+        // Store the firstName and items directly so we don't need to look them up later
+        if (!authorOccurrences[authorKey].surnameVariants[rawLastName]) {
+          authorOccurrences[authorKey].surnameVariants[rawLastName] = {
+            count: 0,
+            firstName: firstName, // Store the raw firstName used with this surname variant
+            items: [] // Store items directly with this variant
+          };
+        }
+        authorOccurrences[authorKey].surnameVariants[rawLastName].count += (creator.count || 1);
+        
+        // Add items directly to this surname variant (limit to avoid memory issues)
+        if (creator.items && creator.items.length > 0) {
+          const existingItems = authorOccurrences[authorKey].surnameVariants[rawLastName].items;
+          const limit = 25;
+          for (const item of creator.items) {
+            if (existingItems.length >= limit) break;
+            // Avoid duplicates by checking item key or id
+            const isDuplicate = existingItems.some(existing => {
+              if (item.key && existing.key) return existing.key === item.key;
+              if (item.id && existing.id) return existing.id === item.id;
+              return false; // If no key or id, assume not duplicate
+            });
+            if (!isDuplicate) {
+              existingItems.push(item);
+            }
+          }
+        }
 
         // Also track surname variants from items (items might have different author names)
         if (creator.items && creator.items.length > 0) {
           for (const item of creator.items) {
             // Preserve original casing for diacritic detection
             const itemLastName = (item.authorLastName || rawLastName || '').trim();
-            if (itemLastName) {
-              authorOccurrences[authorKey].surnameVariants[itemLastName] =
-                (authorOccurrences[authorKey].surnameVariants[itemLastName] || 0) + 1;
+            if (itemLastName && itemLastName !== rawLastName) {
+              if (!authorOccurrences[authorKey].surnameVariants[itemLastName]) {
+                authorOccurrences[authorKey].surnameVariants[itemLastName] = {
+                  count: 0,
+                  firstName: firstName,
+                  items: []
+                };
+              }
+              authorOccurrences[authorKey].surnameVariants[itemLastName].count += 1;
+              // Add item to this variant too
+              const variantItems = authorOccurrences[authorKey].surnameVariants[itemLastName].items;
+              const isDuplicateVar = variantItems.some(existing => {
+                if (item.key && existing.key) return existing.key === item.key;
+                if (item.id && existing.id) return existing.id === item.id;
+                return false;
+              });
+              if (variantItems.length < 25 && !isDuplicateVar) {
+                variantItems.push(item);
+              }
             }
           }
         }
 
-        // Store items keyed by full author name (firstName|rawLastName)
+        // Store items keyed by full author name (firstName|rawLastName) - keep for backward compatibility
         // Use the raw lastName so each surname variant has its own items
         const fullAuthorKey = `${creator.firstName || ''}|${creator.lastName || ''}`;
         if (creator.items && creator.items.length > 0) {
@@ -802,25 +855,35 @@ class ZoteroDBAnalyzer {
       }
 
       // Group surname variants by their normalized (diacritic-agnostic) form
-      const normalizedVariantGroups = new Map(); // normalizedKey -> [{name, count}]
+      const normalizedVariantGroups = new Map(); // normalizedKey -> [{name, count, firstName, items}]
 
-      for (const [name, count] of Object.entries(surnameVariants)) {
+      for (const [name, variantData] of Object.entries(surnameVariants)) {
+        // variantData is now {count, firstName, items} instead of just count
+        const count = typeof variantData === 'object' ? variantData.count : variantData;
+        const variantFirstName = typeof variantData === 'object' ? variantData.firstName : data.firstName;
+        const variantItems = typeof variantData === 'object' ? (variantData.items || []) : [];
         const normalizedKey = normalizeName(name);
-        Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '"');
+        Zotero.debug('ZoteroDBAnalyzer: Normalized "' + name + '" -> "' + normalizedKey + '" (items: ' + variantItems.length + ')');
 
         if (!normalizedVariantGroups.has(normalizedKey)) {
           normalizedVariantGroups.set(normalizedKey, []);
         }
-        normalizedVariantGroups.get(normalizedKey).push({ name, count });
+        normalizedVariantGroups.get(normalizedKey).push({ name, count, firstName: variantFirstName, items: variantItems });
       }
 
       // If we have multiple variants that normalize to the same key, these are diacritic variants
       if (normalizedVariantGroups.size >= 1) {
-        // Collect all variants and their counts
+        // Collect all variants and their counts, firstName, and items
         const allVariants = [];
         for (const [normalizedKey, variants] of normalizedVariantGroups) {
           for (const v of variants) {
-            allVariants.push({ name: v.name, count: v.count, normalizedKey });
+            allVariants.push({ 
+              name: v.name, 
+              count: v.count, 
+              normalizedKey,
+              firstName: v.firstName,
+              items: v.items || []
+            });
           }
         }
 
@@ -832,14 +895,15 @@ class ZoteroDBAnalyzer {
         // Sort by frequency to determine recommended form
         allVariants.sort((a, b) => b.count - a.count);
         const recommended = allVariants[0].name;
+        const recommendedFirstName = allVariants[0].firstName || data.firstName || '';
+        const recommendedItems = allVariants[0].items || [];
 
         // Calculate total count for the recommended form (sum of all variants that normalize to it)
         const recommendedNormalized = normalizeName(recommended);
         const recommendedGroup = normalizedVariantGroups.get(recommendedNormalized);
         const recommendedCount = recommendedGroup.reduce((sum, v) => sum + v.count, 0);
 
-        // Get author info for filtering items
-        const authorFirstName = data.firstName || '';
+        // Get author info for filtering items - use the lastName from data but firstName from the variant
         const authorLastName = data.originalLastName || data.lastName || '';
 
         // Create pairs between the recommended form and other variants (skip the first one which is recommended)
@@ -848,17 +912,21 @@ class ZoteroDBAnalyzer {
           potentialVariants.push({
             variant1: {
               name: recommended,
-              frequency: recommendedCount
+              frequency: recommendedCount,
+              firstName: recommendedFirstName,
+              items: recommendedItems // Items stored directly, no lookup needed
             },
             variant2: {
               name: v.name,
-              frequency: v.count
+              frequency: v.count,
+              firstName: v.firstName || data.firstName || '',
+              items: v.items || [] // Items stored directly, no lookup needed
             },
             similarity: 1.0,
             recommendedNormalization: recommended,
-            // Include author info for filtering items
+            // Include author info for display purposes
             authorInfo: {
-              firstName: authorFirstName,
+              firstName: recommendedFirstName,
               lastName: authorLastName
             }
           });
@@ -1824,18 +1892,30 @@ class ZoteroDBAnalyzer {
       const norm2 = variant.variant2.name;
 
       if (!processedSurnames.has(norm1) && !processedSurnames.has(norm2)) {
-        // Find items for each surname variant by looking up full author names
-        // Filter by author info if available to avoid mixing different authors
-        const items1 = variant.authorInfo
-          ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant1.name)
-          : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
-        const items2 = variant.authorInfo
-          ? this.findItemsByFullAuthorName(itemsByFullAuthor, variant.authorInfo.firstName, variant.variant2.name)
-          : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+        // Use items directly from the variant (already collected during analysis)
+        // Fall back to lookup only if items aren't already attached
+        let items1 = variant.variant1.items || [];
+        let items2 = variant.variant2.items || [];
+        
+        // Fallback: lookup if no items attached (backward compatibility)
+        if (items1.length === 0) {
+          const firstName1 = variant.variant1.firstName || (variant.authorInfo && variant.authorInfo.firstName) || '';
+          items1 = firstName1
+            ? this.findItemsByFullAuthorName(itemsByFullAuthor, firstName1, variant.variant1.name)
+            : this.findItemsBySurname(itemsByFullAuthor, variant.variant1.name);
+        }
+        if (items2.length === 0) {
+          const firstName2 = variant.variant2.firstName || (variant.authorInfo && variant.authorInfo.firstName) || '';
+          items2 = firstName2
+            ? this.findItemsByFullAuthorName(itemsByFullAuthor, firstName2, variant.variant2.name)
+            : this.findItemsBySurname(itemsByFullAuthor, variant.variant2.name);
+        }
 
         const suggestion = {
           type: 'surname',
           primary: variant.recommendedNormalization,
+          // Include authorInfo for display purposes
+          authorInfo: variant.authorInfo || null,
           variants: [
             {
               name: variant.variant1.name,

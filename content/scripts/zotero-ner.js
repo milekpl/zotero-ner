@@ -587,19 +587,40 @@ if (typeof Zotero === 'undefined') {
       selectItem: async function(itemKey) {
         if (!itemKey) return;
         try {
-          // Use ZoteroPane to select the item
-          if (typeof ZoteroPane !== 'undefined' && ZoteroPane.selectItems) {
-            ZoteroPane.selectItems([itemKey]);
-          } else if (typeof Zotero !== 'undefined' && Zotero.URI && Zotero.Items) {
-            // Alternative: construct URL and use launchURL
-            const item = await Zotero.Items.getAsync(itemKey);
-            if (item) {
-              const itemPath = Zotero.URI.getItemPath(item);
-              const url = 'zotero://select/' + itemPath;
-              Zotero.launchURL(url);
+          this.log('selectItem called with key: ' + itemKey);
+          
+          // Method 1: Use ZoteroPane (internal API, most reliable)
+          if (typeof ZoteroPane !== 'undefined' && ZoteroPane.selectItem) {
+            if (typeof Zotero !== 'undefined' && Zotero.Items && Zotero.Items.getByLibraryAndKeyAsync) {
+              const libraryID = Zotero.Libraries.userLibraryID;
+              const item = await Zotero.Items.getByLibraryAndKeyAsync(libraryID, itemKey);
+              if (item && item.id) {
+                this.log('Using ZoteroPane.selectItem with id: ' + item.id);
+                await ZoteroPane.selectItem(item.id);
+                return;
+              }
             }
+            // Fallback: try with key (may not work)
+            this.log('Using ZoteroPane.selectItem with key: ' + itemKey);
+            await ZoteroPane.selectItem(itemKey);
+            return;
           }
+          // Method 2: Use Zotero.NameNormalizer.selectItem (our helper)
+          if (typeof Zotero !== 'undefined' && Zotero.NameNormalizer && Zotero.NameNormalizer.selectItem) {
+            this.log('Using Zotero.NameNormalizer.selectItem');
+            await Zotero.NameNormalizer.selectItem(itemKey);
+            return;
+          }
+          // Method 3: Use zotero:// URI as a last resort
+          if (typeof Zotero !== 'undefined' && Zotero.launchURL) {
+            const url = 'zotero://select/library/items/' + itemKey;
+            this.log('Using launchURL: ' + url);
+            Zotero.launchURL(url);
+            return;
+          }
+          this.log('No method available to select item');
         } catch (e) {
+          this.log('Failed to select item: ' + e.message);
           console.error('Failed to select item: ' + e.message);
         }
       },
