@@ -542,7 +542,7 @@ if (typeof Zotero === 'undefined') {
           const dialogWindow = mainWindow.openDialog(
             'chrome://zoteronamenormalizer/content/dialog.html',
             'zotero-name-normalizer-dialog',
-            'chrome,centerscreen,resizable=yes,width=1200,height=700',
+            'chrome,centerscreen,resizable=yes,width=750,height=550',
             params
           );
           

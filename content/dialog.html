@@ -3,37 +3,53 @@
 <head>
   <title>Author Name Normalizer</title>
   <style>
-    body { 
-      font-family: -moz-dialog, Arial, sans-serif; 
-      padding: 20px; 
-      margin: 0; 
+    html, body {
+      font-family: -moz-dialog, Arial, sans-serif;
+      padding: 12px;
+      margin: 0;
       background: #f9f9f9;
       color: #333;
     }
     h1 { margin-top: 0; }
-    .summary { 
-      background: #e8f4fd; 
-      padding: 15px; 
-      margin: 10px 0; 
-      border: 1px solid #b3d9ff; 
-      border-radius: 4px; 
+    .summary {
+      background: #e8f4fd;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #b3d9ff;
+      border-radius: 4px;
     }
     .summary-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
-    .variant-group { 
-      margin: 15px 0; 
-      padding: 15px; 
-      border: 1px solid #ddd; 
-      border-radius: 4px; 
+    .variant-group {
+      margin: 6px 0;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
       background: white;
     }
+    .variant-group h3 {
+      margin: 0 0 4px 0;
+      font-size: 1em;
+      color: #0066cc;
+    }
     .variant-group h4 { margin: 0 0 10px 0; color: #0066cc; }
-    .primary { 
-      font-weight: bold; 
-      color: #0066cc; 
+    .variant-group-header {
+      margin-bottom: 6px;
+    }
+    .variant-group-summary {
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    .surname-variant {
+      font-style: italic;
+    }
+    .primary {
+      font-weight: bold;
+      color: #0066cc;
       margin-bottom: 10px;
       padding: 5px;
       background: #f0f8ff;
@@ -86,10 +102,14 @@
       font-style: italic;
     }
     .radio-group {
-      margin: 10px 0;
+      margin: 6px 0;
     }
     .radio-group input[type="radio"] {
       margin-right: 5px;
+    }
+    .radio-group label {
+      word-wrap: break-word;
+      max-width: 100%;
     }
     .confidence {
       font-size: 0.9em;
@@ -124,15 +144,44 @@
       margin-bottom: 6px;
     }
     .custom-normalization input[type="text"] {
-      width: 100%;
-      padding: 6px 8px;
+      width: 150px;
+      padding: 4px 6px;
       border: 1px solid #c9d1d9;
       border-radius: 3px;
-      font-size: 0.95em;
+      font-size: 0.9em;
     }
     .custom-normalization input[type="text"]:disabled {
       background: #f0f0f0;
       color: #777;
+    }
+    .card-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e8e8e8;
+    }
+    .card-actions button {
+      margin: 0;
+      padding: 4px 10px;
+      font-size: 0.85em;
+    }
+    .card-actions .apply-btn {
+      background: #007acc;
+      color: white;
+      border-color: #0066a8;
+    }
+    .card-actions .apply-btn:hover:not(:disabled) {
+      background: #0066a8;
+    }
+    .card-actions .not-variants-btn {
+      background: #f9f9f9;
+      color: #666;
+      border-color: #ccc;
+    }
+    .card-actions .not-variants-btn:hover:not(:disabled) {
+      background: #f0f0f0;
+      color: #333;
     }
     .progress { 
       margin: 10px 0; 
@@ -216,12 +265,12 @@
       flex-wrap: wrap;
     }
     #variant-filter-input {
-      flex: 1 1 260px;
-      max-width: 420px;
-      padding: 6px 10px;
+      flex: 1 1 150px;
+      max-width: 200px;
+      padding: 4px 6px;
       border: 1px solid #c9d1d9;
       border-radius: 4px;
-      font-size: 0.95em;
+      font-size: 0.85em;
       background: #fff;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
@@ -240,46 +289,43 @@
     }
     #variant-layout {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-      gap: 20px;
-      align-items: start;
+      grid-template-columns: 1fr 250px;
+      grid-template-rows: auto;
+      gap: 10px;
+      width: 100%;
     }
     #variant-groups-column {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
     }
     .variant-detail {
-      padding: 16px;
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 250px;
+      width: 250px;
+      padding: 8px;
       border: 1px solid #d0d7de;
       border-radius: 6px;
       background: #fff;
       box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
-      position: sticky;
-      top: 0;
-      max-height: calc(100vh - 220px);
+      max-height: 300px;
       overflow: hidden;
-      display: block;
-      transition: box-shadow 0.2s ease;
-    }
-    .variant-detail.hidden {
-      display: none;
     }
     .variant-detail h4 {
-      margin: 0 0 6px 0;
+      margin: 0 0 4px 0;
       color: #005a9c;
-      font-size: 1.05em;
+      font-size: 0.95em;
     }
     .variant-detail-context {
-      font-size: 0.9em;
+      font-size: 0.8em;
       color: #586069;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .variant-detail-empty {
-      font-size: 0.9em;
+      font-size: 0.85em;
       color: #69737d;
-      line-height: 1.4;
-      padding: 12px 0;
+      padding: 8px 0;
     }
     .variant-detail.empty #variant-detail-items,
     .variant-detail.empty .variant-detail-context {
@@ -292,15 +338,15 @@
       list-style: none;
       padding-left: 0;
       margin: 0;
-      max-height: calc(100vh - 320px);
+      max-height: 200px;
       overflow-y: auto;
+      font-size: 0.85em;
     }
     .variant-detail-items li {
-      margin: 6px 0;
-      line-height: 1.4;
-      padding: 4px 6px;
-      border-radius: 3px;
+      margin: 4px 0;
+      padding: 3px 5px;
       background: #fafbfc;
+      border-radius: 3px;
     }
     .variant-detail-items li:hover {
       background: #f0f4f8;
@@ -1155,6 +1201,165 @@
         return false;
       },
 
+      // Per-card apply: apply a single suggestion and remove its card from the UI
+      applyCard: async function(index, suggestion) {
+        const selection = this.ensureUserSelection(index, suggestion);
+        if (!selection) {
+          return false;
+        }
+
+        // Check if there's a valid selection to apply
+        const normalizedValue = (selection.value || selection.customValue || '').trim();
+        if (!normalizedValue || selection.apply === false) {
+          return false;
+        }
+
+        // Mark as applied
+        selection.applied = true;
+
+        // Find and remove the card
+        const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(-20px)';
+          setTimeout(() => {
+            card.remove();
+            this.checkAllCardsApplied();
+          }, 300);
+        }
+
+        return true;
+      },
+
+      // Mark card as "not variants" (distinct authors) and remove from UI
+      markNotVariants: function(index, suggestion) {
+        const selection = this.ensureUserSelection(index, suggestion);
+        if (!selection) {
+          return false;
+        }
+
+        // Mark as declined (not variants)
+        selection.apply = false;
+        selection.notVariants = true;
+
+        // Store user preference to never propose this normalization again
+        this.storeNotVariantsPreference(suggestion);
+
+        // Find and remove the card with animation
+        const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(-20px)';
+          setTimeout(() => {
+            card.remove();
+            this.checkAllCardsApplied();
+          }, 300);
+        }
+
+        return true;
+      },
+
+      // Store user preference for "not variants" (distinct authors)
+      storeNotVariantsPreference: function(suggestion) {
+        // Create a unique key for this suggestion based on its characteristics
+        const key = this.getNotVariantsKey(suggestion);
+
+        // Get existing preferences
+        const existingPrefs = this.getNotVariantsPreferences();
+        if (!existingPrefs.includes(key)) {
+          existingPrefs.push(key);
+          this.saveNotVariantsPreferences(existingPrefs);
+        }
+
+        this.log('Stored "not variants" preference for: ' + key);
+      },
+
+      // Generate a unique key for identifying this suggestion
+      getNotVariantsKey: function(suggestion) {
+        if (suggestion.type === 'given-name') {
+          return `given-name:${suggestion.surname || ''}:${suggestion.primary || ''}`;
+        }
+        return `surname:${suggestion.primary || ''}`;
+      },
+
+      // Get stored "not variants" preferences
+      getNotVariantsPreferences: function() {
+        try {
+          const prefs = window.localStorage.getItem('zotero-ner-not-variants');
+          return prefs ? JSON.parse(prefs) : [];
+        } catch (e) {
+          return [];
+        }
+      },
+
+      // Save "not variants" preferences
+      saveNotVariantsPreferences: function(prefs) {
+        try {
+          window.localStorage.setItem('zotero-ner-not-variants', JSON.stringify(prefs));
+        } catch (e) {
+          this.log('Failed to save not-variants preferences: ' + e.message);
+        }
+      },
+
+      // Check if all cards have been applied/declined
+      checkAllCardsApplied: function() {
+        const remainingCards = document.querySelectorAll('.variant-group');
+        if (remainingCards.length === 0) {
+          // All cards have been handled - update empty message
+          const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
+          if (emptyMsg) {
+            const content = document.createElement('div');
+            content.className = 'empty-message-content';
+            const p = document.createElement('p');
+            p.textContent = 'All variant groups have been processed. You can close this dialog.';
+            content.appendChild(p);
+            emptyMsg.innerHTML = '';
+            emptyMsg.appendChild(content);
+            emptyMsg.style.display = 'block';
+          }
+          // Disable the main apply buttons since there are no more cards
+          this.setApplyEnabled(false);
+        }
+      },
+
+      // Build the per-card action buttons (Apply and Not Variants)
+      buildCardActions: function(index, suggestion) {
+        const container = ZoteroNER_HTMLUtils.createElement('div', { class: 'card-actions' });
+
+        // Apply button
+        const applyBtn = ZoteroNER_HTMLUtils.createElement('button', {
+          type: 'button',
+          class: 'apply-btn',
+          'data-suggestion-index': String(index)
+        });
+        applyBtn.textContent = 'Apply';
+
+        // Not Variants button (Distinct Authors)
+        const notVariantsBtn = ZoteroNER_HTMLUtils.createElement('button', {
+          type: 'button',
+          class: 'not-variants-btn',
+          'data-suggestion-index': String(index),
+          title: 'Mark these as distinct authors - this will not be proposed again'
+        });
+        notVariantsBtn.textContent = 'Not Variants';
+
+        // Add click handlers
+        applyBtn.addEventListener('click', async () => {
+          await this.applyCard(index, suggestion);
+        });
+
+        notVariantsBtn.addEventListener('click', () => {
+          this.markNotVariants(index, suggestion);
+        });
+
+        container.appendChild(applyBtn);
+        container.appendChild(notVariantsBtn);
+
+        return container;
+      },
+
       getDefaultNormalizationValue: function(suggestion) {
         if (!suggestion) {
           return '';
@@ -1194,13 +1399,13 @@
         if (suggestion.type === 'given-name') {
           const surname = this.titleCase(suggestion.surname || suggestion.primary || '');
           return surname
-            ? `Given name variants · ${surname}`
-            : `Given name variants · Group ${groupNumber}`;
+            ? `Given name variants <span class="surname-variant">${surname}</span>`
+            : `Given name variants Group ${groupNumber}`;
         }
 
         const surname = this.titleCase(suggestion.primary || '');
         return surname
-          ? `Surname variants · ${surname}`
+          ? `Surname variants <span class="surname-variant">${surname}</span>`
           : `Variant Group ${groupNumber}`;
       },
 
@@ -1323,11 +1528,11 @@
       },
 
       getVariantDetailTitle: function(suggestion, variant) {
-  const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+        const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
         if (suggestion.type === 'given-name') {
           return `Occurrences for ${label}`;
         }
-        return `Occurrences for surname variant ${label}`;
+        return `Occurrences for <span class="surname-variant">${label}</span>`;
       },
 
       showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
@@ -1374,7 +1579,7 @@
 
         const titleEl = ZoteroNER_HTMLUtils.getElement('variant-detail-title');
         if (titleEl) {
-          titleEl.textContent = this.getVariantDetailTitle(suggestion, variant);
+          titleEl.innerHTML = this.getVariantDetailTitle(suggestion, variant);
         }
 
         const contextEl = ZoteroNER_HTMLUtils.getElement('variant-detail-context');
@@ -1400,13 +1605,6 @@
             emptyLi.innerHTML = `<span style="color:red;">No items found. lookupKey=[${lookupKey}]</span>`;
             listEl.appendChild(emptyLi);
           } else {
-            // Add debug info element at the top
-            const debugLi = document.createElement('li');
-            debugLi.className = 'debug-info';
-            debugLi.style.cssText = 'color:#666;font-size:0.8em;padding:2px 0;';
-            debugLi.textContent = 'DEBUG: ' + items.length + ' items loaded';
-            listEl.appendChild(debugLi);
-
             items.forEach(item => {
               const li = document.createElement('li');
               const html = this.formatItemSummaryHTML(item);
@@ -1707,11 +1905,11 @@
           visibleCount++;
           renderedIndexes.push(index);
           this.ensureUserSelection(index, suggestion);
-          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
+          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group', 'data-suggestion-index': String(index) });
 
           const header = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-header' });
           const title = ZoteroNER_HTMLUtils.createElement('h3');
-          title.textContent = this.getGroupTitle(index, suggestion);
+          title.innerHTML = this.getGroupTitle(index, suggestion);
           header.appendChild(title);
 
           const summary = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-summary' });
@@ -1748,6 +1946,10 @@
               variantsContainer.appendChild(relatedSection);
             }
           }
+
+          // Add per-card action buttons
+          const cardActions = this.buildCardActions(index, suggestion);
+          variantsContainer.appendChild(cardActions);
 
           groupElement.appendChild(variantsContainer);
           container.appendChild(groupElement);
@@ -2150,11 +2352,8 @@
         ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         ZoteroNER_HTMLUtils.setHidden('variant-section', true);
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
-        
-        // Set initial loading message
         ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
         ZoteroNER_HTMLUtils.updateProgressBar(0);
-        
         this.setApplyEnabled(false);
       },
       
@@ -2162,16 +2361,14 @@
         if (!progress) {
           return;
         }
-
+        ZoteroNER_HTMLUtils.setHidden('progress-container', false);
         // Log debug messages to file
         if (progress.stage === 'debug' && progress.message) {
           this.fileLogger.log('ANALYZER: ' + progress.message);
         }
-
         let message = 'Analyzing library...';
         let percent = 0;
         let isIndeterminate = false;
-
         if (progress.stage === 'filtering_items') {
           message = `Loading items... (${progress.processed || 0} of ${progress.total || '?'})`;
           percent = progress.percent || 0;
@@ -2190,9 +2387,7 @@
           message = progress.message || 'Analyzing...';
           percent = progress.percent || 0;
         }
-
         ZoteroNER_HTMLUtils.updateProgressLabel(message);
-
         // Update progress bar with visual feedback
         const fill = document.getElementById('progress-fill');
         if (fill) {
