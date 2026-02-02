@@ -505,6 +505,66 @@
       }
     };
 
+    // Zotero API access helper - robust pattern for dialog context
+    var ZoteroNER_ZoteroAPI = {
+      /**
+       * Get Zotero API reference from dialog context
+       * Tries multiple patterns in order of preference
+       * @returns {Object|null} Zotero API or null if unavailable
+       */
+      getZotero: function() {
+        // Pattern 1: window.opener.Zotero (for dialogs opened via openDialog)
+        if (window.opener && window.opener.Zotero) {
+          return window.opener.Zotero;
+        }
+
+        // Pattern 2: parent frame Zotero (for iframes)
+        let current = window;
+        while (current.parent && current.parent !== current) {
+          if (current.parent.Zotero) {
+            return current.parent.Zotero;
+          }
+          current = current.parent;
+        }
+
+        // Pattern 3: Global Zotero (may not be available in dialog context)
+        if (typeof Zotero !== 'undefined') {
+          return Zotero;
+        }
+
+        return null;
+      },
+
+      /**
+       * Get Zotero.NER / Zotero.NameNormalizer reference
+       * @returns {Object|null} NameNormalizer API or null if unavailable
+       */
+      getNameNormalizer: function() {
+        const zotero = this.getZotero();
+        if (!zotero) return null;
+
+        // Prefer Zotero.NameNormalizer (modern)
+        if (zotero.NameNormalizer) {
+          return zotero.NameNormalizer;
+        }
+
+        // Fall back to Zotero.NER (legacy alias)
+        if (zotero.NER) {
+          return zotero.NER;
+        }
+
+        return null;
+      },
+
+      /**
+       * Check if Zotero APIs are available
+       * @returns {boolean}
+       */
+      isAvailable: function() {
+        return this.getZotero() !== null;
+      }
+    };
+
     // Embedded controller
     var ZoteroNER_NormalizationDialog = {
       dbAnalyzer: null,
@@ -517,37 +577,8 @@
     filterText: '',
     currentProgressState: null,
 
-      // File-based logger for debugging
-      fileLogger: {
-        logPath: '/tmp/zotero-normalizer.log',
-        log: function(msg) {
-          try {
-            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-            const line = timestamp + ' ' + msg + '\n';
-            if (typeof Components !== 'undefined') {
-              // Firefox/XUL context - use nsIFileOutputStream
-              const file = Components.classes['@mozilla.org/file/directory_service;1']
-                .getService(Components.interfaces.nsIProperties)
-                .get('TmpD', Components.interfaces.nsIFile);
-              file.append('zotero-normalizer.log');
-              const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
-                .createInstance(Components.interfaces.nsIFileOutputStream);
-              fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0);
-              const data = new TextEncoder().encode(line);
-              fos.write(line, data.length);
-              fos.close();
-            }
-            // Also log to console for immediate feedback
-            console.log('NER-LOG: ' + msg);
-          } catch(e) {
-            console.log('NER-LOG: ' + msg);
-          }
-        }
-      },
-
       init: function() {
         console.log('Dialog initialization started');
-        this.fileLogger.log('=== Dialog init started ===');
         this.userSelections = new Map();
         this.variantDetailState = null;
         this.filterText = '';
@@ -747,21 +778,7 @@
             Zotero.debug('Zotero NER Dialog: ' + message);
           }
         } catch (e) {}
-        // Also write to file for debugging
-        try {
-          if (typeof Components !== 'undefined') {
-            const file = Components.classes['@mozilla.org/file/directory_service;1']
-              .getService(Components.interfaces.nsIProperties)
-              .get('TmpD', Components.interfaces.nsIFile);
-            file.append('zotero-normalizer.log');
-            const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
-              .createInstance(Components.interfaces.nsIFileOutputStream);
-            fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0);
-            const data = new TextEncoder().encode(timestamp + ' ' + message + '\n');
-            fos.write(message, data.length);
-            fos.close();
-          }
-        } catch (e) {}
+        // Note: XPCOM file logging removed (dead code, never worked in modern browsers)
       },
 
       alert: function(title, message) {
@@ -845,12 +862,16 @@
       
       initialize: async function() {
         this.log('Dialog initialize started');
-        this.fileLogger.log('=== Dialog initialize ===');
 
         // Track when analysis is complete (set by updateAnalysisResults)
         this.analysisComplete = false;
 
         // DEBUG: Set timeout to detect if analysis never starts
+        // Track last progress update time for adaptive timeout
+        let lastProgressTime = Date.now();
+        const ADAPTIVE_TIMEOUT_MS = 60000; // 60 seconds max for large libraries
+        const PROGRESS_UPDATE_TIMEOUT_MS = 15000; // 15 seconds since last progress = stuck
+
         const analysisStartTime = Date.now();
         const self = this;
         this.checkAnalysisInterval = setInterval(() => {
@@ -859,18 +880,30 @@
             clearInterval(self.checkAnalysisInterval);
             self.checkAnalysisInterval = null;
             const suggestionCount = (self.analysisResults && self.analysisResults.suggestions) ? self.analysisResults.suggestions.length : 0;
-            self.fileLogger.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
-          } else if (Date.now() - analysisStartTime > 10000) {
-            // 10 seconds passed, no valid results
+            self.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
+          } else if (self.analysisResults && self.analysisResults.suggestions) {
+            // Results arrived but analysisComplete flag not set - complete now
             clearInterval(self.checkAnalysisInterval);
             self.checkAnalysisInterval = null;
-            self.fileLogger.log('ERROR: Timeout waiting for analysis results after 10s');
-            self.fileLogger.log('  this.analysisResults: ' + (self.analysisResults ? 'SET' : 'NULL'));
-            self.fileLogger.log('  this.analysisComplete: ' + self.analysisComplete);
-            if (self.analysisResults) {
-              self.fileLogger.log('  suggestions: ' + (self.analysisResults.suggestions ? self.analysisResults.suggestions.length : 'NULL'));
+            self.log('Analysis results received (timeout check), suggestions: ' + self.analysisResults.suggestions.length);
+          } else {
+            // Adaptive timeout: check both max time and last progress
+            const timeSinceStart = Date.now() - analysisStartTime;
+            const timeSinceProgress = Date.now() - lastProgressTime;
+
+            if (timeSinceStart > ADAPTIVE_TIMEOUT_MS) {
+              // Absolute timeout: analysis running too long
+              clearInterval(self.checkAnalysisInterval);
+              self.checkAnalysisInterval = null;
+              self.log('ERROR: Analysis timeout after ' + timeSinceStart + 'ms (adaptive)');
+              self.showEmptyState('Analysis timed out. The library may be too large or the server may be busy.');
+            } else if (timeSinceProgress > PROGRESS_UPDATE_TIMEOUT_MS) {
+              // No progress for 15 seconds - check if we're still loading
+              self.log('No progress for ' + timeSinceProgress + 'ms, checking status...');
+              // Don't timeout yet, just log - analysis might still be running
+              // Reset lastProgressTime to avoid repeated warnings
+              lastProgressTime = Date.now();
             }
-            self.showEmptyState('Analysis timed out. The analysis may have failed to run properly.');
           }
         }, 500);
 
@@ -879,14 +912,9 @@
         try {
           if (typeof window.arguments !== 'undefined' && window.arguments.length > 0) {
             params = window.arguments[0];
-            this.fileLogger.log('window.arguments[0] type: ' + (params ? typeof params : 'NULL'));
-            this.fileLogger.log('window.arguments[0] loading: ' + (params && params.loading === true ? 'TRUE' : 'FALSE/NULL'));
-            this.fileLogger.log('window.arguments[0] has analysisResults: ' + (params && params.analysisResults ? 'TRUE' : 'FALSE'));
             if (params && params.analysisResults) {
-              this.fileLogger.log('  params.analysisResults.suggestions: ' + (params.analysisResults.suggestions ? params.analysisResults.suggestions.length : 'NULL'));
             }
           } else {
-            this.fileLogger.log('window.arguments is undefined or empty');
           }
         } catch (err) {
           this.log('Unable to read window arguments: ' + err.message);
@@ -941,41 +969,21 @@
         }
 
         // DEBUG: Log params status
-        this.fileLogger.log('params is ' + (params ? 'SET' : 'NULL'));
-        this.fileLogger.log('window.opener is ' + (window.opener ? 'SET' : 'NULL'));
         if (window.opener) {
-          this.fileLogger.log('opener.ZoteroNERDialogParams is ' + (window.opener.ZoteroNERDialogParams ? 'SET' : 'NULL'));
-          this.fileLogger.log('opener.ZoteroNERAnalysisResultsJSON is ' + (window.opener.ZoteroNERAnalysisResultsJSON ? 'SET' : 'NULL'));
-          this.fileLogger.log('opener.ZoteroNERAnalysisResults is ' + (window.opener.ZoteroNERAnalysisResults ? 'SET' : 'NULL'));
         }
-        this.fileLogger.log('window.ZoteroNERDialogParams is ' + (window.ZoteroNERDialogParams ? 'SET' : 'NULL'));
-        this.fileLogger.log('window.ZoteroNERAnalysisResultsJSON is ' + (window.ZoteroNERAnalysisResultsJSON ? 'SET' : 'NULL'));
-        this.fileLogger.log('window.ZoteroNERAnalysisResults is ' + (window.ZoteroNERAnalysisResults ? 'SET' : 'NULL'));
 
         let analysisResults = null;
 
         // DEBUG: Log all potential sources
-        this.fileLogger.log('Checking for params/analysisResults...');
-        this.fileLogger.log('  window.arguments[0]: ' + (typeof window.arguments !== 'undefined' && window.arguments.length > 0 ? 'EXISTS' : 'NULL/EMPTY'));
-        this.fileLogger.log('  window.ZoteroNERDialogParams: ' + (window.ZoteroNERDialogParams ? 'EXISTS' : 'NULL'));
-        this.fileLogger.log('  window.ZoteroNERAnalysisResults: ' + (window.ZoteroNERAnalysisResults ? 'EXISTS' : 'NULL'));
         if (window.ZoteroNERAnalysisResults) {
-          this.fileLogger.log('    window.ZoteroNERAnalysisResults.suggestions: ' + (window.ZoteroNERAnalysisResults.suggestions ? window.ZoteroNERAnalysisResults.suggestions.length : 'NULL'));
         }
-        this.fileLogger.log('  window.opener.ZoteroNERDialogParams: ' + (window.opener && window.opener.ZoteroNERDialogParams ? 'EXISTS' : 'NULL'));
-        this.fileLogger.log('  window.opener.ZoteroNERAnalysisResults: ' + (window.opener && window.opener.ZoteroNERAnalysisResults ? 'EXISTS' : 'NULL'));
         if (window.opener && window.opener.ZoteroNERAnalysisResults) {
-          this.fileLogger.log('    opener.analysisResults.suggestions: ' + (window.opener.ZoteroNERAnalysisResults.suggestions ? window.opener.ZoteroNERAnalysisResults.suggestions.length : 'NULL'));
         }
 
         if (params) {
           params = this.unwrapDialogParams(params);
-          this.fileLogger.log('  params after unwrap: ' + (params ? 'EXISTS' : 'NULL'));
           if (params) {
-            this.fileLogger.log('    params.analysisResults: ' + (params.analysisResults ? 'EXISTS' : 'NULL'));
-            this.fileLogger.log('    params.analysisResultsJSON: ' + (params.analysisResultsJSON ? 'EXISTS' : 'NULL'));
             if (params.analysisResults) {
-              this.fileLogger.log('    params.analysisResults.suggestions: ' + (params.analysisResults.suggestions ? params.analysisResults.suggestions.length : 'NULL'));
             }
           }
         }
@@ -983,33 +991,27 @@
         // Try to resolve analysisResults from params
         if (params) {
           analysisResults = this.resolveAnalysisResults(params, 'dialog params');
-          this.fileLogger.log('resolveAnalysisResults from params: ' + (analysisResults ? 'EXISTS' : 'NULL'));
         }
 
         // Try other sources if needed
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
-          this.fileLogger.log('Trying opener.ZoteroNERAnalysisResultsJSON...');
           analysisResults = this.safeParseJSON(window.opener.ZoteroNERAnalysisResultsJSON, 'opener.ZoteroNERAnalysisResultsJSON');
         }
 
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResults) {
-          this.fileLogger.log('Trying opener.ZoteroNERAnalysisResults...');
           analysisResults = this.sanitizeAnalysisResults(window.opener.ZoteroNERAnalysisResults, 'opener.ZoteroNERAnalysisResults direct');
         }
 
         if (!analysisResults && window.ZoteroNERAnalysisResultsJSON) {
-          this.fileLogger.log('Trying window.ZoteroNERAnalysisResultsJSON...');
           analysisResults = this.safeParseJSON(window.ZoteroNERAnalysisResultsJSON, 'window.ZoteroNERAnalysisResultsJSON');
         }
 
         if (!analysisResults && window.ZoteroNERAnalysisResults) {
-          this.fileLogger.log('Trying window.ZoteroNERAnalysisResults...');
           analysisResults = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults direct');
         }
 
         // If still no results but params looks like results itself
         if (!analysisResults && params && typeof params === 'object' && !params.loading) {
-          this.fileLogger.log('Trying params as direct results...');
           const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
           if (direct) {
             analysisResults = direct;
@@ -1022,19 +1024,14 @@
         }
 
         // Log what we found
-        this.fileLogger.log('Final analysisResults: ' + (analysisResults ? 'EXISTS' : 'NULL'));
         if (analysisResults) {
-          this.fileLogger.log('  suggestions count: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 'NULL'));
-          this.fileLogger.log('  totalUniqueSurnames: ' + (analysisResults.totalUniqueSurnames || 'NULL'));
           if (analysisResults.suggestions && analysisResults.suggestions.length > 0) {
             const sample = analysisResults.suggestions.slice(0, 3).map(s => s.primary || s.surname || '?').join(', ');
-            this.fileLogger.log('  Sample suggestions: ' + sample);
           }
         }
 
         if (!analysisResults) {
           this.log('No analysis results found');
-          this.fileLogger.log('ERROR: No analysis results found - showing empty state');
           this.showEmptyState('No analysis results were provided to the dialog.');
           this.updateProgress();
           return;
@@ -1047,7 +1044,6 @@
         if (analysisResults.loading === true || analysisResults.suggestions === null) {
           const reason = analysisResults.loading === true ? 'loading=true' : 'suggestions=NULL';
           this.log('Dialog opened in loading state (' + reason + ')');
-          this.fileLogger.log('Loading state (' + reason + ') - will wait for updateAnalysisResults');
           // Update loading message to show we're waiting
           ZoteroNER_HTMLUtils.updateProgressLabel('Waiting for analysis to complete...');
           this.showLoadingState();
@@ -2294,10 +2290,12 @@
         let applyError = null;
 
         try {
-          // Try to use the main window's Zotero.NER which has proper Zotero context
+          // Try to use the main window's Zotero API which has proper Zotero context
           let results;
-          if (window.opener && window.opener.Zotero && window.opener.Zotero.NER) {
-            results = await window.opener.Zotero.NER.applyNormalizationSuggestions(
+          const nameNormalizer = ZoteroNER_ZoteroAPI.getNameNormalizer();
+
+          if (nameNormalizer) {
+            results = await nameNormalizer.applyNormalizationSuggestions(
               preparedSuggestions,
               false,
               {
@@ -2316,7 +2314,7 @@
               progressCallback: (event) => this.handleApplyProgress(event)
             });
           } else {
-            throw new Error('Zotero database analyzer is not available in this context.');
+            throw new Error('Zotero API not available. Cannot apply normalizations.');
           }
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
@@ -2400,6 +2398,9 @@
       },
       
       handleAnalysisProgress: function(progress) {
+        // Track progress time for adaptive timeout
+        lastProgressTime = Date.now();
+
         if (!progress) {
           this.log('handleAnalysisProgress: received null progress');
           return;
@@ -2408,7 +2409,6 @@
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
         // Log debug messages to file
         if (progress.stage === 'debug' && progress.message) {
-          this.fileLogger.log('ANALYZER: ' + progress.message);
         }
         let message = 'Analyzing library...';
         let percent = 0;
@@ -2446,10 +2446,7 @@
       },
       
       updateAnalysisResults: function(analysisResults) {
-        this.fileLogger.log('updateAnalysisResults called with ' + (analysisResults ? 'data' : 'NULL'));
         if (analysisResults) {
-          this.fileLogger.log('  suggestions count: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 0));
-          this.fileLogger.log('  totalUniqueSurnames: ' + (analysisResults.totalUniqueSurnames || 'undefined'));
         }
 
         // Mark analysis as complete to prevent timeout error
@@ -2462,7 +2459,6 @@
         }
 
         if (!analysisResults) {
-          this.fileLogger.log('ERROR: updateAnalysisResults received NULL');
           this.showEmptyState('Analysis completed but no results were returned.');
           return;
         }
