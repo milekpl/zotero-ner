@@ -739,10 +739,27 @@
       },
 
       log: function(message) {
-        console.log('Zotero NER Dialog: ' + message);
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const logLine = 'NER-DIALOG:' + timestamp + ' ' + message;
+        console.log(logLine);
         try {
           if (typeof Zotero !== 'undefined' && typeof Zotero.debug === 'function') {
             Zotero.debug('Zotero NER Dialog: ' + message);
+          }
+        } catch (e) {}
+        // Also write to file for debugging
+        try {
+          if (typeof Components !== 'undefined') {
+            const file = Components.classes['@mozilla.org/file/directory_service;1']
+              .getService(Components.interfaces.nsIProperties)
+              .get('TmpD', Components.interfaces.nsIFile);
+            file.append('zotero-normalizer.log');
+            const fos = Components.classes['@mozilla.org/network/file-output-stream;1']
+              .createInstance(Components.interfaces.nsIFileOutputStream);
+            fos.init(file, 0x02 | 0x08 | 0x10, 0o644, 0);
+            const data = new TextEncoder().encode(timestamp + ' ' + message + '\n');
+            fos.write(message, data.length);
+            fos.close();
           }
         } catch (e) {}
       },
@@ -1203,27 +1220,39 @@
 
       // Per-card apply: apply a single suggestion and remove its card from the UI
       applyCard: async function(index, suggestion) {
+        this.log('applyCard called: index=' + index + ', suggestion.type=' + (suggestion ? suggestion.type : 'null'));
         const selection = this.ensureUserSelection(index, suggestion);
         if (!selection) {
+          this.log('applyCard: no selection found, returning false');
           return false;
         }
 
+        this.log('applyCard: selection.mode=' + selection.mode + ', apply=' + selection.apply + ', value=' + selection.value + ', customValue=' + selection.customValue);
+
         // Check if there's a valid selection to apply
         const normalizedValue = (selection.value || selection.customValue || '').trim();
+        this.log('applyCard: normalizedValue="' + normalizedValue + '"');
+
         if (!normalizedValue || selection.apply === false) {
+          this.log('applyCard: early return - no value or apply=false');
           return false;
         }
 
         // Mark as applied
         selection.applied = true;
+        this.log('applyCard: marked as applied, looking for card');
 
         // Find and remove the card
         const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
+        this.log('applyCard: card found=' + (card ? 'yes' : 'no'));
+
         if (card) {
+          this.log('applyCard: removing card with animation');
           card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
           card.style.opacity = '0';
           card.style.transform = 'translateX(-20px)';
           setTimeout(() => {
+            this.log('applyCard: timeout fired, removing card DOM element');
             card.remove();
             this.checkAllCardsApplied();
           }, 300);
@@ -1277,11 +1306,15 @@
       },
 
       // Generate a unique key for identifying this suggestion
+      // Sanitize values to prevent special characters from breaking the key format
       getNotVariantsKey: function(suggestion) {
+        const sanitize = function(value) {
+          return (value || '').replace(/[:\\/\n\r\t]/g, '_').substring(0, 100);
+        };
         if (suggestion.type === 'given-name') {
-          return `given-name:${suggestion.surname || ''}:${suggestion.primary || ''}`;
+          return `given-name:${sanitize(suggestion.surname)}:${sanitize(suggestion.primary)}`;
         }
-        return `surname:${suggestion.primary || ''}`;
+        return `surname:${sanitize(suggestion.primary)}`;
       },
 
       // Get stored "not variants" preferences
@@ -1297,9 +1330,12 @@
       // Save "not variants" preferences
       saveNotVariantsPreferences: function(prefs) {
         try {
-          window.localStorage.setItem('zotero-ner-not-variants', JSON.stringify(prefs));
+          const json = JSON.stringify(prefs);
+          window.localStorage.setItem('zotero-ner-not-variants', json);
         } catch (e) {
           this.log('Failed to save not-variants preferences: ' + e.message);
+          // localStorage may fail in private browsing or when quota exceeded
+          // The preference won't persist, but the UI interaction still works
         }
       },
 
@@ -1326,6 +1362,7 @@
 
       // Build the per-card action buttons (Apply and Not Variants)
       buildCardActions: function(index, suggestion) {
+        this.log('buildCardActions: creating buttons for index=' + index);
         const container = ZoteroNER_HTMLUtils.createElement('div', { class: 'card-actions' });
 
         // Apply button
@@ -1347,6 +1384,7 @@
 
         // Add click handlers
         applyBtn.addEventListener('click', async () => {
+          this.log('Apply button clicked for index=' + index);
           await this.applyCard(index, suggestion);
         });
 
@@ -1398,14 +1436,16 @@
         const groupNumber = index + 1;
         if (suggestion.type === 'given-name') {
           const surname = this.titleCase(suggestion.surname || suggestion.primary || '');
+          const safeSurname = this.escapeHTML(surname);
           return surname
-            ? `Given name variants <span class="surname-variant">${surname}</span>`
+            ? `Given name variants <span class="surname-variant">${safeSurname}</span>`
             : `Given name variants Group ${groupNumber}`;
         }
 
         const surname = this.titleCase(suggestion.primary || '');
+        const safeSurname = this.escapeHTML(surname);
         return surname
-          ? `Surname variants <span class="surname-variant">${surname}</span>`
+          ? `Surname variants <span class="surname-variant">${safeSurname}</span>`
           : `Variant Group ${groupNumber}`;
       },
 
@@ -1529,10 +1569,11 @@
 
       getVariantDetailTitle: function(suggestion, variant) {
         const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+        const safeLabel = this.escapeHTML(label);
         if (suggestion.type === 'given-name') {
-          return `Occurrences for ${label}`;
+          return `Occurrences for ${safeLabel}`;
         }
-        return `Occurrences for <span class="surname-variant">${label}</span>`;
+        return `Occurrences for <span class="surname-variant">${safeLabel}</span>`;
       },
 
       showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
@@ -1902,6 +1943,7 @@
             return;
           }
 
+          this.log('populateVariantGroupList: rendering card for index=' + index + ', type=' + suggestion.type);
           visibleCount++;
           renderedIndexes.push(index);
           this.ensureUserSelection(index, suggestion);
@@ -2359,8 +2401,10 @@
       
       handleAnalysisProgress: function(progress) {
         if (!progress) {
+          this.log('handleAnalysisProgress: received null progress');
           return;
         }
+        this.log('handleAnalysisProgress: stage=' + progress.stage + ', processed=' + progress.processed + ', total=' + progress.total + ', percent=' + progress.percent);
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
         // Log debug messages to file
         if (progress.stage === 'debug' && progress.message) {
@@ -2373,6 +2417,7 @@
           message = `Loading items... (${progress.processed || 0} of ${progress.total || '?'})`;
           percent = progress.percent || 0;
         } else if (progress.stage === 'analyzing_surnames') {
+          this.log('handleAnalysisProgress: analyzing_surnames stage, percent=' + progress.percent);
           if (progress.total) {
             message = `Analyzing surnames... (${progress.processed || 0} of ${progress.total})`;
             percent = progress.percent || 0;
