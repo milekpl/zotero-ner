@@ -2264,6 +2264,27 @@ if (typeof console === 'undefined') {
     "src/zotero/zotero-db-analyzer.js"(exports, module) {
       var { NAME_PREFIXES, NAME_SUFFIXES, COMMON_GIVEN_NAME_EQUIVALENTS: SHARED_NAME_EQUIVALENTS } = require_name_constants();
       var { normalizedLevenshtein, isDiacriticOnlyVariant, normalizeName } = require_string_distance();
+      function fileLog(msg) {
+        try {
+          const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[1].split(".")[0];
+          const line = timestamp + " [db-analyzer] " + msg + "\n";
+          if (typeof Components !== "undefined") {
+            const file = Components.classes["@mozilla.org/file/directory_service;1"].getService(Components.interfaces.nsIProperties).get("TmpD", Components.interfaces.nsIFile);
+            file.append("zotero-normalizer.log");
+            const fos = Components.classes["@mozilla.org/network/file-output-stream;1"].createInstance(Components.interfaces.nsIFileOutputStream);
+            fos.init(file, 2 | 8 | 16, 420, 0);
+            fos.write(line, line.length);
+            fos.close();
+          }
+          if (typeof Zotero !== "undefined" && Zotero.debug) {
+            Zotero.debug("NER-DB: " + msg);
+          }
+        } catch (e) {
+          if (typeof console !== "undefined" && console.log) {
+            console.log("NER-DB: " + msg);
+          }
+        }
+      }
       var COMMON_GIVEN_NAME_EQUIVALENTS = Object.freeze({
         alex: "alexander",
         alexander: "alexander",
@@ -2400,22 +2421,27 @@ if (typeof console === 'undefined') {
               console.error(line);
             }
           };
+          fileLog("analyzeFullLibrary started");
           log("analyzeFullLibrary started");
           if (typeof Zotero === "undefined") {
             log("ERROR: Zotero is undefined");
+            fileLog("ERROR: Zotero is undefined");
             throw new Error("This method must be run in the Zotero context");
           }
           console.log("Starting full library analysis...");
           try {
             const libraryID = Zotero.Libraries.userLibraryID;
+            fileLog("Creating search for libraryID: " + libraryID);
             log("Creating search for libraryID: " + libraryID);
             const search = new Zotero.Search();
             search.addCondition("libraryID", "is", libraryID);
             const itemIDs = await search.search();
+            fileLog("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
             log("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
             console.log(`Found ${itemIDs.length} total items in library`);
             if (!itemIDs || itemIDs.length === 0) {
               console.log("No items found in library");
+              fileLog("No items found in library - returning empty");
               return {
                 surnameFrequencies: {},
                 potentialVariants: [],
@@ -2460,6 +2486,7 @@ if (typeof console === 'undefined') {
               }
             }
             Zotero.debug("ZoteroDBAnalyzer: Filtering complete, items with creators: " + itemsWithCreators.length);
+            fileLog("Filtering complete: itemsWithCreators=" + itemsWithCreators.length + ", creatorsMap keys=" + Object.keys(creatorsMap).length);
             console.log(`Found ${itemsWithCreators.length} items with valid creators`);
             if (itemsWithCreators.length === 0) {
               console.log("WARNING: No items with valid creators found!");
@@ -2503,17 +2530,24 @@ if (typeof console === 'undefined') {
               console.log("WARNING: No creators found! This indicates an issue with creator extraction.");
             }
             Zotero.debug("ZoteroDBAnalyzer: Starting analyzeCreators with " + creators.length + " creators");
+            fileLog("Calling analyzeCreators with " + creators.length + " creators");
             if (this.learningEngine) {
+              fileLog("LearningEngine distinctPairs size: " + (this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : "unknown"));
               try {
                 const distinctCount = this.learningEngine.distinctPairs ? this.learningEngine.distinctPairs.size : 0;
+                fileLog("Distinct pairs in learning engine: " + distinctCount);
                 if (distinctCount > 0) {
+                  fileLog("Sample distinct pairs: " + JSON.stringify([...this.learningEngine.distinctPairs.keys()].slice(0, 5)));
                 }
               } catch (e) {
+                fileLog("Error checking distinctPairs: " + e.message);
               }
             } else {
+              fileLog("LearningEngine is NULL");
             }
             const results = await this.analyzeCreators(creators, progressCallback, shouldCancel);
             Zotero.debug("ZoteroDBAnalyzer: analyzeCreators completed, suggestions count: " + (results.suggestions ? results.suggestions.length : 0));
+            fileLog("analyzeCreators complete: suggestions=" + (results.suggestions ? results.suggestions.length : 0) + ", totalUniqueSurnames=" + results.totalUniqueSurnames);
             console.log(`Analysis complete: processed ${creators.length} unique creator entries`);
             return results;
           } catch (error) {
@@ -2652,7 +2686,11 @@ if (typeof console === 'undefined') {
           }
           const normalizedFirst = (firstName || "").trim().toLowerCase();
           const variantLastName = lastName.trim();
+          fileLog('findItemsByFullAuthorName: searching for firstName="' + firstName + '" lastName="' + lastName + '"');
+          fileLog('  normalizedFirst="' + normalizedFirst + '" variantLastName="' + variantLastName + '"');
+          fileLog("  itemsByFullAuthor has " + Object.keys(itemsByFullAuthor).length + " keys");
           const sampleKeys = Object.keys(itemsByFullAuthor).slice(0, 5);
+          fileLog("  Sample keys: " + JSON.stringify(sampleKeys));
           for (const [authorKey, authorItems] of Object.entries(itemsByFullAuthor)) {
             const keyParts = authorKey.split("|");
             if (keyParts.length >= 2) {
@@ -2661,6 +2699,7 @@ if (typeof console === 'undefined') {
               const storedLastLower = storedLastRaw.toLowerCase();
               const searchLastLower = variantLastName.toLowerCase();
               if (storedFirst === normalizedFirst && storedLastLower === searchLastLower) {
+                fileLog('  MATCH FOUND: authorKey="' + authorKey + '" items=' + (Array.isArray(authorItems) ? authorItems.length : 0));
                 if (Array.isArray(authorItems)) {
                   return authorItems.slice().sort((a, b) => {
                     const authorA = (a.author || "").toLowerCase();
@@ -2672,6 +2711,7 @@ if (typeof console === 'undefined') {
               }
             }
           }
+          fileLog('  NO MATCH FOUND for firstName="' + firstName + '" lastName="' + lastName + '"');
           return [];
         }
         extractYear(dateValue) {
@@ -4139,8 +4179,8 @@ if (typeof console === 'undefined') {
               for (const itemSummary of variant.items) {
                 if (!itemSummary || !itemSummary.id) continue;
                 const itemId = itemSummary.id;
-                const variantName = variant.name || "";
-                if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) continue;
+                const variantName = (variant.name || "").trim();
+                if (variantName === normalizedValue) continue;
                 allItemIds.add(itemId);
                 if (!itemUpdates.has(itemId)) {
                   itemUpdates.set(itemId, { suggestion, variant, normalizedValue, type });
@@ -4245,7 +4285,7 @@ if (typeof console === 'undefined') {
                 continue;
               }
               unique.add(opKey);
-              if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) {
+              if (variantName === normalizedValue) {
                 continue;
               }
               plan.operations.push({

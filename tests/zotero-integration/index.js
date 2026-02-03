@@ -1,7 +1,7 @@
 /**
- * Zotero NER Integration Test Infrastructure
+ * Zotero Name Normalizer Integration Test Infrastructure
  *
- * This directory contains infrastructure for testing the Zotero NER extension
+ * This directory contains infrastructure for testing the Zotero Name Normalizer extension
  * within Zotero's actual JavaScript context.
  *
  * Files:
@@ -31,7 +31,7 @@ const OUTPUT_FILE = path.join(__dirname, 'test-results.json');
  * Run with: node tests/zotero-integration/index.js
  */
 async function verifyExtension() {
-  console.log('Zotero NER Extension Verification');
+  console.log('Zotero Name Normalizer Extension Verification');
   console.log('='.repeat(50));
 
   // Check that built files exist

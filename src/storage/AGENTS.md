@@ -4,7 +4,7 @@
 # storage
 
 ## Purpose
-Data persistence layer for the Zotero NER extension. Handles localStorage-based storage of learned name mappings and user preferences.
+Data persistence layer for the name normalization extension. Handles localStorage-based storage of learned name mappings and user preferences.
 
 ## Key Files
 | File | Description |

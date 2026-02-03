@@ -83,7 +83,7 @@ async function getSelectedItems() {
 // Create a test item
 async function createTestItem() {
     var item = new Zotero.Item('journalArticle');
-    item.setField('title', 'Test Article for Zotero NER');
+    item.setField('title', 'Test Article for Zotero Name Normalizer');
     item.setField('date', '2024-01-01');
     item.setField('abstractNote', 'Test abstract');
     await item.save();

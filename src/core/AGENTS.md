@@ -4,23 +4,21 @@
 # core
 
 ## Purpose
-Core NER (Named Entity Recognition) processing modules. Handles name parsing, variant generation, similarity matching, candidate finding, and machine learning for name normalization.
+Name normalization processing modules. Handles name parsing, variant generation, similarity matching, candidate finding, and machine learning for author name normalization.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ner-processor.js` | Main NER processing orchestrator - name parsing and similarity matching |
 | `name-parser.js` | Enhanced name component parsing (given names, surnames, initials) |
 | `variant-generator.js` | Generates normalized name variations for matching |
 | `learning-engine.js` | Stores learned mappings with Jaro-Winkler similarity algorithm |
 | `candidate-finder.js` | Finds candidate matches from learned mappings |
-| `gliner-handler.js` | GLINER NER model interface (ONNX.js) for future use |
 
 ## For AI Agents
 
 ### Working In This Directory
 - Core modules are pure JavaScript (no Zotero dependencies)
-- `ner-processor.js` is the main entry point for NER operations
+- `item-processor.js` (in `src/zotero/`) is the main entry point that orchestrates these modules
 - `learning-engine.js` handles persistence of user-learned normalizations
 - Similarity algorithms: Jaro-Winkler, LCS (Longest Common Subsequence), initial matching
 

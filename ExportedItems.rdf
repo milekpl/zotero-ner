@@ -1,0 +1,765 @@
+<rdf:RDF
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+ xmlns:z="http://www.zotero.org/namespaces/export#"
+ xmlns:dcterms="http://purl.org/dc/terms/"
+ xmlns:prism="http://prismstandard.org/namespaces/1.2/basic/"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:bib="http://purl.org/net/biblio#"
+ xmlns:foaf="http://xmlns.com/foaf/0.1/"
+ xmlns:vcard="http://nwalsh.com/rdf/vCard#">
+    <bib:Article rdf:about="http://marcinmilkowski.pl/pl/teksty-mainmenu-27/26-rozum-publiczny-jako-wiadoma-kompetencja">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+               <prism:volume>3 (10)</prism:volume><dc:title>Rubikon</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>kompetencja</dc:subject>
+        <dc:subject>rozum publiczny</dc:subject>
+        <dc:title>Rozum publiczny jako świadoma kompetencja</dc:title>
+        <dc:date>2000</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/pl/teksty-mainmenu-27/26-rozum-publiczny-jako-wiadoma-kompetencja</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>29-34</bib:pages>
+    </bib:Article>
+    <bib:Book rdf:about="#item_89">
+        <z:itemType>book</z:itemType>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>MIT Press</foaf:name>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>Cambridge, Mass.</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>Cognitive neuroscience</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>Computational complexity</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>Computational neuroscience</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>Data processing</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Explaining the Computational Mind</dc:title>
+        <dcterms:abstract>In this book, Marcin Milkowski argues that the mind can be explained computationally because it is itself computational—whether it engages in mental arithmetic, parses natural language, or processes the auditory signals that allow us to experience music. Defending the computational explanation against objections to it—from John Searle and Hilary Putnam in particular—Milkowski writes that computationalism is here to stay but is not what many have taken it to be. It does not, for example, rely on a Cartesian gulf between software and hardware, or mind and brain. Milkowski's mechanistic construal of computation allows him to show that no purely computational explanation of a physical process will ever be complete. Computationalism is only plausible, he argues, if you also accept explanatory pluralism. Milkowski sketches a mechanistic theory of implementation of computation against a background of extant conceptions, describing four dissimilar computational models of cognition. He reviews other philosophical accounts of implementation and computational explanation and defends a notion of representation that is compatible with his mechanistic account and adequate vis à vis the four models discussed earlier. Instead of arguing that there is no computation without representation, he inverts the slogan and shows that there is no representation without computation—but explains that representation goes beyond purely computational considerations. Milkowski's arguments succeed in vindicating computational explanation in a novel way by relying on mechanistic theory of science and interventionist theory of causation.</dcterms:abstract>
+        <dc:date>2013</dc:date>
+        <dc:rights>All rights reserved</dc:rights>
+        <dc:description>00002</dc:description>
+    </bib:Book>
+    <bib:Article rdf:about="http://skfu.amu.edu.pl/downloads/skfu6_2/2milkowski_skfu6_2.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+                <prism:volume>6</prism:volume>
+                <dc:title>Studia z Kognitywistyki i Filozofii Umysłu</dc:title>
+                <prism:number>2</prism:number>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>⛔ No DOI found</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>moduł wykrywania oszustów</dc:subject>
+        <dc:subject>modularność</dc:subject>
+        <dc:subject>psychologia ewolucyjna</dc:subject>
+        <dc:subject>specyficzność dziedzinowa</dc:subject>
+        <dc:subject>zadanie Wasona</dc:subject>
+        <dc:title>Jak wyróżniać moduły umysłowe? Problemy ze specjalizacją i konfirmacją</dc:title>
+        <dcterms:abstract>W artykule przedstawiono argumenty, że konfirmacja tezy, iż istnieją moduły umysłowe wyjaśniające cechy umysłu, jest z kilku powodów kłopotliwa. Po pierwsze, istnieje kilka konkurencyjnych teorii modularności, które zresztą nie zawsze się wykluczają, przez co nie można między nimi rozstrzygać eksperymentalnie. Po drugie, tezy na temat modularności często oparte są na bezzasadnym założeniu, iż wyróżnianie specyficznych dziedzin (semantycznych lub składniowych) działania modułów nie jest problematyczne. Po trzecie, analizując znany z literatury moduł wykrywania oszustów, postulowany przez Cosmi- des w celu wyjaśnienia rzekomej irracjonalności objawiającej się w tzw. zadaniu Wasona, pokazuję, że wyjaśniane zjawisko nie zostało zdefiniowane dostatecznie dokładnie, a przez to nieostra jest funkcjonalna charakterystyka modułów je wyjaśniających. Co więcej, nie ma powodów sądzić, że zjawisko, które ten moduł miał wyjaśniać, w ogóle istnieje. Wskazuję też kilka problemów metodologicznych związanych ze zbieraniem eksperymentalnych świadectw na rzecz modularności, takich jak zaburzanie wyników eksperymentów przez uśrednianie i brak kontroli nad kluczowymi czynnikami wpływającymi na rezultaty uzyskiwane przez uczestników badania.</dcterms:abstract>
+        <dc:date>2012</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://skfu.amu.edu.pl/downloads/skfu6_2/2milkowski_skfu6_2.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>27-48</bib:pages>
+    </bib:Article>
+    <bib:BookSection rdf:about="http://marcinmilkowski.pl/downloads/milk-den.pdf">
+        <z:itemType>bookSection</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Book>
+               <dc:title>Formy reprezentacji umysłowych</dc:title>
+            </bib:Book>
+        </dcterms:isPartOf>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>Wydawnictwo IFiS PAN</foaf:name>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>Warszawa</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <bib:editors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Piłat</foaf:surname>
+                        <foaf:givenName>R.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Walczak</foaf:surname>
+                        <foaf:givenName>M.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Wróbel</foaf:surname>
+                        <foaf:givenName>Sz</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:editors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:title>Rzeczywiste wzorce intencjonalności</dc:title>
+        <dcterms:abstract>W naturalistycznych nurtach filozofii umysłu żywa jest kwestia pojmowania intencjonalności. Samą intencjonalność rozumie się tradycyjnie jako posiadanie treści lub bycie na jakiś temat (aboutness). Pod znakiem zapytania stawiane są jednak tradycyjne tezy na temat niematerialnego charakteru własności intencjonalnych, jej obiektów, związku intencjonalności ze świadomością. Trzy pytania wydają się szczególnie charakterystyczne w tym kontekście: (1) Czy intencjonalność jest rzeczywiście przysługującą własnością, czy też własnością przypisywaną tylko ze względów pragmatycznych? (2) Jakiego rodzaju jest to własność? W szczególności. czy jest to własność redukowalna do własności fizycznych? (3) Jakim obiektom należy przypisywać (przysługują) stany intencjonalne? Na jakich zasadach się to odbywa? (4) Czy własności intencjonalne są redukowalne do własności reprezentacji umysłowych i relacji między nimi? Na powyższe pytania odpowiada między innymi koncepcja Daniela Dennetta, który jest uznawany za zwolennika tezy o czysto instrumentalistycznym statusie własności intencjonalnych. Początkowe prace tego autora rzeczywiście tego rodzaju wrażenie mogły sprawiać, lecz dziś autor ten bywa zaliczany do obozu realistów. Zamierzam niżej pokazać, iż Dennett w istocie pozostaje realistą co do stanów intencjonalnych, a jego koncepcja zawiera odpowiedzi na pytania, które postawiłem powyżej.</dcterms:abstract>
+        <dc:date>2006</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/milk-den.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>133-151</bib:pages>
+    </bib:BookSection>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/downloads/naturalizm-reaktywacja.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+                <dc:title>Przegląd Filozoficzno-Literacki</dc:title>
+                <prism:number>2 (17)</prism:number>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:title>Naturalizm. Reaktywacja (w odpowiedzi Mieszkowi Tałasiewiczowi)</dc:title>
+        <dc:date>2007</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/naturalizm-reaktywacja.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>409-420</bib:pages>
+    </bib:Article>
+    <bib:BookSection rdf:about="http://marcinmilkowski.pl/downloads/is-computationalism-trivial.pdf">
+        <z:itemType>bookSection</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Book>
+                <dc:title>Computation, Information, Cognition – The Nexus and the Liminal</dc:title>
+            </bib:Book>
+        </dcterms:isPartOf>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>Cambridge Scholars Press</foaf:name>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>Newcastle</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <bib:editors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Crnkovic</foaf:surname>
+                        <foaf:givenName>Gordana Dodig</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Stuart</foaf:surname>
+                        <foaf:givenName>Susan</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:editors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:title>Is computationalism trivial?</dc:title>
+        <dc:date>2007</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/is-computationalism-trivial.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>236-246</bib:pages>
+    </bib:BookSection>
+    <bib:BookSection rdf:about="urn:isbn:978-83-927082-2-3">
+        <z:itemType>bookSection</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Book>
+                <dc:identifier>ISBN 978-83-927082-2-3</dc:identifier>
+                <dc:title>Utajone funkcje umysłu</dc:title>
+            </bib:Book>
+        </dcterms:isPartOf>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>Wydział Pedagogiczno-Artystyczny UAM w Poznaniu</foaf:name>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>Poznań; Kalisz</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <bib:editors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Wróbel</foaf:surname>
+                        <foaf:givenName>Szymon</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:editors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:title>Postulowanie utajonych funkcji umysłu: realizm kontra antyrealizm</dc:title>
+        <dc:date>2008</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/utajone.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>15-37</bib:pages>
+    </bib:BookSection>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/pl/teksty-mainmenu-27/29-jak-by-moralist-w-rodkach-masowego-przekazu">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+               <prism:volume>4 (11)</prism:volume><dc:title>Rubikon</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>moralistyka</dc:subject>
+        <dc:title>Jak być moralistą w środkach masowego przekazu? (krótki kurs)</dc:title>
+        <dc:date>2000</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/pl/teksty-mainmenu-27/29-jak-by-moralist-w-rodkach-masowego-przekazu</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>52-56</bib:pages>
+    </bib:Article>
+    <bib:BookSection rdf:about="urn:isbn:83-915323-0-5">
+        <z:itemType>bookSection</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Book>
+                <dc:identifier>ISBN 83-915323-0-5</dc:identifier>
+                <dc:title>Oblicza relatywizmu teoriopoznawczego</dc:title>
+            </bib:Book>
+        </dcterms:isPartOf>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>Koło Filozoficzne przy MISH</foaf:name>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>Warszawa</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <bib:editors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Ciecierski</foaf:surname>
+                        <foaf:givenName>Tadeusz</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Nijakowski</foaf:surname>
+                        <foaf:givenName>Lech N.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:editors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>⛔ No DOI found</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Klasyczna socjologia wiedzy a relatywizm teoriopoznawczy</dc:title>
+        <dc:date>2001</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/socjologia_wiedzy.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>43-56</bib:pages>
+    </bib:BookSection>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/downloads/fopa.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+               <prism:volume>6</prism:volume><dc:title>fo:pa</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>⛔ No DOI found</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Epistemologia znaturalizowana</dc:title>
+        <dc:date>2006</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+               <rdf:value>http://marcinmilkowski.pl/downloads/fopa.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>6-9</bib:pages>
+    </bib:Article>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/downloads/inzynier.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+                <prism:volume>2 (50)</prism:volume>
+                <dc:title>Przegląd Filozoficzny – Nowa Seria</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:title>Filozofia jako inżynieria odwrotna: rzecz o filozofii Daniela Dennetta</dc:title>
+        <dc:date>2004</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/inzynier.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>75-89</bib:pages>
+    </bib:Article>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/downloads/hobbes.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+                <dc:title>Przegląd Filozoficzno-Literacki</dc:title>
+                <prism:number>1 (30)</prism:number>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>⛔ No DOI found</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Hobbesa konstrukcja pojęcia wolności</dc:title>
+        <dcterms:abstract>W artykule przedstawiono racjonalną rekonstrukcję pojęcia wolności w filozofii Hobbesa. Odgrywa ono istotną rolę w strukturze teoretycznej, która ma uprawomocnić zasady racjonalnego ustroju politycznego. Tezą tekstu jest, że właściwe pojęcie wolności, o które chodzi Hobbesowi, należy analizować nie w kategoriach mechanistycznej metafizyki, lecz w kategoriach politycznych, a mianowicie w kategoriach uprawnień. Konstrukcja umowy społecznej z suwerenem ma zapewniać zachowanie maksymalnego (i równego dla wszystkich) zakresu uprawnień: uprawnienia można ograniczać tylko tam, gdzie jest to bezwzględnie konieczne dla dalszego obowiązywania umowy i jej zawarcia. W efekcie Hobbesowski wywód okazuje się bliski późniejszej tradycji kantowskiej, a Lewiatan – gwarantem wolności i pomyślności powszechnej.</dcterms:abstract>
+        <dc:date>2011</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/downloads/hobbes.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>209-220</bib:pages>
+    </bib:Article>
+    <bib:Article rdf:about="http://marcinmilkowski.pl/pl/teksty-mainmenu-27/25-jak-mwi-apolitycznie-krtki-kurs">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+               <prism:volume>1-2 (8-9)</prism:volume><dc:title>Rubikon</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>ekspert</dc:subject>
+        <dc:subject>publicystyka</dc:subject>
+        <dc:title>Jak mówić apolitycznie? Krótki kurs</dc:title>
+        <dc:date>2000</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/pl/teksty-mainmenu-27/25-jak-mwi-apolitycznie-krtki-kurs</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+    </bib:Article>
+    <bib:Article rdf:about="http://www.diametros.iphils.uj.edu.pl/pdf/diam6f3milkowski.pdf">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+               <prism:volume>6</prism:volume><dc:title>Diametros</dc:title>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>#nosource</dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>⛔ No DOI found</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>O rzekomym zmierzchu filozofii analitycznej</dc:title>
+        <dc:date>2005</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://www.diametros.iphils.uj.edu.pl/pdf/diam6f3milkowski.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dc:rights>All rights reserved</dc:rights>
+        <bib:pages>249-254</bib:pages>
+    </bib:Article>
+    <bib:Article rdf:about="https://academic.oup.com/mind/article-lookup/doi/10.1093/mind/fzv066">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf rdf:resource="urn:issn:0026-4423,%201460-2113"/>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Myin</foaf:surname>
+                        <foaf:givenName>Erik</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Zahidi</foaf:surname>
+                        <foaf:givenName>Karim</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:title>&lt;i&gt;Explaining the Computational Mind&lt;/i&gt; , by Marcin Milkowski.</dc:title>
+        <dc:date>07/2015</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://academic.oup.com/mind/article-lookup/doi/10.1093/mind/fzv066</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dcterms:dateSubmitted>2018-09-12 08:40:10</dcterms:dateSubmitted>
+        <z:language>en</z:language>
+        <z:libraryCatalog>Crossref</z:libraryCatalog>
+        <bib:pages>951-954</bib:pages>
+    </bib:Article>
+    <bib:Journal rdf:about="urn:issn:0026-4423,%201460-2113">
+        <dc:identifier>DOI 10/gd8cf8</dc:identifier>
+        <prism:volume>124</prism:volume>
+        <dc:title>Mind</dc:title>
+        <dc:identifier>ISSN 0026-4423, 1460-2113</dc:identifier>
+        <prism:number>495</prism:number>
+    </bib:Journal>
+    <bib:Report rdf:about="http://marcinmilkowski.pl/wp-content/uploads/2015/03/sintelnet-whitepaper.pdf">
+        <z:itemType>report</z:itemType>
+        <dc:publisher>
+            <foaf:Organization>
+                <foaf:name>Sintelnet. European Network for Social Intelligence</foaf:name>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Afeltowicz</foaf:surname>
+                        <foaf:givenName>Łukasz</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Borghi</foaf:surname>
+                        <foaf:givenName>Anna</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Butterfill</foaf:surname>
+                        <foaf:givenName>Stephen</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Miłkowski</foaf:surname>
+                        <foaf:givenName>Marcin</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Clowes</foaf:surname>
+                        <foaf:givenName>Robert William</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Gies</foaf:surname>
+                        <foaf:givenName>Adam</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Loughlin</foaf:surname>
+                        <foaf:givenName>Victor</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Matyja</foaf:surname>
+                        <foaf:givenName>Jakub R.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>McGann</foaf:surname>
+                        <foaf:givenName>Marek</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Przegalińska</foaf:surname>
+                        <foaf:givenName>Aleksandra</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Rączaszek-Leonardi</foaf:surname>
+                        <foaf:givenName>Joanna</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Rucińska</foaf:surname>
+                        <foaf:givenName>Zuzanna</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Stjernberg</foaf:surname>
+                        <foaf:givenName>Fredrik</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Tummolini</foaf:surname>
+                        <foaf:givenName>Luca</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>O'Shea</foaf:surname>
+                        <foaf:givenName>Roger</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Wachowski</foaf:surname>
+                        <foaf:givenName>Witold M.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Wheeler</foaf:surname>
+                        <foaf:givenName>Michael</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Zawidzki</foaf:surname>
+                        <foaf:givenName>Tadeusz</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>grounded cognition</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>mechanistic explanation</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>extended mind</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>Distributed cognition</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>Enactivism</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>wide computationalism</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+            <z:AutomaticTag>
+               <rdf:value>Embodied Cognition</rdf:value>
+            </z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>scaffolded mind</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>wide cognition</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:subject>
+           <z:AutomaticTag><rdf:value>wide mechanism</rdf:value></z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Relevance of wide cognition for social intelligence. Key trends</dc:title>
+        <dc:date>2013</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>http://marcinmilkowski.pl/wp-content/uploads/2015/03/sintelnet-whitepaper.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dcterms:dateSubmitted>2018-12-02 15:06:21</dcterms:dateSubmitted>
+        <z:language>English</z:language>
+        <dc:rights>All rights reserved</dc:rights>
+        <z:type>White Paper</z:type>
+    </bib:Report>
+</rdf:RDF>

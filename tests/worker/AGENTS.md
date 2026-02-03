@@ -9,7 +9,7 @@ Unit tests for the background worker module. Tests Web Worker message passing an
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ner-worker.test.js` | Tests for NER worker functionality |
+| `name-worker.test.js` | Tests for name worker functionality |
 
 ## For AI Agents
 
@@ -29,7 +29,7 @@ Unit tests for the background worker module. Tests Web Worker message passing an
 ## Dependencies
 
 ### Internal
-- `src/worker/ner-worker.js` - Source module being tested
+- `src/worker/name-worker.js` - Source module being tested
 - `src/core/*` - Processing logic used by worker
 
 ### External

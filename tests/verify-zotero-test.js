@@ -120,12 +120,12 @@ user_pref("zotero.debug.log.timestamp", true);
     // Simple test code
     const testCode = `
 (function() {
-    var result = { zotero: false, ner: false, nameParser: false };
+    var result = { zotero: false, nameNormalizer: false, nameParser: false };
     try {
         result.zotero = typeof Zotero !== 'undefined';
-        result.ner = typeof Zotero !== 'undefined' && typeof Zotero.NER !== 'undefined';
-        if (result.ner) {
-            result.nameParser = typeof Zotero.NER.nameParser !== 'undefined';
+        result.nameNormalizer = typeof Zotero !== 'undefined' && typeof Zotero.NameNormalizer !== 'undefined';
+        if (result.nameNormalizer) {
+            result.nameParser = typeof Zotero.NameNormalizer.nameParser !== 'undefined';
         }
     } catch(e) {
         result.error = e.message;
@@ -168,13 +168,13 @@ user_pref("zotero.debug.log.timestamp", true);
                 console.log();
                 log("Test Results:");
                 log(`  Zotero defined: ${result.zotero ? 'YES' : 'NO'}`);
-                log(`  Zotero.NER defined: ${result.ner ? 'YES' : 'NO'}`);
+                log(`  Zotero.NameNormalizer defined: ${result.nameNormalizer ? 'YES' : 'NO'}`);
                 log(`  nameParser defined: ${result.nameParser ? 'YES' : 'NO'}`);
                 if (result.error) {
                     log(`  Error: ${result.error}`);
                 }
 
-                if (result.ner && result.nameParser) {
+                if (result.nameNormalizer && result.nameParser) {
                     console.log();
                     log("SUCCESS: Extension loaded correctly!");
                     process.exit(0);

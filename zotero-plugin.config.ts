@@ -94,7 +94,11 @@ if (ZoteroNameNormalizerRef) {
   },
 
   test: {
-    entries: ["test"],
+    entries: ["tests/zotero-framework/test/tests"],
     waitForPlugin: "() => typeof Zotero !== 'undefined' && Zotero.NameNormalizer?.initialized",
+    mocha: {
+      timeout: 60000,
+    },
+    watch: false,
   },
 });

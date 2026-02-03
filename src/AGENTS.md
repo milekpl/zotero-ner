@@ -4,13 +4,13 @@
 # src
 
 ## Purpose
-Main application source code organized by architectural layer. Contains all core NER processing, Zotero integration, UI components, storage, and background worker modules.
+Main application source code organized by architectural layer. Contains all name normalization processing, Zotero integration, UI components, storage, and background worker modules.
 
 ## Key Files
 | File | Description |
 |------|-------------|
 | `index.js` | Main export - bundles all modules for webpack |
-| `core/` | NER processing core modules (see `core/AGENTS.md`) |
+| `core/` | Name normalization core modules (see `core/AGENTS.md`) |
 | `zotero/` | Zotero integration modules (see `zotero/AGENTS.md`) |
 | `ui/` | UI components (see `ui/AGENTS.md`) |
 | `storage/` | Data persistence layer (see `storage/AGENTS.md`) |
@@ -19,11 +19,11 @@ Main application source code organized by architectural layer. Contains all core
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | NER name parsing, similarity matching, learning engine |
+| `core/` | Name parsing, similarity matching, learning engine |
 | `zotero/` | Zotero API integration, item processing, menu integration |
 | `ui/` | Normalization dialog, batch processor UI |
 | `storage/` | localStorage-based persistence |
-| `worker/` | Background worker for intensive NER processing |
+| `worker/` | Background worker for intensive name processing |
 
 ## For AI Agents
 
@@ -39,13 +39,13 @@ Main application source code organized by architectural layer. Contains all core
 
 ### Common Patterns
 - Learning system: `LearningEngine` stores user preferences with Jaro-Winkler, LCS, and initial-matching similarity
-- NER fallback: Rule-based parsing with optional GLINER integration
+- Name processing: Rule-based name parsing with optional GLINER integration for future enhancements
 - Zotero integration: Bootstrap loads bundled code into isolated scope, shares via `window.ZoteroNER` and `Zotero.Ner` hooks
 
 ## Dependencies
 
 ### Internal
-- `src/core/*` - Core NER processing
+- `src/core/*` - Core name normalization processing
 - `src/zotero/*` - Zotero integration
 - `src/ui/*` - UI components
 - `src/storage/*` - Data persistence

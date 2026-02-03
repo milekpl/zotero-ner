@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-This plan outlines a comprehensive automated testing infrastructure for the Zotero NER extension that runs **within Zotero's actual environment**, using Zotero's internal Mocha test framework. Tests will verify both core functionality and UI interactions, with CI/CD integration for GitHub Actions.
+This plan outlines a comprehensive automated testing infrastructure for the Zotero Name Normalizer extension that runs **within Zotero's actual environment**, using Zotero's internal Mocha test framework. Tests will verify both core functionality and UI interactions, with CI/CD integration for GitHub Actions.
 
 ## Research Findings
 
@@ -62,7 +62,7 @@ ZOTERO_TEST=1 zotero -profile <profile> -test <tests> -grep <pattern>
 
 **Test Categories:**
 ```javascript
-describe("Zotero NER Extension", function () {
+describe("Zotero Name Normalizer Extension", function () {
     describe("Extension Loading", function () {
         it("should have Zotero.NER defined");
         it("should have all submodules initialized");

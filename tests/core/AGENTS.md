@@ -4,19 +4,18 @@
 # core
 
 ## Purpose
-Unit tests for core NER processing modules. Tests name parsing, variant generation, learning engine, candidate finding, and GLINER handler.
+Unit tests for core name normalization modules. Tests name parsing, variant generation, learning engine, candidate finding, and name equivalence.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ner-processor.test.js` | Tests for main NER processor |
 | `name-parser.test.js` | Tests for name component parsing |
 | `variant-generator.test.js` | Tests for name variant generation |
 | `learning-engine.test.js` | Tests for learning engine and similarity |
 | `candidate-finder.test.js` | Tests for candidate matching |
-| `gliner-handler.test.js` | Tests for GLINER integration |
 | `given-name-equivalents.test.js` | Tests for given name equivalence |
-| `index.test.js` | Tests for module exports |
+| `name-constants.test.js` | Tests for name constants and configuration |
+| `string-distance.test.js` | Tests for string distance algorithms |
 
 ## For AI Agents
 

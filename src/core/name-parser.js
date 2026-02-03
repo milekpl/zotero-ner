@@ -49,6 +49,7 @@ class NameParser {
   _doParse(rawName) {
     const original = rawName || '';
     let working = (original || '').trim();
+    let isInvertedFormat = false;
 
     if (working.includes(',')) {
       const commaSegments = working
@@ -63,6 +64,7 @@ class NameParser {
 
         if (/\p{L}/u.test(firstSegment) && /\p{L}/u.test(restCombined)) {
           working = `${restCombined} ${firstSegment}`.trim();
+          isInvertedFormat = true;  // Mark that this was inverted
         }
       }
     }
@@ -98,52 +100,60 @@ class NameParser {
       // Set first name as the first part
       result.firstName = this.stripTrailingPeriodIfName(parts[0]);
       
-      // Check for prefixes at the beginning (after first name)
-      let prefixEndIndex = 1;
-      while (prefixEndIndex < parts.length - 1 && 
-             this.prefixes.includes(parts[prefixEndIndex].toLowerCase())) {
-        if (result.prefix) {
-          result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
-        } else {
-          result.prefix = parts[prefixEndIndex];
-        }
-        prefixEndIndex++;
-      }
-      
-      // Handle special case where a prefix can take a following name part
-      // For example, "del Carmen" is a complete prefix
-      if (result.prefix && prefixEndIndex < parts.length - 1) {
-        // Check if the next word after the prefix should be part of it
-        if (this.isNextWordForPrefix(result.prefix, parts[prefixEndIndex])) {
-          result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+      // For inverted format names (was: "de la Vega, Sancho" -> now: "Sancho de la Vega"),
+      // treat all remaining parts as the lastName to preserve the full surname with prefixes
+      if (isInvertedFormat) {
+        const remainingParts = parts.slice(1);
+        result.lastName = remainingParts.join(' ');
+      } else {
+        // For normal format, parse out prefixes and suffixes
+        // Check for prefixes at the beginning (after first name)
+        let prefixEndIndex = 1;
+        while (prefixEndIndex < parts.length - 1 && 
+               this.prefixes.includes(parts[prefixEndIndex].toLowerCase())) {
+          if (result.prefix) {
+            result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+          } else {
+            result.prefix = parts[prefixEndIndex];
+          }
           prefixEndIndex++;
         }
-      }
-      
-      // Check for suffixes at the end
-      let suffixStartIndex = parts.length - 1;
-      while (suffixStartIndex > prefixEndIndex && 
-             this.suffixes.some(s => 
-               parts[suffixStartIndex].toLowerCase() === s.toLowerCase() || 
-               parts[suffixStartIndex].toLowerCase() === s.toLowerCase() + '.')) {
-        if (result.suffix) {
-          result.suffix = `${parts[suffixStartIndex]} ${result.suffix}`;
-        } else {
-          result.suffix = parts[suffixStartIndex];
+        
+        // Handle special case where a prefix can take a following name part
+        // For example, "del Carmen" is a complete prefix
+        if (result.prefix && prefixEndIndex < parts.length - 1) {
+          // Check if the next word after the prefix should be part of it
+          if (this.isNextWordForPrefix(result.prefix, parts[prefixEndIndex])) {
+            result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+            prefixEndIndex++;
+          }
         }
-        suffixStartIndex--;
-      }
-      
-      // Determine the last name (the part after all prefixes and before all suffixes)
-      if (suffixStartIndex >= prefixEndIndex) {
-        result.lastName = parts[suffixStartIndex];
-      }
-      
-      // Handle middle names (anything between first name and last name that's not a prefix or suffix)
-      if (prefixEndIndex < suffixStartIndex) {
-        const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
-        if (middleParts.length > 0) {
-          result.middleName = middleParts.map(part => this.stripTrailingPeriodIfName(part)).join(' ');
+        
+        // Check for suffixes at the end
+        let suffixStartIndex = parts.length - 1;
+        while (suffixStartIndex > prefixEndIndex && 
+               this.suffixes.some(s => 
+                 parts[suffixStartIndex].toLowerCase() === s.toLowerCase() || 
+                 parts[suffixStartIndex].toLowerCase() === s.toLowerCase() + '.')) {
+          if (result.suffix) {
+            result.suffix = `${parts[suffixStartIndex]} ${result.suffix}`;
+          } else {
+            result.suffix = parts[suffixStartIndex];
+          }
+          suffixStartIndex--;
+        }
+        
+        // Determine the last name (the part after all prefixes and before all suffixes)
+        if (suffixStartIndex >= prefixEndIndex) {
+          result.lastName = parts[suffixStartIndex];
+        }
+        
+        // Handle middle names (anything between first name and last name that's not a prefix or suffix)
+        if (prefixEndIndex < suffixStartIndex) {
+          const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
+          if (middleParts.length > 0) {
+            result.middleName = middleParts.map(part => this.stripTrailingPeriodIfName(part)).join(' ');
+          }
         }
       }
     }

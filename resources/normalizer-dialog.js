@@ -1,5 +1,5 @@
 /**
- * JavaScript for the NER Normalizer Dialog
+ * JavaScript for the Name Normalizer Dialog
  * Handles the XUL interface for name normalization
  */
 

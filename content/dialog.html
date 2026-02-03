@@ -152,7 +152,7 @@
     }
     .custom-normalization input[type="text"]:disabled {
       background: #f0f0f0;
-      color: #777;
+      color: #555;
     }
     .card-actions {
       display: flex;
@@ -208,7 +208,7 @@
       background: linear-gradient(90deg, #0066cc 0%, #007acc 50%, #0066cc 100%);
       background-size: 200% 100%;
       animation: indeterminate-progress 1.5s ease-in-out infinite;
-      width: 30% !important;
+      width: 0%;
     }
     @keyframes indeterminate-progress {
       0% { background-position: 100% 0; }
@@ -497,11 +497,24 @@
       },
       updateProgressBar: function(percent) {
         const fill = document.getElementById('progress-fill');
-        if (fill) fill.style.width = percent + '%';
+        if (fill) {
+          fill.classList.remove('indeterminate');
+          fill.style.width = percent + '%';
+        }
       },
       updateProgressLabel: function(text) {
         const label = document.getElementById('progress-label');
         if (label) label.textContent = text;
+      },
+      setProgressIndeterminate: function(indeterminate) {
+        const fill = document.getElementById('progress-fill');
+        if (fill) {
+          if (indeterminate) {
+            fill.classList.add('indeterminate');
+          } else {
+            fill.classList.remove('indeterminate');
+          }
+        }
       }
     };
 
@@ -576,6 +589,9 @@
     variantDetailState: null,
     filterText: '',
     currentProgressState: null,
+    lastProgressTime: null,
+    lastHeartbeat: null,
+    progressUpdateTimer: null,
 
       init: function() {
         console.log('Dialog initialization started');
@@ -866,55 +882,11 @@
         // Track when analysis is complete (set by updateAnalysisResults)
         this.analysisComplete = false;
 
-        // DEBUG: Set timeout to detect if analysis never starts
-        // Track last progress update time for adaptive timeout
-        let lastProgressTime = Date.now();
-        const ADAPTIVE_TIMEOUT_MS = 60000; // 60 seconds max for large libraries
-        const PROGRESS_UPDATE_TIMEOUT_MS = 15000; // 15 seconds since last progress = stuck
-
-        const analysisStartTime = Date.now();
-        const self = this;
-        this.checkAnalysisInterval = setInterval(() => {
-          // Check if analysis completed (flag set by updateAnalysisResults)
-          if (self.analysisComplete) {
-            clearInterval(self.checkAnalysisInterval);
-            self.checkAnalysisInterval = null;
-            const suggestionCount = (self.analysisResults && self.analysisResults.suggestions) ? self.analysisResults.suggestions.length : 0;
-            self.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
-          } else if (self.analysisResults && self.analysisResults.suggestions) {
-            // Results arrived but analysisComplete flag not set - complete now
-            clearInterval(self.checkAnalysisInterval);
-            self.checkAnalysisInterval = null;
-            self.log('Analysis results received (timeout check), suggestions: ' + self.analysisResults.suggestions.length);
-          } else {
-            // Adaptive timeout: check both max time and last progress
-            const timeSinceStart = Date.now() - analysisStartTime;
-            const timeSinceProgress = Date.now() - lastProgressTime;
-
-            if (timeSinceStart > ADAPTIVE_TIMEOUT_MS) {
-              // Absolute timeout: analysis running too long
-              clearInterval(self.checkAnalysisInterval);
-              self.checkAnalysisInterval = null;
-              self.log('ERROR: Analysis timeout after ' + timeSinceStart + 'ms (adaptive)');
-              self.showEmptyState('Analysis timed out. The library may be too large or the server may be busy.');
-            } else if (timeSinceProgress > PROGRESS_UPDATE_TIMEOUT_MS) {
-              // No progress for 15 seconds - check if we're still loading
-              self.log('No progress for ' + timeSinceProgress + 'ms, checking status...');
-              // Don't timeout yet, just log - analysis might still be running
-              // Reset lastProgressTime to avoid repeated warnings
-              lastProgressTime = Date.now();
-            }
-          }
-        }, 500);
-
         let params = null;
 
         try {
           if (typeof window.arguments !== 'undefined' && window.arguments.length > 0) {
             params = window.arguments[0];
-            if (params && params.analysisResults) {
-            }
-          } else {
           }
         } catch (err) {
           this.log('Unable to read window arguments: ' + err.message);
@@ -968,24 +940,10 @@
           }
         }
 
-        // DEBUG: Log params status
-        if (window.opener) {
-        }
-
         let analysisResults = null;
-
-        // DEBUG: Log all potential sources
-        if (window.ZoteroNERAnalysisResults) {
-        }
-        if (window.opener && window.opener.ZoteroNERAnalysisResults) {
-        }
 
         if (params) {
           params = this.unwrapDialogParams(params);
-          if (params) {
-            if (params.analysisResults) {
-            }
-          }
         }
 
         // Try to resolve analysisResults from params
@@ -1023,13 +981,6 @@
           this.items = params.items;
         }
 
-        // Log what we found
-        if (analysisResults) {
-          if (analysisResults.suggestions && analysisResults.suggestions.length > 0) {
-            const sample = analysisResults.suggestions.slice(0, 3).map(s => s.primary || s.surname || '?').join(', ');
-          }
-        }
-
         if (!analysisResults) {
           this.log('No analysis results found');
           this.showEmptyState('No analysis results were provided to the dialog.');
@@ -1044,9 +995,10 @@
         if (analysisResults.loading === true || analysisResults.suggestions === null) {
           const reason = analysisResults.loading === true ? 'loading=true' : 'suggestions=NULL';
           this.log('Dialog opened in loading state (' + reason + ')');
-          // Update loading message to show we're waiting
-          ZoteroNER_HTMLUtils.updateProgressLabel('Waiting for analysis to complete...');
+          // Always show loading state first to ensure progress bar is visible immediately
           this.showLoadingState();
+          // Then start progress tracking for timeout detection
+          this.startProgressTracking();
           return;
         }
 
@@ -1060,10 +1012,15 @@
         this.updateSummaryHeader();
         this.populateVariantGroupList();
         this.refreshApplyButtonState();
+        // Hide progress container when showing results
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
         this.updateProgress();
       },
 
       showEmptyState: function(message) {
+        // Ensure progress bar is hidden
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        
         if (this.analysisResults) {
           this.updateSummaryHeader();
         } else {
@@ -1229,14 +1186,78 @@
         const normalizedValue = (selection.value || selection.customValue || '').trim();
         this.log('applyCard: normalizedValue="' + normalizedValue + '"');
 
-        if (!normalizedValue || selection.apply === false) {
-          this.log('applyCard: early return - no value or apply=false');
+        // For per-card Apply button: if no explicit apply flag but we have a normalized value, allow it
+        // This allows the button to work even if user hasn't explicitly selected a radio option yet
+        if (!normalizedValue) {
+          this.log('applyCard: early return - no normalized value');
           return false;
+        }
+
+        if (selection.apply === false && selection.mode !== 'primary') {
+          this.log('applyCard: early return - apply=false and not in primary mode');
+          return false;
+        }
+
+        // Prepare this specific suggestion for application
+        const preparedSuggestion = Object.assign({}, suggestion);
+        preparedSuggestion.originalPrimary = suggestion.primary;
+        preparedSuggestion.userSelection = Object.assign({}, selection);
+        preparedSuggestion.variants = (suggestion.variants || []).map(variant => {
+          const variantClone = Object.assign({}, variant);
+          if (Array.isArray(variantClone.items)) {
+            variantClone.items = variantClone.items.map(item => Object.assign({}, item));
+          }
+          return variantClone;
+        });
+
+        // Update the primary value with the selected normalization
+        preparedSuggestion.primary = normalizedValue;
+
+        if (selection.mode === 'variant' && typeof selection.variantIndex === 'number') {
+          preparedSuggestion.selectedVariant = preparedSuggestion.variants[selection.variantIndex] || null;
+        }
+
+        if (selection.mode === 'custom') {
+          preparedSuggestion.customNormalization = normalizedValue;
         }
 
         // Mark as applied
         selection.applied = true;
         this.log('applyCard: marked as applied, looking for card');
+
+        // Apply the normalization to the database
+        try {
+          // Try to use the main window's Zotero API which has proper Zotero context
+          let results;
+          const zotero = ZoteroNER_ZoteroAPI.getZotero();
+          this.log('applyCard: zotero available=' + (zotero ? 'yes' : 'no'));
+          
+          const nameNormalizer = ZoteroNER_ZoteroAPI.getNameNormalizer();
+          this.log('applyCard: nameNormalizer available=' + (nameNormalizer ? 'yes' : 'no'));
+          this.log('applyCard: nameNormalizer.applyNormalizationSuggestions=' + (nameNormalizer && typeof nameNormalizer.applyNormalizationSuggestions));
+
+          if (nameNormalizer && typeof nameNormalizer.applyNormalizationSuggestions === 'function') {
+            this.log('applyCard: calling applyNormalizationSuggestions with 1 suggestion');
+            results = await nameNormalizer.applyNormalizationSuggestions(
+              [preparedSuggestion],  // Apply only this one suggestion
+              false,
+              {
+                declinedSuggestions: [],
+                progressCallback: (event) => this.handleApplyProgress(event)
+              }
+            );
+
+            this.log('applyCard: normalization applied successfully, results:', results);
+          } else {
+            this.log('applyCard: ERROR - nameNormalizer not available or missing method');
+            throw new Error('Zotero NameNormalizer API not available');
+          }
+        } catch (error) {
+          this.log('applyCard: EXCEPTION caught: ' + error.message);
+          console.error('Error applying normalization in applyCard:', error);
+          this.alert('Error', 'Failed to apply normalization: ' + error.message);
+          return false;
+        }
 
         // Find and remove the card
         const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
@@ -1379,12 +1400,27 @@
         notVariantsBtn.textContent = 'Not Variants';
 
         // Add click handlers
-        applyBtn.addEventListener('click', async () => {
+        applyBtn.addEventListener('click', async (event) => {
           this.log('Apply button clicked for index=' + index);
-          await this.applyCard(index, suggestion);
+          // Prevent multiple clicks during processing
+          applyBtn.disabled = true;
+          applyBtn.textContent = 'Applying...';
+
+          try {
+            // Ensure the selection is marked as apply=true before applying
+            const currentSelection = this.ensureUserSelection(index, suggestion);
+            if (currentSelection) {
+              currentSelection.apply = true;
+            }
+            await this.applyCard(index, suggestion);
+          } finally {
+            // Re-enable button after processing
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Apply';
+          }
         });
 
-        notVariantsBtn.addEventListener('click', () => {
+        notVariantsBtn.addEventListener('click', (event) => {
           this.markNotVariants(index, suggestion);
         });
 
@@ -1576,18 +1612,6 @@
         const variant = suggestion.variants[variantIndex];
         const items = Array.isArray(variant?.items) ? variant.items : [];
 
-        // Debug info for troubleshooting
-        const authorInfo = suggestion.authorInfo || {};
-        const lookupKey = `${authorInfo.firstName || ''}|${variant.name || ''}`;
-        // Debug: show first 3 items if any
-        let debugInfo = `lookupKey=[${lookupKey}], items.length=${items.length}`;
-        if (items.length > 0) {
-          const sampleKeys = items.slice(0, 3).map(i => i.key).join(', ');
-          debugInfo += `, sampleKeys=[${sampleKeys}]`;
-        }
-        console.error('DEBUG: ' + debugInfo);
-        // Remaining dump() calls removed - they don't work in Zotero context
-
         if (!suggestion || !Array.isArray(suggestion.variants)) {
           this.clearVariantDetails();
           return;
@@ -1634,12 +1658,11 @@
         if (listEl) {
           listEl.innerHTML = '';
           const items = Array.isArray(variant.items) ? variant.items : [];
-          const authorInfo = suggestion.authorInfo || {};
-          const lookupKey = `${authorInfo.firstName || ''}|${variant.name || ''}`;
 
           if (items.length === 0) {
             const emptyLi = document.createElement('li');
-            emptyLi.innerHTML = `<span style="color:red;">No items found. lookupKey=[${lookupKey}]</span>`;
+            emptyLi.className = 'variant-meta';
+            emptyLi.textContent = 'No items found for this variant.';
             listEl.appendChild(emptyLi);
           } else {
             items.forEach(item => {
@@ -1754,7 +1777,7 @@
           mode: 'primary',
           label: recommendedLabelText,
           checked: selection.mode === 'primary',
-          selectionUpdate: () => ({ mode: 'primary', value: recommendedValue })
+          selectionUpdate: () => ({ mode: 'primary', value: recommendedValue, apply: true })
         });
         choiceGroup.appendChild(primaryRow);
 
@@ -1782,7 +1805,8 @@
               return {
                 mode: 'variant',
                 variantIndex,
-                value: variantValue
+                value: variantValue,
+                apply: true
               };
             }
           });
@@ -1853,7 +1877,8 @@
               mode: 'custom',
               value: input.value,
               customValue: input.value,
-              variantIndex: null
+              variantIndex: null,
+              apply: true
             });
           }
         });
@@ -2367,8 +2392,7 @@
         }
 
         // Show confirmation dialog for bulk operations
-        const confirmed = this.confirm(
-          'Apply Multiple Normalizations',
+        const confirmed = window.confirm(
           `You are about to apply ${selectedCount} normalization(s) to your library.\n\n` +
           `This will modify author names in ${selectedCount} item(s).\n\n` +
           `Are you sure you want to continue?`
@@ -2384,40 +2408,129 @@
         await this.applySelected();
       },
 
+      startProgressTracking: function() {
+        this.log('Starting progress tracking');
+
+        // Track when analysis is complete (set by updateAnalysisResults)
+        this.analysisComplete = false;
+
+        // Track last progress update time for adaptive timeout
+        this.lastProgressTime = Date.now();
+        this.lastHeartbeat = Date.now();
+
+        const ADAPTIVE_TIMEOUT_MS = 120000;        // 120 seconds max for large libraries
+        const PROGRESS_UPDATE_TIMEOUT_MS = 45000;  // 45 seconds since last progress = stuck
+        const HEARTBEAT_TIMEOUT_MS = 30000;        // 30 seconds without heartbeat = stalled
+
+        const analysisStartTime = Date.now();
+        const self = this;
+
+        // Clear any existing interval
+        if (this.checkAnalysisInterval) {
+          clearInterval(this.checkAnalysisInterval);
+          this.checkAnalysisInterval = null;
+        }
+
+        // Set up the timeout check interval
+        this.checkAnalysisInterval = setInterval(() => {
+          // Check if analysis completed (flag set by updateAnalysisResults)
+          if (self.analysisComplete) {
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            const suggestionCount = (self.analysisResults && self.analysisResults.suggestions) ? self.analysisResults.suggestions.length : 0;
+            self.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
+          } else if (self.analysisResults && self.analysisResults.suggestions) {
+            // Results arrived but analysisComplete flag not set - complete now
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            self.log('Analysis results received (timeout check), suggestions: ' + self.analysisResults.suggestions.length);
+          } else {
+            // Adaptive timeout: check max time, last progress, and heartbeat
+            const timeSinceStart = Date.now() - analysisStartTime;
+            const timeSinceProgress = Date.now() - self.lastProgressTime;
+            const timeSinceHeartbeat = Date.now() - (self.lastHeartbeat || self.lastProgressTime);
+
+            if (timeSinceStart > ADAPTIVE_TIMEOUT_MS) {
+              // Absolute timeout: analysis running too long
+              clearInterval(self.checkAnalysisInterval);
+              self.checkAnalysisInterval = null;
+              self.log('ERROR: Analysis timeout after ' + timeSinceStart + 'ms (adaptive)');
+              self.showEmptyState('Analysis timed out. The library may be too large.');
+            } else if (timeSinceHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+              // No heartbeat - analysis may be stalled
+              self.log('No heartbeat for ' + timeSinceHeartbeat + 'ms, checking status...');
+              self.lastHeartbeat = Date.now();  // Reset to avoid repeated warnings
+            } else if (timeSinceProgress > PROGRESS_UPDATE_TIMEOUT_MS) {
+              // No progress update, but heartbeat still coming - CPU busy, not stuck
+              self.log('No progress update for ' + timeSinceProgress + 'ms (CPU busy, not stuck)');
+              // Don't reset lastProgressTime - we want to track actual progress
+            }
+          }
+        }, 500);
+
+        // Note: showLoadingState() is now called separately in initialize()
+        // before startProgressTracking() to ensure progress bar appears immediately
+      },
+
       showLoadingState: function() {
         this.log('Showing loading state');
-        
+
         // Hide empty message, show progress
         ZoteroNER_HTMLUtils.setHidden('empty-message', true);
         ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         ZoteroNER_HTMLUtils.setHidden('variant-section', true);
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
         ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
-        ZoteroNER_HTMLUtils.updateProgressBar(0);
+        // Use indeterminate animation so user sees progress even if analysis is fast
+        ZoteroNER_HTMLUtils.setProgressIndeterminate(true);
         this.setApplyEnabled(false);
       },
       
       handleAnalysisProgress: function(progress) {
-        // Track progress time for adaptive timeout
-        lastProgressTime = Date.now();
+        // Always update timestamps first
+        this.lastProgressTime = Date.now();
+        this.lastHeartbeat = Date.now();
+
+        this.log('handleAnalysisProgress: stage=' + (progress.stage || 'unknown') + ', percent=' + (progress.percent !== undefined ? progress.percent : 'N/A') + ', processed=' + (progress.processed || 'N/A') + ', total=' + (progress.total || 'N/A'));
 
         if (!progress) {
           this.log('handleAnalysisProgress: received null progress');
           return;
         }
-        this.log('handleAnalysisProgress: stage=' + progress.stage + ', processed=' + progress.processed + ', total=' + progress.total + ', percent=' + progress.percent);
-        ZoteroNER_HTMLUtils.setHidden('progress-container', false);
-        // Log debug messages to file
-        if (progress.stage === 'debug' && progress.message) {
+
+        // Debounce rapid updates to prevent UI jank
+        if (this.progressUpdateTimer) {
+          clearTimeout(this.progressUpdateTimer);
         }
+
+        this.progressUpdateTimer = setTimeout(() => {
+          this.updateProgressUI(progress);
+        }, 100);
+      },
+
+      receiveHeartbeat: function() {
+        // Check if dialog is still open/valid
+        if (!document.getElementById('progress-container')) {
+          return;  // Dialog closing, ignore heartbeat
+        }
+        this.lastHeartbeat = Date.now();
+        // Note: Do NOT update lastProgressTime - heartbeat != actual progress
+      },
+
+      updateProgressUI: function(progress) {
+        // Ensure progress container is visible while updating
+        if (!progress) return;
+
+        ZoteroNER_HTMLUtils.setHidden('progress-container', false);
+
         let message = 'Analyzing library...';
         let percent = 0;
         let isIndeterminate = false;
+
         if (progress.stage === 'filtering_items') {
           message = `Loading items... (${progress.processed || 0} of ${progress.total || '?'})`;
           percent = progress.percent || 0;
         } else if (progress.stage === 'analyzing_surnames') {
-          this.log('handleAnalysisProgress: analyzing_surnames stage, percent=' + progress.percent);
           if (progress.total) {
             message = `Analyzing surnames... (${progress.processed || 0} of ${progress.total})`;
             percent = progress.percent || 0;
@@ -2432,22 +2545,21 @@
           message = progress.message || 'Analyzing...';
           percent = progress.percent || 0;
         }
+
         ZoteroNER_HTMLUtils.updateProgressLabel(message);
-        // Update progress bar with visual feedback
+
         const fill = document.getElementById('progress-fill');
         if (fill) {
           if (isIndeterminate) {
             fill.classList.add('indeterminate');
           } else {
             fill.classList.remove('indeterminate');
-            fill.style.width = Math.max(percent, 3) + '%'; // Min 3% for visibility
+            fill.style.width = Math.max(percent, 3) + '%';
           }
         }
       },
       
       updateAnalysisResults: function(analysisResults) {
-        if (analysisResults) {
-        }
 
         // Mark analysis as complete to prevent timeout error
         this.analysisComplete = true;
@@ -2458,8 +2570,15 @@
           this.checkAnalysisInterval = null;
         }
 
+        // Clear any pending progress update timer
+        if (this.progressUpdateTimer) {
+          clearTimeout(this.progressUpdateTimer);
+          this.progressUpdateTimer = null;
+        }
+
         if (!analysisResults) {
           this.showEmptyState('Analysis completed but no results were returned.');
+          ZoteroNER_HTMLUtils.setHidden('progress-container', true);
           return;
         }
 
@@ -2470,9 +2589,16 @@
         this.resetSelections();
         this.clearVariantDetails();
         
-        // Show the variant section
-        ZoteroNER_HTMLUtils.setHidden('variant-section', false);
-        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        // Show 100% progress for a moment before hiding
+        ZoteroNER_HTMLUtils.updateProgressLabel('Analysis complete!');
+        ZoteroNER_HTMLUtils.updateProgressBar(100);
+        
+        // Hide progress container after a brief delay to show completion
+        setTimeout(() => {
+          ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+          ZoteroNER_HTMLUtils.setHidden('summary-group', false);
+          ZoteroNER_HTMLUtils.setHidden('variant-section', false);
+        }, 500);
         
         this.updateSummaryHeader();
         this.populateVariantGroupList();

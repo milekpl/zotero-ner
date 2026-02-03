@@ -205,9 +205,4 @@ describe('Zotero NameNormalizer Integration', () => {
     // Restore ZoteroNameNormalizer
     global.ZoteroNameNormalizer = originalZoteroNameNormalizer;
   });
-
-  test('backward compatibility alias Zotero.NER should reference NameNormalizer', () => {
-    // Verify backward compatibility alias works
-    expect(global.Zotero.NER).toBe(global.Zotero.NameNormalizer);
-  });
 });

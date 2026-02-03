@@ -1,5 +1,5 @@
 /**
- * Zotero NER UI Test - Malformed Surname Test
+ * Zotero Name Normalizer UI Test - Malformed Surname Test
  *
  * Reproduces the "and Friston" issue where clicking on a malformed
  * surname variant shows no items in the right-hand side panel.

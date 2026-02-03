@@ -4,12 +4,12 @@
 # worker
 
 ## Purpose
-Background worker module for intensive NER processing. Offloads computationally expensive operations from the main thread to prevent UI blocking.
+Background worker module for intensive name normalization processing. Offloads computationally expensive operations from the main thread to prevent UI blocking.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ner-worker.js` | Web Worker for background NER processing |
+| `name-worker.js` | Web Worker for background name processing |
 
 ## For AI Agents
 

@@ -189,21 +189,16 @@ const ZoteroNER_ZoteroAPI = {
   },
 
   /**
-   * Get Zotero.NER / Zotero.NameNormalizer reference
+   * Get Zotero.NameNormalizer reference
    * @returns {Object|null} NameNormalizer API or null if unavailable
    */
   getNameNormalizer: function() {
     const zotero = this.getZotero();
     if (!zotero) return null;
 
-    // Prefer Zotero.NameNormalizer (modern)
+    // Use Zotero.NameNormalizer
     if (zotero.NameNormalizer) {
       return zotero.NameNormalizer;
-    }
-
-    // Fall back to Zotero.NER (legacy alias)
-    if (zotero.NER) {
-      return zotero.NER;
     }
 
     return null;
@@ -233,7 +228,7 @@ git commit -m "feat: add getZoteroAPI() helper for robust dialog access
 - Pattern 1: window.opener.Zotero (dialogs via openDialog)
 - Pattern 2: parent frame Zotero (iframes)
 - Pattern 3: Global Zotero fallback
-- Prefer Zotero.NameNormalizer over Zotero.NER alias"
+- Use Zotero.NameNormalizer API"
 ```
 
 ---
@@ -246,9 +241,9 @@ git commit -m "feat: add getZoteroAPI() helper for robust dialog access
 **Step 1: Read current applySelected implementation**
 
 Run: `sed -n '2250,2280p' content/dialog.html`
-Expected: Shows current Zotero.NER access pattern
+Expected: Shows current Zotero.NameNormalizer access pattern
 
-**Step 2: Replace window.opener.Zotero.NER with helper**
+**Step 2: Replace window.opener.Zotero.NameNormalizer with helper**
 
 Edit to use `ZoteroNER_ZoteroAPI.getNameNormalizer()`:
 
@@ -292,7 +287,7 @@ Expected: Shows new helper-based access pattern
 git add content/dialog.html
 git commit -m "fix: use ZoteroNER_ZoteroAPI helper in applySelected()
 
-- Replace fragile window.opener.Zotero.NER with robust helper
+- Replace fragile window.opener.Zotero.NameNormalizer with robust helper
 - Graceful fallback to ZoteroNER if helper unavailable
 - Better error message when Zotero not available"
 ```
@@ -443,11 +438,10 @@ describe('ZoteroNER_ZoteroAPI', () => {
     expect(api.getZotero()).toBeNull();
   });
 
-  test('getNameNormalizer should prefer NameNormalizer over NER', () => {
+  test('getNameNormalizer should return NameNormalizer when available', () => {
     window.opener = {
       Zotero: {
-        NameNormalizer: { initialized: true },
-        NER: { initialized: false }
+        NameNormalizer: { initialized: true }
       }
     };
     const api = ZoteroNER_ZoteroAPI;
@@ -469,7 +463,7 @@ git commit -m "test: add unit tests for adaptive timeout and Zotero API helper
 
 - Test timeout behavior with progress updates
 - Test Zotero API helper access patterns
-- Test NameNormalizer vs NER preference"
+- Test NameNormalizer availability"
 ```
 
 ---

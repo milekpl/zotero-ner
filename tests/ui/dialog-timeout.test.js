@@ -235,14 +235,9 @@ describe('ZoteroNER_ZoteroAPI Helper', () => {
       const zotero = this.getZotero();
       if (!zotero) return null;
 
-      // Prefer Zotero.NameNormalizer (modern)
+      // Use Zotero.NameNormalizer
       if (zotero.NameNormalizer) {
         return zotero.NameNormalizer;
-      }
-
-      // Fall back to Zotero.NER (legacy alias)
-      if (zotero.NER) {
-        return zotero.NER;
       }
 
       return null;
@@ -277,21 +272,10 @@ describe('ZoteroNER_ZoteroAPI Helper', () => {
     expect(api.getZotero()).toEqual({ version: '7.0' });
   });
 
-  test('getNameNormalizer should prefer NameNormalizer over NER', () => {
+  test('getNameNormalizer should return NameNormalizer when available', () => {
     global.window.opener = {
       Zotero: {
-        NameNormalizer: { initialized: true },
-        NER: { initialized: false }
-      }
-    };
-    const api = createZoteroAPI();
-    expect(api.getNameNormalizer()).toEqual({ initialized: true });
-  });
-
-  test('getNameNormalizer should fall back to NER if NameNormalizer not available', () => {
-    global.window.opener = {
-      Zotero: {
-        NER: { initialized: true }
+        NameNormalizer: { initialized: true }
       }
     };
     const api = createZoteroAPI();

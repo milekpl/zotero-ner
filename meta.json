@@ -1,0 +1,36 @@
+{
+  "inputs": {
+    "tests/zotero-framework/test/tests/zotero-ner.spec.js": {
+      "bytes": 6738,
+      "imports": []
+    },
+    "tests/zotero-framework/test/tests/zotero-ner-ui.spec.js": {
+      "bytes": 13642,
+      "imports": []
+    }
+  },
+  "outputs": {
+    "../../../../tmp/test-bundle2/zotero-ner.spec.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "tests/zotero-framework/test/tests/zotero-ner.spec.js",
+      "inputs": {
+        "tests/zotero-framework/test/tests/zotero-ner.spec.js": {
+          "bytesInOutput": 5750
+        }
+      },
+      "bytes": 5823
+    },
+    "../../../../tmp/test-bundle2/zotero-ner-ui.spec.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "tests/zotero-framework/test/tests/zotero-ner-ui.spec.js",
+      "inputs": {
+        "tests/zotero-framework/test/tests/zotero-ner-ui.spec.js": {
+          "bytesInOutput": 10901
+        }
+      },
+      "bytes": 10977
+    }
+  }
+}

@@ -27,11 +27,4 @@ describe('Dialog Zotero Access Integration', () => {
     expect(nameNormalizer.initialized).toBe(true);
   });
 
-  test('Zotero.NER alias should point to NameNormalizer', () => {
-    if (!zoteroAvailable) {
-      console.log('Zotero not available (expected in unit test mode)');
-      return;
-    }
-    expect(Zotero.NER).toBe(Zotero.NameNormalizer);
-  });
 });

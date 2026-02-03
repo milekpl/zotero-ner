@@ -104,11 +104,11 @@ const TEST_DEFINITIONS = {
     name: 'Extension Loaded',
     code: `
       try {
-        const loaded = typeof Zotero !== 'undefined' && Zotero.NER;
+        const loaded = typeof Zotero !== 'undefined' && Zotero.NameNormalizer;
         if (!loaded) {
-          throw new Error('Zotero.NER is not defined');
+          throw new Error('Zotero.NameNormalizer is not defined');
         }
-        dump('${MARKERS.DUMP}' + JSON.stringify({initialized: Zotero.NER.initialized}) + '\\n');
+        dump('${MARKERS.DUMP}' + JSON.stringify({initialized: Zotero.NameNormalizer.initialized}) + '\\n');
         return { success: true, message: 'Extension is loaded' };
       } catch (e) {
         return { success: false, error: e.message };
@@ -123,12 +123,12 @@ const TEST_DEFINITIONS = {
     name: 'Learning Engine',
     code: `
       try {
-        if (!Zotero.NER.learningEngine) {
+        if (!Zotero.NameNormalizer.learningEngine) {
           throw new Error('Learning engine not initialized');
         }
         // Test storing and retrieving a mapping
-        Zotero.NER.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
-        const mappings = Zotero.NER.learningEngine.getMapping('Smyth');
+        Zotero.NameNormalizer.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
+        const mappings = Zotero.NameNormalizer.learningEngine.getMapping('Smyth');
         const success = mappings && mappings.normalized === 'Smith';
         return {
           success: success,
@@ -148,7 +148,7 @@ const TEST_DEFINITIONS = {
     name: 'Name Parser',
     code: `
       try {
-        if (!Zotero.NER.nameParser) {
+        if (!Zotero.NameNormalizer.nameParser) {
           throw new Error('Name parser not initialized');
         }
         const testCases = [
@@ -157,7 +157,7 @@ const TEST_DEFINITIONS = {
           { input: 'van der Berg', expected: { firstName: '', lastName: 'van der Berg' } }
         ];
         const results = testCases.map(tc => {
-          const parsed = Zotero.NER.nameParser.parse(tc.input);
+          const parsed = Zotero.NameNormalizer.nameParser.parse(tc.input);
           return {
             input: tc.input,
             parsed: parsed,
@@ -180,11 +180,11 @@ const TEST_DEFINITIONS = {
     name: 'Candidate Finder',
     code: `
       try {
-        if (!Zotero.NER.candidateFinder) {
+        if (!Zotero.NameNormalizer.candidateFinder) {
           throw new Error('Candidate finder not initialized');
         }
         const surnames = ['Smith', 'Smyth', 'Smythe', 'Johnson', 'Johnsen'];
-        const candidates = Zotero.NER.candidateFinder.findPotentialVariants(surnames);
+        const candidates = Zotero.NameNormalizer.candidateFinder.findPotentialVariants(surnames);
         dump('${MARKERS.DUMP}' + JSON.stringify({candidates: candidates}) + '\\n');
         return {
           success: candidates && candidates.length > 0,
@@ -204,10 +204,10 @@ const TEST_DEFINITIONS = {
     name: 'DB Analyzer',
     code: `
       try {
-        if (!Zotero.NER.menuIntegration) {
+        if (!Zotero.NameNormalizer.menuIntegration) {
           throw new Error('Menu integration not initialized');
         }
-        const dbAnalyzer = Zotero.NER.menuIntegration.zoteroDBAnalyzer;
+        const dbAnalyzer = Zotero.NameNormalizer.menuIntegration.zoteroDBAnalyzer;
         if (!dbAnalyzer) {
           throw new Error('DB analyzer not available');
         }
@@ -477,7 +477,7 @@ async function runAllTests(options = {}) {
   const { debug = false, filter = null } = options;
 
   console.log('='.repeat(60));
-  console.log('Zotero NER Integration Tests');
+  console.log('Zotero Name Normalizer Integration Tests');
   console.log('='.repeat(60));
   console.log(`Zotero: ${ZOTERO_PATH}`);
   console.log(`Profile: ${PROFILE_PATH}`);

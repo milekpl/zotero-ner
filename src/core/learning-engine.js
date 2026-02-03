@@ -33,11 +33,6 @@ class LearningEngine {
     this.maxBatchSize = 100;
     this.isBatchingEnabled = true;
 
-    // Phonetic indexing DISABLED - causes false positives like Chen/Cohen
-    // Only exact character-based matching should be used for names
-    this.phoneticIndex = new Map();
-    this.usePhoneticIndexing = false;
-
     // Register for shutdown event to ensure data is saved
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => this.forceSave());
@@ -82,13 +77,6 @@ class LearningEngine {
         const parsed = JSON.parse(stored);
         // Convert back to Map
         this.mappings = new Map(parsed);
-
-        // Build phonetic index for all loaded mappings
-        if (this.usePhoneticIndexing) {
-          for (const [key] of this.mappings) {
-            this.addToPhoneticIndex(key);
-          }
-        }
       }
     } catch (error) {
       console.error('Error loading mappings:', error);
@@ -263,11 +251,6 @@ class LearningEngine {
     if (this.isBatchingEnabled) {
       this.pendingSaves.add(canonicalKey);
 
-      // Add to phonetic index for new mappings
-      if (!this.mappings.has(canonicalKey)) {
-        this.addToPhoneticIndex(canonicalKey);
-      }
-
       // Immediate save if batch is large
       if (this.pendingSaves.size >= this.maxBatchSize) {
         await this.flushPendingSaves();
@@ -275,10 +258,6 @@ class LearningEngine {
         this.scheduleSave();
       }
     } else {
-      // Add to phonetic index for new mappings
-      if (!this.mappings.has(canonicalKey)) {
-        this.addToPhoneticIndex(canonicalKey);
-      }
       await this.saveMappings();
     }
   }
@@ -339,71 +318,6 @@ class LearningEngine {
         await this.saveMappings();
       }
     }
-  }
-
-  /**
-   * Add a mapping to the phonetic index
-   * @param {string} canonicalKey - Canonical key of the mapping
-   * @private
-   */
-  addToPhoneticIndex(canonicalKey) {
-    if (!this.usePhoneticIndexing) return;
-
-    const { getPhoneticKey, getBucketKey } = require('../utils/phonetic-index');
-
-    const phoneticKey = getPhoneticKey(canonicalKey);
-    const bucketKey = getBucketKey(canonicalKey);
-
-    // Add to phonetic index
-    if (!this.phoneticIndex.has(phoneticKey)) {
-      this.phoneticIndex.set(phoneticKey, new Set());
-    }
-    this.phoneticIndex.get(phoneticKey).add(canonicalKey);
-
-    // Also add to bucket index (first letter + length category)
-    const bucketIndexKey = `bucket:${bucketKey}`;
-    if (!this.phoneticIndex.has(bucketIndexKey)) {
-      this.phoneticIndex.set(bucketIndexKey, new Set());
-    }
-    this.phoneticIndex.get(bucketIndexKey).add(canonicalKey);
-  }
-
-  /**
-   * Get candidate keys from phonetic index
-   * @param {string} query - Query string
-   * @returns {Set} Set of candidate canonical keys
-   * @private
-   */
-  getPhoneticCandidates(query) {
-    if (!this.usePhoneticIndexing) {
-      return new Set(this.mappings.keys());
-    }
-
-    const { getPhoneticKey, getBucketKey, phoneticSimilarity } = require('../utils/phonetic-index');
-
-    const phoneticKey = getPhoneticKey(query);
-    const bucketKey = getBucketKey(query);
-
-    const candidates = new Set();
-
-    // Get candidates with same phonetic key
-    const phoneticMatches = this.phoneticIndex.get(phoneticKey);
-    if (phoneticMatches) {
-      phoneticMatches.forEach(key => candidates.add(key));
-    }
-
-    // Get candidates from same bucket
-    const bucketMatches = this.phoneticIndex.get(`bucket:${bucketKey}`);
-    if (bucketMatches) {
-      bucketMatches.forEach(key => candidates.add(key));
-    }
-
-    // If no candidates found, fall back to all keys
-    if (candidates.size === 0) {
-      return new Set(this.mappings.keys());
-    }
-
-    return candidates;
   }
 
   /**

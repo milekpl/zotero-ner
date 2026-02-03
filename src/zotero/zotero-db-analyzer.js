@@ -2373,9 +2373,9 @@ class ZoteroDBAnalyzer {
           if (!itemSummary || !itemSummary.id) continue;
           const itemId = itemSummary.id;
 
-          // Skip if this variant IS the normalized value
-          const variantName = variant.name || '';
-          if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) continue;
+          // Skip if this variant IS the normalized value (case-sensitive check)
+          const variantName = (variant.name || '').trim();
+          if (variantName === normalizedValue) continue;
 
           allItemIds.add(itemId);
           if (!itemUpdates.has(itemId)) {
@@ -2508,7 +2508,7 @@ class ZoteroDBAnalyzer {
         }
         unique.add(opKey);
 
-        if (this.stringsEqualIgnoreCase(variantName, normalizedValue)) {
+        if (variantName === normalizedValue) {
           continue;
         }
 

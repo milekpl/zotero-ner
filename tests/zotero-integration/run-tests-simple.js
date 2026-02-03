@@ -20,7 +20,7 @@ const TEST_FILE = '/tmp/zotero-ner-test-runner.js';
 
 // Test code to run in Zotero
 const TEST_CODE = `
-// Zotero NER Test Runner
+// Zotero Name Normalizer Test Runner
 // This file is loaded and executed by Zotero
 
 var results = {
@@ -47,28 +47,28 @@ runTest('testZoteroLoaded', function() {
 
 // Test 2: Extension loaded
 runTest('testExtensionLoaded', function() {
-  if (typeof Zotero === 'undefined' || !Zotero.NER) {
-    return { success: false, error: 'Zotero.NER not defined' };
+  if (typeof Zotero === 'undefined' || !Zotero.NameNormalizer) {
+    return { success: false, error: 'Zotero.NameNormalizer not defined' };
   }
-  return { success: true, initialized: Zotero.NER.initialized };
+  return { success: true, initialized: Zotero.NameNormalizer.initialized };
 });
 
 // Test 3: Learning engine
 runTest('testLearningEngine', function() {
-  if (!Zotero.NER.learningEngine) {
+  if (!Zotero.NameNormalizer.learningEngine) {
     return { success: false, error: 'Learning engine not initialized' };
   }
-  Zotero.NER.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
-  var mappings = Zotero.NER.learningEngine.getMapping('Smyth');
+  Zotero.NameNormalizer.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
+  var mappings = Zotero.NameNormalizer.learningEngine.getMapping('Smyth');
   return { success: mappings && mappings.normalized === 'Smith', mappings: mappings };
 });
 
 // Test 4: Name parser
 runTest('testNameParser', function() {
-  if (!Zotero.NER.nameParser) {
+  if (!Zotero.NameNormalizer.nameParser) {
     return { success: false, error: 'Name parser not initialized' };
   }
-  var parsed = Zotero.NER.nameParser.parse('John Smith');
+  var parsed = Zotero.NameNormalizer.nameParser.parse('John Smith');
   return { success: parsed.lastName === 'Smith', parsed: parsed };
 });
 
@@ -90,7 +90,7 @@ Zotero.quit();
 fs.writeFileSync(TEST_FILE, TEST_CODE.replace('${OUTPUT_FILE}', OUTPUT_FILE));
 
 console.log('='.repeat(60));
-console.log('Zotero NER Integration Tests');
+console.log('Zotero Name Normalizer Integration Tests');
 console.log('='.repeat(60));
 console.log(`Zotero: ${ZOTERO_PATH}`);
 console.log(`Profile: ${PROFILE_PATH}`);

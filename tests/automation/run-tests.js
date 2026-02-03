@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Zotero NER Extension Test Automation
+ * Zotero Name Normalizer Extension Test Automation
  *
  * Uses Zotero's startup script capability to run tests.
  * This approach actually loads the extension and runs tests in a real Zotero session.
@@ -26,7 +26,7 @@ function findXPI() {
   const files = fs.readdirSync(distDir);
   const xpiFile = files.find(f => f.endsWith('.xpi') && f.includes('zotero-ner'));
   if (!xpiFile) {
-    throw new Error('No Zotero NER XPI found in dist/. Run "npm run build" first.');
+    throw new Error('No Zotero Name Normalizer XPI found in dist/. Run "npm run build" first.');
   }
   return path.join(distDir, xpiFile);
 }
@@ -34,7 +34,7 @@ function findXPI() {
 // The test script that runs in Zotero
 function createTestScript() {
   return `
-// Zotero NER Test Script - runs at Zotero startup
+// Zotero Name Normalizer Test Script - runs at Zotero startup
 // Tests the extension and writes results to file
 
 (function() {
@@ -47,10 +47,10 @@ function createTestScript() {
   // Wait a bit for extension to fully load
   setTimeout(function() {
     try {
-      log('Checking Zotero.NER...');
-      if (typeof Zotero === 'undefined' || !Zotero.NER) {
-        log('ERROR: Zotero or Zotero.NER not available');
-        writeResults({ error: 'Zotero.NER not available' });
+      log('Checking Zotero.NameNormalizer...');
+      if (typeof Zotero === 'undefined' || !Zotero.NameNormalizer) {
+        log('ERROR: Zotero or Zotero.NameNormalizer not available');
+        writeResults({ error: 'Zotero.NameNormalizer not available' });
         Zotero.quit();
         return;
       }
@@ -121,7 +121,7 @@ function createTestProfile() {
   fs.writeFileSync(testScriptPath, createTestScript());
 
   const prefsContent = `
-// Zotero NER Test Profile
+// Zotero Name Normalizer Test Profile
 user_pref("extensions.zotero.debug.logging", true);
 user_pref("extensions.zotero.debug.console", true);
 user_pref("javascript.options.showInConsole", true);
@@ -210,7 +210,7 @@ function formatResults(results) {
 
   const lines = [];
   lines.push('='.repeat(50));
-  lines.push('Zotero NER Test Results');
+  lines.push('Zotero Name Normalizer Test Results');
   lines.push('='.repeat(50));
 
   if (results.timestamp) {
@@ -256,7 +256,7 @@ function formatResults(results) {
 
 async function main() {
   console.log('');
-  log('Zotero NER Extension Test Automation');
+  log('Zotero Name Normalizer Extension Test Automation');
   log('====================================');
   console.log('');
 

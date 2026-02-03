@@ -1,6 +1,6 @@
 # Zotero Integration Testing - Findings and Approaches
 
-This document summarizes our exploration of testing the Zotero NER extension within Zotero's actual JavaScript context.
+This document summarizes our exploration of testing the Zotero Name Normalizer extension within Zotero's actual JavaScript context.
 
 ## Current Test Status
 
@@ -172,7 +172,7 @@ To add proper E2E tests, create a test file following Zotero's patterns:
 
 ```javascript
 // test/tests/zoteroNerTest.js
-describe("Zotero NER Extension", function () {
+describe("Zotero Name Normalizer Extension", function () {
     var win, doc, ZoteroPane;
 
     before(async function () {

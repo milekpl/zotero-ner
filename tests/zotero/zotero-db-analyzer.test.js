@@ -939,4 +939,257 @@ describe('ZoteroDBAnalyzer', () => {
       }
     });
   });
+
+  describe('Capitalization-only normalization', () => {
+    test('should apply capitalization-only changes like FODOR -> Fodor', async () => {
+      // Create a mock item with "FODOR" (all caps)
+      const fodorItem = {
+        id: 999,
+        key: 'FODOR001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Jerry', lastName: 'FODOR', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([fodorItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Fodor',  // Title case normalization
+          variants: [
+            { 
+              name: 'FODOR',  // All caps variant
+              frequency: 5, 
+              items: [{ id: 999, key: 'FODOR001' }] 
+            }
+          ],
+          similarity: 1.0
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(fodorItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' }
+      ]);
+      expect(fodorItem.save).toHaveBeenCalled();
+    });
+
+    test('should apply lowercase to titlecase normalization', async () => {
+      const lowercaseItem = {
+        id: 1001,
+        key: 'lower001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Jane', lastName: 'smith', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([lowercaseItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Smith',
+          variants: [
+            { 
+              name: 'smith',
+              frequency: 3, 
+              items: [{ id: 1001, key: 'lower001' }] 
+            }
+          ],
+          similarity: 1.0
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(lowercaseItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Jane', lastName: 'Smith', creatorType: 'author' }
+      ]);
+    });
+
+    test('should skip true duplicates (exact match)', async () => {
+      const duplicateItem = {
+        id: 1002,
+        key: 'dup001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([duplicateItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Smith',
+          variants: [
+            { 
+              name: 'Smith',  // Exact match - should be skipped
+              frequency: 10, 
+              items: [{ id: 1002, key: 'dup001' }] 
+            }
+          ],
+          similarity: 1.0
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      // Should skip this item since variant name equals normalized value
+      expect(results.updatedCreators).toBe(0);
+      expect(duplicateItem.setCreators).not.toHaveBeenCalled();
+    });
+
+    test('should apply multiple capitalization changes in one batch', async () => {
+      const fodorItem = {
+        id: 1003,
+        key: 'FODOR002',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Jerry', lastName: 'FODOR', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+
+      const kripkeItem = {
+        id: 1004,
+        key: 'KRIPKE001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Saul', lastName: 'kripke', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+
+      global.Zotero.Items.getAsync.mockResolvedValue([fodorItem, kripkeItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Fodor',
+          variants: [
+            { name: 'FODOR', frequency: 3, items: [{ id: 1003, key: 'FODOR002' }] }
+          ],
+          similarity: 1.0
+        },
+        {
+          type: 'surname',
+          primary: 'Kripke',
+          variants: [
+            { name: 'kripke', frequency: 4, items: [{ id: 1004, key: 'KRIPKE001' }] }
+          ],
+          similarity: 1.0
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.applied).toBe(2);
+      expect(results.updatedCreators).toBe(2);
+      
+      expect(fodorItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' }
+      ]);
+      expect(kripkeItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Saul', lastName: 'Kripke', creatorType: 'author' }
+      ]);
+    });
+
+    test('should distinguish between capitalization changes and typo fixes', async () => {
+      const capitalItem = {
+        id: 1005,
+        key: 'cap001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Bob', lastName: 'SMITH', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+
+      const typoItem = {
+        id: 1006,
+        key: 'typo001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Alice', lastName: 'Smyth', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+
+      global.Zotero.Items.getAsync.mockResolvedValue([capitalItem, typoItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Smith',
+          variants: [
+            { name: 'SMITH', frequency: 2, items: [{ id: 1005, key: 'cap001' }] },
+            { name: 'Smyth', frequency: 1, items: [{ id: 1006, key: 'typo001' }] }
+          ],
+          similarity: 0.95
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      // Should apply both normalizations - capitalization and typo
+      expect(results.applied).toBe(1);
+      expect(results.updatedCreators).toBeGreaterThanOrEqual(2);
+      
+      // Capitalization item should be normalized
+      expect(capitalItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Bob', lastName: 'Smith', creatorType: 'author' }
+      ]);
+      
+      // Typo item should be normalized
+      expect(typoItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Alice', lastName: 'Smith', creatorType: 'author' }
+      ]);
+    });
+
+    test('should handle given-name capitalization normalization', async () => {
+      const givenNameItem = {
+        id: 1006,
+        key: 'given001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'JOHN', lastName: 'Smith', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([givenNameItem]);
+
+      const suggestions = [
+        {
+          type: 'given-name',
+          surname: 'Smith',
+          primary: 'John Smith',
+          recommendedFullName: 'John Smith',
+          variants: [
+            { 
+              firstName: 'JOHN',
+              lastName: 'Smith',
+              frequency: 2, 
+              items: [{ id: 1006, key: 'given001' }] 
+            }
+          ],
+          similarity: 1.0
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(givenNameItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
+      ]);
+    });
+  });
 });

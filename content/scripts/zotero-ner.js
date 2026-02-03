@@ -438,18 +438,45 @@ if (typeof Zotero === 'undefined') {
                   const targetWindow = self.currentDialogWindow;
                   if (targetWindow && targetWindow.ZoteroNERController) {
                     targetWindow.ZoteroNERController.handleAnalysisProgress(progress);
+                    // Also send heartbeat on progress
+                    targetWindow.ZoteroNERController.receiveHeartbeat();
                   } else {
                     Zotero.debug('Zotero NER: ERROR - targetWindow=' + (!!targetWindow) + ' ZoteroNERController=' + !!(targetWindow && targetWindow.ZoteroNERController));
                   }
                 };
 
+                // Start heartbeat timer (independent of progress callbacks)
+                const heartbeatTimer = setInterval(() => {
+                  const targetWindow = self.currentDialogWindow;
+                  if (targetWindow && targetWindow.ZoteroNERController) {
+                    targetWindow.ZoteroNERController.receiveHeartbeat();
+                  }
+                }, 10000);  // Every 10 seconds
+
                 // Perform analysis asynchronously
                 fileLog('Calling analyzeFullLibrary...');
                 console.log('Name Normalizer: Calling analyzeFullLibrary...');
-                const analysisResults = await dbAnalyzer.analyzeFullLibrary(progressCallback);
-                fileLog('Analysis complete: suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
-                console.log('Name Normalizer: Analysis complete, suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
-                self.log('Analysis complete, updating dialog...');
+                let analysisResults = null;
+                try {
+                  // Signal the dialog to start progress tracking
+                  // This sets up the timeout interval and shows the loading UI
+                  if (dialogWindow && dialogWindow.ZoteroNERController) {
+                    dialogWindow.ZoteroNERController.startProgressTracking();
+                    fileLog('startProgressTracking called');
+                    console.log('Name Normalizer: startProgressTracking called');
+                  }
+
+                  analysisResults = await dbAnalyzer.analyzeFullLibrary(progressCallback);
+                  fileLog('Analysis complete: suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
+                  console.log('Name Normalizer: Analysis complete, suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
+                  self.log('Analysis complete, updating dialog...');
+                  // Clear heartbeat timer
+                  clearInterval(heartbeatTimer);
+                } catch (analysisError) {
+                  // Clear heartbeat timer on error
+                  clearInterval(heartbeatTimer);
+                  throw analysisError;
+                }
 
                 // Update dialog with results
                 if (dialogWindow && dialogWindow.ZoteroNERController) {
@@ -654,7 +681,4 @@ if (typeof Zotero === 'undefined') {
       }
     };
   }
-
-  // Backward compatibility alias
-  Zotero.NER = Zotero.NameNormalizer;
 }

@@ -30,18 +30,18 @@ const TEST_DEFINITIONS = {
   testExtensionLoaded: {
     name: 'Extension Loaded',
     code: `
-      typeof Zotero !== 'undefined' && Zotero.NER && { success: true, initialized: Zotero.NER.initialized }
+      typeof Zotero !== 'undefined' && Zotero.NameNormalizer && { success: true, initialized: Zotero.NameNormalizer.initialized }
     `
   },
 
   testLearningEngine: {
     name: 'Learning Engine',
     code: `
-      if (!Zotero.NER.learningEngine) {
+      if (!Zotero.NameNormalizer.learningEngine) {
         throw new Error('Learning engine not initialized');
       }
-      Zotero.NER.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
-      const mappings = Zotero.NER.learningEngine.getMapping('Smyth');
+      Zotero.NameNormalizer.learningEngine.storeMapping('Smyth', 'Smith', 0.9);
+      const mappings = Zotero.NameNormalizer.learningEngine.getMapping('Smyth');
       { success: mappings && mappings.normalized === 'Smith', mappings: mappings }
     `
   },
@@ -49,10 +49,10 @@ const TEST_DEFINITIONS = {
   testNameParser: {
     name: 'Name Parser',
     code: `
-      if (!Zotero.NER.nameParser) {
+      if (!Zotero.NameNormalizer.nameParser) {
         throw new Error('Name parser not initialized');
       }
-      const parsed = Zotero.NER.nameParser.parse('John Smith');
+      const parsed = Zotero.NameNormalizer.nameParser.parse('John Smith');
       { success: parsed.lastName === 'Smith', parsed: parsed }
     `
   },
@@ -60,11 +60,11 @@ const TEST_DEFINITIONS = {
   testCandidateFinder: {
     name: 'Candidate Finder',
     code: `
-      if (!Zotero.NER.candidateFinder) {
+      if (!Zotero.NameNormalizer.candidateFinder) {
         throw new Error('Candidate finder not initialized');
       }
       const surnames = ['Smith', 'Smyth', 'Smythe'];
-      const candidates = Zotero.NER.candidateFinder.findPotentialVariants(surnames);
+      const candidates = Zotero.NameNormalizer.candidateFinder.findPotentialVariants(surnames);
       { success: true, candidateCount: candidates ? candidates.length : 0 }
     `
   },
@@ -72,10 +72,10 @@ const TEST_DEFINITIONS = {
   testDBAnalyzer: {
     name: 'DB Analyzer',
     code: `
-      if (!Zotero.NER.menuIntegration) {
+      if (!Zotero.NameNormalizer.menuIntegration) {
         throw new Error('Menu integration not initialized');
       }
-      { success: !!Zotero.NER.menuIntegration.zoteroDBAnalyzer }
+      { success: !!Zotero.NameNormalizer.menuIntegration.zoteroDBAnalyzer }
     `
   },
 
@@ -122,7 +122,7 @@ async function runAllTests(options = {}) {
   const { headless = true, timeout = 60000 } = options;
 
   console.log('='.repeat(60));
-  console.log('Zotero NER Integration Tests (Playwright)');
+  console.log('Zotero Name Normalizer Integration Tests (Playwright)');
   console.log('='.repeat(60));
   console.log(`Zotero: ${ZOTERO_PATH}`);
   console.log(`Profile: ${PROFILE_PATH}`);

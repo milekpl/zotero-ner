@@ -23,7 +23,7 @@ Jest unit test suite organized to mirror the `src/` directory structure. Tests v
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | Unit tests for NER processing modules |
+| `core/` | Unit tests for name normalization modules |
 | `zotero/` | Unit tests for Zotero integration |
 | `ui/` | Unit tests for UI components |
 | `storage/` | Unit tests for data persistence |

@@ -440,7 +440,4 @@ if (typeof Zotero === 'undefined') {
       }
     };
   }
-  
-  // Backward compatibility alias
-  Zotero.NER = Zotero.NameNormalizer;
 }

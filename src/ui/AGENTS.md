@@ -4,7 +4,7 @@
 # ui
 
 ## Purpose
-User interface components for the Zotero NER extension. Provides dialogs for viewing and modifying name normalizations, and batch processing UI.
+User interface components for the name normalization extension. Provides dialogs for viewing and modifying name normalizations, and batch processing UI.
 
 ## Key Files
 | File | Description |
