@@ -87,9 +87,11 @@
       background: #eef5ff;
     }
     .variant-pill.active {
-      background: #007acc;
-      border-color: #007acc;
-      color: #fff;
+      background: #ffd700 !important;
+      border-color: #b8860b !important;
+      color: #000 !important;
+      box-shadow: 0 0 0 1px #ffd700;
+      font-weight: 600;
     }
     .variant-pill.recommended {
       border-color: #2563eb;
@@ -289,7 +291,7 @@
     }
     #variant-layout {
       display: grid;
-      grid-template-columns: 1fr 250px;
+      grid-template-columns: 1fr 260px;
       grid-template-rows: auto;
       gap: 10px;
       width: 100%;
@@ -298,6 +300,8 @@
       grid-column: 1;
       grid-row: 1;
       min-width: 0;
+      overflow-y: auto;
+      max-height: calc(100vh - 250px);
     }
     .variant-detail {
       grid-column: 2;
@@ -309,8 +313,11 @@
       border-radius: 6px;
       background: #fff;
       box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
-      max-height: 300px;
-      overflow: hidden;
+      max-height: calc(100vh - 250px);
+      overflow-y: auto;
+      align-self: start;
+      position: sticky;
+      top: 0;
     }
     .variant-detail h4 {
       margin: 0 0 4px 0;
@@ -407,8 +414,7 @@
   </style>
 </head>
 <body>
-  <h1>Author Name Normalizer</h1>
-  <p>Review and apply author name normalizations for your library.</p>
+  <h1 style="display:none;">Author Name Normalizer</h1>
 
   <!-- Summary header for full-library analysis -->
   <div id="summary-group" class="summary" style="display: none;">
@@ -431,7 +437,6 @@
   <!-- Variant groups + detail layout -->
   <div id="variant-section">
     <h3>Creator Variant Groups</h3>
-    <p id="variant-groups-description">Review variant groups discovered in your library. Each entry represents multiple creator spellings that may refer to the same person.</p>
     <div id="variant-filter-bar">
       <input type="search" id="variant-filter-input" placeholder="Filter variant groups…" aria-label="Filter variant groups">
       <span id="variant-filter-summary">Showing all groups</span>
@@ -665,6 +670,7 @@
         });
 
         this.setupFilterInput();
+        this.setupKeyboardShortcuts();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -819,6 +825,98 @@
         input.addEventListener('input', (event) => {
           this.handleFilterInput(event.target.value);
         });
+      },
+
+      setupKeyboardShortcuts: function() {
+        document.addEventListener('keydown', (event) => {
+          // Ignore shortcuts when typing in input fields
+          const tagName = event.target.tagName.toLowerCase();
+          if (tagName === 'input' || tagName === 'textarea') {
+            return;
+          }
+
+          const isMod = event.ctrlKey || event.metaKey;
+
+          // Ctrl/Cmd + Enter - Apply selected
+          if (isMod && event.key === 'Enter') {
+            event.preventDefault();
+            const applyBtn = document.getElementById('apply-button');
+            if (applyBtn && !applyBtn.disabled) {
+              this.applySelected();
+            }
+            return;
+          }
+
+          // Ctrl/Cmd + A - Apply all
+          if (isMod && event.key.toLowerCase() === 'a') {
+            event.preventDefault();
+            const applyAllBtn = document.getElementById('apply-all-button');
+            if (applyAllBtn && !applyAllBtn.disabled) {
+              this.applyAllSelected();
+            }
+            return;
+          }
+
+          // Ctrl/Cmd + F - Focus filter
+          if (isMod && event.key.toLowerCase() === 'f') {
+            event.preventDefault();
+            const filterInput = document.getElementById('variant-filter-input');
+            if (filterInput) {
+              filterInput.focus();
+              filterInput.select();
+            }
+            return;
+          }
+
+          // Escape - Cancel/close
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            window.close();
+            return;
+          }
+
+          // Arrow keys - Navigate pills within current group
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+              event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            this.handlePillNavigation(event);
+            return;
+          }
+
+          // Enter/Space - Activate focused pill
+          if (event.key === 'Enter' || event.key === ' ') {
+            const focusedPill = document.querySelector('.variant-pill:focus');
+            if (focusedPill) {
+              event.preventDefault();
+              focusedPill.click();
+            }
+            return;
+          }
+        });
+      },
+
+      handlePillNavigation: function(event) {
+        const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+        const pills = Array.from(document.querySelectorAll('.variant-pill'));
+        const focusedIndex = pills.findIndex(p => p === document.activeElement);
+
+        if (focusedIndex === -1) {
+          // No pill focused, focus first or last based on direction
+          const targetIndex = direction === 1 ? 0 : pills.length - 1;
+          if (pills[targetIndex]) {
+            pills[targetIndex].focus();
+          }
+        } else {
+          // Navigate to adjacent pill
+          let newIndex = focusedIndex + direction;
+          if (newIndex < 0) newIndex = pills.length - 1;
+          if (newIndex >= pills.length) newIndex = 0;
+
+          if (pills[newIndex]) {
+            pills[newIndex].focus();
+          }
+        }
+
+        event.preventDefault();
       },
 
       handleFilterInput: function(rawValue) {
@@ -1637,6 +1735,14 @@
         panel.classList.remove('empty');
         panel.classList.remove('hidden');
         panel.style.display = 'block';
+
+        // Scroll the column so the selected variant group aligns with the detail panel
+        const groupContainer = ZoteroNER_HTMLUtils.getElement('variant-groups-container');
+        const variantGroup = groupContainer?.querySelector(`[data-suggestion-index="${suggestionIndex}"]`);
+        const scrollContainer = ZoteroNER_HTMLUtils.getElement('variant-groups-column');
+        if (variantGroup && scrollContainer) {
+          variantGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
 
         const titleEl = ZoteroNER_HTMLUtils.getElement('variant-detail-title');
         if (titleEl) {
