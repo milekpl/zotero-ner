@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm install
+        - run: npm install
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
