@@ -1846,6 +1846,28 @@ class ZoteroDBAnalyzer {
   }
 
   /**
+   * Check if a name appears to be in all uppercase
+   * Used to determine if given name should be title-cased during surname normalization
+   * @param {string} name - Name to check
+   * @returns {boolean} True if the name appears to be uppercase
+   */
+  isUpperCaseName(name) {
+    if (!name || typeof name !== 'string') {
+      return false;
+    }
+
+    // Remove periods, spaces, hyphens for checking
+    const letters = name.replace(/[.\s-]/g, '');
+    if (letters.length === 0) {
+      return false;
+    }
+
+    // Check if all letters are uppercase (and at least one is a letter)
+    // This handles "JERRY A." -> true, "Jerry A." -> false, "J.A." -> true
+    return letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+  }
+
+  /**
    * Parse a name string into components
    * @param {string} name - Full name string
    * @returns {Object} Parsed name components
@@ -2421,6 +2443,13 @@ class ZoteroDBAnalyzer {
 
             if (this.stringsEqualIgnoreCase(creatorLastName, variantName)) {
               newCreator.lastName = normalizedValue;
+
+              // Smart given name capitalization: if firstName is uppercase, apply title-case
+              const creatorFirstName = (creator.firstName || '').trim();
+              if (creatorFirstName && this.isUpperCaseName(creatorFirstName)) {
+                newCreator.firstName = this.toTitleCase(creatorFirstName);
+              }
+
               updated = true;
             }
           } else {

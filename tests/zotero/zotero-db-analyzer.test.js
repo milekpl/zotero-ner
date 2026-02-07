@@ -1191,5 +1191,105 @@ describe('ZoteroDBAnalyzer', () => {
         { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
       ]);
     });
+
+    test('should normalize uppercase given name when normalizing surname capitalization', async () => {
+      const uppercaseItem = {
+        id: 1007,
+        key: 'up001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'JERRY A.', lastName: 'FODOR', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([uppercaseItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Fodor',
+          variants: [
+            {
+              name: 'FODOR',
+              items: [{ id: 1007, key: 'up001' }]
+            }
+          ]
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(uppercaseItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Jerry A.', lastName: 'Fodor', creatorType: 'author' }
+      ]);
+    });
+
+    test('should preserve mixed-case given name during surname normalization', async () => {
+      const mixedCaseItem = {
+        id: 1008,
+        key: 'mc001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'Jerry A.', lastName: 'FODOR', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([mixedCaseItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Fodor',
+          variants: [
+            {
+              name: 'FODOR',
+              items: [{ id: 1008, key: 'mc001' }]
+            }
+          ]
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      expect(mixedCaseItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'Jerry A.', lastName: 'Fodor', creatorType: 'author' }
+      ]);
+    });
+
+    test('should preserve initials during surname normalization', async () => {
+      const initialsItem = {
+        id: 1009,
+        key: 'init001',
+        getCreators: jest.fn().mockReturnValue([
+          { firstName: 'J.A.', lastName: 'FODOR', creatorType: 'author' }
+        ]),
+        setCreators: jest.fn(),
+        save: jest.fn().mockResolvedValue(true)
+      };
+      global.Zotero.Items.getAsync.mockResolvedValue([initialsItem]);
+
+      const suggestions = [
+        {
+          type: 'surname',
+          primary: 'Fodor',
+          variants: [
+            {
+              name: 'FODOR',
+              items: [{ id: 1009, key: 'init001' }]
+            }
+          ]
+        }
+      ];
+
+      const results = await analyzer.applyNormalizationSuggestions(suggestions, true);
+
+      expect(results.updatedCreators).toBe(1);
+      // Initials are normalized to title case: J.A. -> J.a. (first initial caps, rest lowercase)
+      expect(initialsItem.setCreators).toHaveBeenCalledWith([
+        { firstName: 'J.a.', lastName: 'Fodor', creatorType: 'author' }
+      ]);
+    });
   });
 });

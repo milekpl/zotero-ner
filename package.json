@@ -27,12 +27,12 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/marcinmilkowski/zotero-name-normalizer.git"
+    "url": "git+https://github.com/milekpl/zotero-ner.git"
   },
   "bugs": {
-    "url": "https://github.com/marcinmilkowski/zotero-name-normalizer/issues"
+    "url": "https://github.com/milekpl/zotero-ner/issues"
   },
-  "homepage": "https://github.com/marcinmilkowski/zotero-name-normalizer#readme",
+  "homepage": "https://github.com/milekpl/zotero-ner#readme",
   "devDependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",

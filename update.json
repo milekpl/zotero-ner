@@ -3,9 +3,9 @@
     "zotero-name-normalizer@marcinmilkowski.pl": {
       "updates": [
         {
-          "version": "1.2.0",
-          "update_link": "https://github.com/marcinmilkowski/zotero-name-normalizer/releases/download/v1.2.0/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi",
-          "update_hash": "sha512:0dfeae871ff6d584b124f2206d6d869882db3d106f1db991315144d542f1d2ab46cbee2ee68e589f02fde9cdb25ca2852f456282c749f7c1246bfab695e00d84",
+          "version": "1.2.1",
+          "update_link": "https://github.com/milekpl/zotero-ner/releases/download/v1.2.1/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi",
+          "update_hash": "sha512:b5b92289bd8a761485a8000e4ecef2041b7d7c4c1574f32c36ed0c08f4c52e97f54ed73c876cf9ba7998725ba22a9929f0f193780bd65596bbb4b28a73d37272",
           "applications": {
             "zotero": {
               "strict_min_version": "6.999",

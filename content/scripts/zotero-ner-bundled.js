@@ -3591,6 +3591,22 @@ if (typeof console === 'undefined') {
           }).join(" ");
         }
         /**
+         * Check if a name appears to be in all uppercase
+         * Used to determine if given name should be title-cased during surname normalization
+         * @param {string} name - Name to check
+         * @returns {boolean} True if the name appears to be uppercase
+         */
+        isUpperCaseName(name) {
+          if (!name || typeof name !== "string") {
+            return false;
+          }
+          const letters = name.replace(/[.\s-]/g, "");
+          if (letters.length === 0) {
+            return false;
+          }
+          return letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+        }
+        /**
          * Parse a name string into components
          * @param {string} name - Full name string
          * @returns {Object} Parsed name components
@@ -4063,6 +4079,10 @@ if (typeof console === 'undefined') {
                   const variantName = (variant.name || "").trim();
                   if (this.stringsEqualIgnoreCase(creatorLastName, variantName)) {
                     newCreator.lastName = normalizedValue;
+                    const creatorFirstName = (creator.firstName || "").trim();
+                    if (creatorFirstName && this.isUpperCaseName(creatorFirstName)) {
+                      newCreator.firstName = this.toTitleCase(creatorFirstName);
+                    }
                     updated = true;
                   }
                 } else {
