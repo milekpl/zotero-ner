@@ -22,6 +22,7 @@ export default defineConfig({
   name: pkg.description,
   id: "zotero-name-normalizer@marcinmilkowski.pl",
   namespace: "ZoteroNameNormalizer",
+  updateURL: "https://raw.githubusercontent.com/milekpl/zotero-ner/main/update.json",
 
   build: {
     assets: [
