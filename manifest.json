@@ -4,8 +4,8 @@
   "name": "__MSG_name__",
   "version": "1.2.0",
   "description": "__MSG_description__",
-  "homepage_url": "https://github.com/marcinmilkowski/zotero-name-normalizer",
-  "author": "Marcin Milkowski",
+  "homepage_url": "https://github.com/milekpl/zotero-ner",
+  "author": "Marcin Miłkowski",
   "icons": {
     "48": "content/icons/icon.svg",
     "96": "content/icons/icon.svg"
@@ -13,7 +13,7 @@
   "applications": {
     "zotero": {
       "id": "zotero-name-normalizer@marcinmilkowski.pl",
-      "update_url": "https://raw.githubusercontent.com/marcinmilkowski/zotero-name-normalizer/main/update.json",
+      "update_url": "https://raw.githubusercontent.com/milekpl/zotero-ner/main/update.json",
       "strict_min_version": "6.999",
       "strict_max_version": "8.0.*"
     }
