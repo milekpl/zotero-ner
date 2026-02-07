@@ -463,6 +463,7 @@
 
   <!-- Action buttons -->
   <div style="text-align: right; margin-top: 20px;">
+    <button id="export-button" style="margin-right: auto;">Export JSON</button>
     <button id="apply-all-button" disabled style="margin-right: 10px;">Apply All Selected</button>
     <button id="apply-button" disabled>Apply Selected</button>
     <button id="cancel-button">Cancel</button>
@@ -580,7 +581,8 @@
        */
       isAvailable: function() {
         return this.getZotero() !== null;
-      }
+      },
+
     };
 
     // Embedded controller
@@ -671,6 +673,7 @@
 
         this.setupFilterInput();
         this.setupKeyboardShortcuts();
+        this.setupExportShortcut();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -917,6 +920,150 @@
         }
 
         event.preventDefault();
+      },
+
+      setupExportShortcut: function() {
+        // Export button click
+        const exportBtn = document.getElementById('export-button');
+        if (exportBtn) {
+          exportBtn.addEventListener('click', () => {
+            console.log('Export button clicked');
+            this.exportToJSON();
+          });
+        }
+
+        // Ctrl+S keyboard shortcut
+        document.addEventListener('keydown', (event) => {
+          const isMod = event.ctrlKey || event.metaKey;
+          if (isMod && event.key.toLowerCase() === 's') {
+            event.preventDefault();
+            console.log('Ctrl+S pressed');
+            this.exportToJSON();
+          }
+        });
+      },
+
+      exportToJSON: async function() {
+        if (!this.analysisResults || !this.analysisResults.suggestions) {
+          this.alert('Export', 'No data to export.');
+          return;
+        }
+
+        const suggestions = this.analysisResults.suggestions;
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          totalVariantGroups: suggestions.length,
+          totalUniqueSurnames: this.analysisResults.totalUniqueSurnames || 0,
+          variantGroups: []
+        };
+
+        suggestions.forEach((suggestion, index) => {
+          const selection = this.userSelections ? this.userSelections.get(index) : null;
+          const totalOccurrences = (suggestion.variants || []).reduce((sum, v) => sum + (v.frequency || 0), 0);
+
+          const group = {
+            index: index,
+            type: suggestion.type,
+            surname: suggestion.surname || '',
+            primary: suggestion.primary || '',
+            variantCount: suggestion.variants ? suggestion.variants.length : 0,
+            totalOccurrences: totalOccurrences,
+            recommendedNormalization: this.getDefaultNormalizationValue(suggestion),
+            variants: []
+          };
+
+          if (suggestion.variants) {
+            suggestion.variants.forEach(variant => {
+              const variantData = {
+                name: variant.name || (variant.firstName ? `${variant.firstName} ${variant.lastName || ''}` : ''),
+                firstName: variant.firstName || '',
+                lastName: variant.lastName || '',
+                frequency: variant.frequency || 0,
+                items: []
+              };
+
+              if (variant.items) {
+                variant.items.forEach(item => {
+                  variantData.items.push({
+                    title: item.title || 'Untitled',
+                    year: item.year || item.date || '',
+                    author: item.author || '',
+                    key: item.key || ''
+                  });
+                });
+              }
+
+              group.variants.push(variantData);
+            });
+          }
+
+          if (selection) {
+            group.userSelection = {
+              mode: selection.mode || 'primary',
+              value: selection.value || selection.customValue || '',
+              apply: selection.apply !== false,
+              variantIndex: selection.variantIndex
+            };
+          }
+
+          exportData.variantGroups.push(group);
+        });
+
+        const json = JSON.stringify(exportData, null, 2);
+        const timestamp = new Date().toISOString().split('T')[0];
+        const defaultName = `zotero-ner-variant-groups-${timestamp}.json`;
+
+        try {
+          // Get Zotero instance
+          const zotero = window.opener && window.opener.Zotero ? window.opener.Zotero : 
+                        (typeof Zotero !== 'undefined' ? Zotero : null);
+          
+          if (!zotero) {
+            this.alert('Export Error', 'Zotero instance not available');
+            return;
+          }
+
+          // Get Zotero data directory
+          let exportDir = null;
+          
+          // Try various ways to get the data directory
+          if (zotero.DataDirectory && zotero.DataDirectory.dir) {
+            exportDir = zotero.DataDirectory.dir;
+          } else if (zotero.getZoteroDirectory && typeof zotero.getZoteroDirectory === 'function') {
+            const dirObj = zotero.getZoteroDirectory();
+            exportDir = dirObj ? dirObj.path : null;
+          } else if (typeof Cc !== 'undefined' && typeof Ci !== 'undefined') {
+            // Fallback: use Zotero's profile directory
+            const dirService = Cc['@mozilla.org/file/directory_service;1'].getService(Ci.nsIProperties);
+            const profileDir = dirService.get('ProfD', Ci.nsIFile);
+            exportDir = profileDir.path;
+          }
+
+          if (!exportDir) {
+            this.alert('Export Error', 'Could not determine Zotero data directory');
+            return;
+          }
+
+          console.warn('NER Export: Using directory:', exportDir);
+
+          // Construct full path
+          const exportPath = PathUtils.join(exportDir, defaultName);
+          console.warn('NER Export: Full path:', exportPath);
+
+          // Write the file
+          await IOUtils.writeUTF8(exportPath, json);
+
+          console.warn('NER Export: File written successfully');
+          this.log('Exported to ' + exportPath);
+          
+          // Show success with file location
+          window.alert('Export successful!\n\nFile saved to:\n' + exportPath);
+          
+        } catch (e) {
+          console.error('NER Export FAILED:', e.message, e);
+          this.log('Export error: ' + e.message);
+          window.alert('Export failed: ' + e.message);
+        }
       },
 
       handleFilterInput: function(rawValue) {
@@ -1555,10 +1702,107 @@
         }
 
         const cleaned = value.normalize('NFC').replace(/[\u200B-\u200D\uFEFF]/g, '');
-        return cleaned
-          .split(/\s+/)
+
+        // Surname prefixes that should remain lowercase:
+        // - Dutch: van, de, der, den, la, le, het, op, ten, ter, aan, in, uit
+        // - German: von
+        // - Spanish: y (conjunction "and")
+        const lowercasePrefixes = [
+          'van', 'de', 'la', 'le', 'het', 'op', 'ten', 'ter', 'aan', 'in', 'uit',
+          'von'
+        ];
+
+        // Multi-word prefixes (Dutch/German)
+        const multiWordPrefixes = [
+          'van der', 'van de', 'van den', 'van het',
+          'von der', 'von dem'
+        ];
+
+        // Spanish conjunction that stays lowercase
+        const spanishConjunction = 'y';
+
+        // Build a map of words to skip (keep lowercase)
+        const skipMap = new Set();
+
+        // First pass: identify multi-word prefixes
+        const words = cleaned.split(/\s+/);
+        for (let i = 0; i < words.length; i++) {
+          const lowerWord = words[i].toLowerCase();
+          const combinedTwo = lowerWord + ' ' + (words[i + 1] || '').toLowerCase();
+
+          // Check for multi-word prefix
+          if (multiWordPrefixes.includes(combinedTwo)) {
+            skipMap.add(i);
+            skipMap.add(i + 1);
+          }
+        }
+
+        // Second pass: process each word
+        return words
           .filter(Boolean)
-          .map(part => part.toLowerCase().replace(/(^|['`-])(\p{L})/gu, (match, prefix, letter) => prefix + letter.toUpperCase()))
+          .map((part, index) => {
+            const lowerPart = part.toLowerCase();
+
+            // Skip words identified in multi-word prefix detection
+            if (skipMap.has(index)) {
+              return lowerPart;
+            }
+
+            // Single-word prefix check (only if not already part of multi-word prefix)
+            if (lowercasePrefixes.includes(lowerPart)) {
+              return lowerPart;
+            }
+
+            // Spanish conjunction "y" (and) - should stay lowercase
+            if (lowerPart === spanishConjunction) {
+              return lowerPart;
+            }
+
+            // Handle "Mc" prefix - always capitalize next letter (Mc is consistently followed by capital)
+            if (lowerPart.startsWith('mc') && lowerPart.length > 2) {
+              return 'Mc' + lowerPart.substring(2).charAt(0).toUpperCase() + lowerPart.substring(3);
+            }
+
+            // Handle standalone "mc"
+            if (lowerPart === 'mc') {
+              return 'Mc';
+            }
+
+            // Handle "Mac" prefix
+            // Scottish convention: capitalize first letter after "Mac" (MacDonald, MacArthur)
+            // BUT preserve anglicized forms (Macdonald, Macarthur)
+            // EXCEPTION: Names that start with "Mac" but should use standard title-case
+            const macExceptions = ['machamer'];
+            if (macExceptions.includes(lowerPart)) {
+              // Standard title-case for exceptions
+              return lowerPart.replace(/(^|['`-])(.)/gu, (match, prefix, letter) => prefix + letter.toUpperCase());
+            }
+            if (lowerPart.startsWith('mac') && lowerPart.length > 3) {
+              const afterMac = lowerPart.substring(3);
+              const originalAfterMac = part.substring(3, 4);
+
+              // Check if this is an all-caps input
+              const isAllCaps = part === part.toUpperCase() && part !== part.toLowerCase();
+              if (isAllCaps) {
+                // For all-caps, use standard pattern (capitalize after Mac)
+                return 'Mac' + afterMac.charAt(0).toUpperCase() + afterMac.substring(1);
+              } else if (originalAfterMac === originalAfterMac.toUpperCase() && originalAfterMac !== originalAfterMac.toLowerCase()) {
+                // Original had capital after Mac (MacDonald) - preserve
+                return 'Mac' + afterMac.charAt(0).toUpperCase() + afterMac.substring(1);
+              } else {
+                // Original had lowercase after Mac (Macdonald) - preserve anglicized form
+                return 'Mac' + afterMac;
+              }
+            }
+
+            // Handle standalone "mac"
+            if (lowerPart === 'mac') {
+              return 'Mac';
+            }
+
+            // Standard title-case: first letter capital after prefix/punctuation
+            return lowerPart.replace(/(^|['`-])(.)/gu, (match, prefix, letter) => prefix + letter.toUpperCase());
+          })
           .join(' ');
       },
 
@@ -2728,6 +2972,7 @@
 
     // Expose controller globally so parent window can call it
     window.ZoteroNERController = ZoteroNER_NormalizationDialog;
+    window.ZoteroNER_NormalizationDialog = ZoteroNER_NormalizationDialog;
 
     // Start
     ZoteroNER_NormalizationDialog.init();

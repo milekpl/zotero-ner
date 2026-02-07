@@ -280,6 +280,7 @@ if (typeof console === 'undefined') {
         _doParse(rawName) {
           const original = rawName || "";
           let working = (original || "").trim();
+          let isInvertedFormat = false;
           if (working.includes(",")) {
             const commaSegments = working.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0);
             if (commaSegments.length >= 2) {
@@ -288,6 +289,7 @@ if (typeof console === 'undefined') {
               const restCombined = restSegments.join(" ").trim();
               if (new RegExp("\\p{L}", "u").test(firstSegment) && new RegExp("\\p{L}", "u").test(restCombined)) {
                 working = `${restCombined} ${firstSegment}`.trim();
+                isInvertedFormat = true;
               }
             }
           }
@@ -313,37 +315,42 @@ if (typeof console === 'undefined') {
           }
           if (parts.length >= 2) {
             result.firstName = this.stripTrailingPeriodIfName(parts[0]);
-            let prefixEndIndex = 1;
-            while (prefixEndIndex < parts.length - 1 && this.prefixes.includes(parts[prefixEndIndex].toLowerCase())) {
-              if (result.prefix) {
-                result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
-              } else {
-                result.prefix = parts[prefixEndIndex];
-              }
-              prefixEndIndex++;
-            }
-            if (result.prefix && prefixEndIndex < parts.length - 1) {
-              if (this.isNextWordForPrefix(result.prefix, parts[prefixEndIndex])) {
-                result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+            if (isInvertedFormat) {
+              const remainingParts = parts.slice(1);
+              result.lastName = remainingParts.join(" ");
+            } else {
+              let prefixEndIndex = 1;
+              while (prefixEndIndex < parts.length - 1 && this.prefixes.includes(parts[prefixEndIndex].toLowerCase())) {
+                if (result.prefix) {
+                  result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+                } else {
+                  result.prefix = parts[prefixEndIndex];
+                }
                 prefixEndIndex++;
               }
-            }
-            let suffixStartIndex = parts.length - 1;
-            while (suffixStartIndex > prefixEndIndex && this.suffixes.some((s) => parts[suffixStartIndex].toLowerCase() === s.toLowerCase() || parts[suffixStartIndex].toLowerCase() === s.toLowerCase() + ".")) {
-              if (result.suffix) {
-                result.suffix = `${parts[suffixStartIndex]} ${result.suffix}`;
-              } else {
-                result.suffix = parts[suffixStartIndex];
+              if (result.prefix && prefixEndIndex < parts.length - 1) {
+                if (this.isNextWordForPrefix(result.prefix, parts[prefixEndIndex])) {
+                  result.prefix = `${result.prefix} ${parts[prefixEndIndex]}`;
+                  prefixEndIndex++;
+                }
               }
-              suffixStartIndex--;
-            }
-            if (suffixStartIndex >= prefixEndIndex) {
-              result.lastName = parts[suffixStartIndex];
-            }
-            if (prefixEndIndex < suffixStartIndex) {
-              const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
-              if (middleParts.length > 0) {
-                result.middleName = middleParts.map((part) => this.stripTrailingPeriodIfName(part)).join(" ");
+              let suffixStartIndex = parts.length - 1;
+              while (suffixStartIndex > prefixEndIndex && this.suffixes.some((s) => parts[suffixStartIndex].toLowerCase() === s.toLowerCase() || parts[suffixStartIndex].toLowerCase() === s.toLowerCase() + ".")) {
+                if (result.suffix) {
+                  result.suffix = `${parts[suffixStartIndex]} ${result.suffix}`;
+                } else {
+                  result.suffix = parts[suffixStartIndex];
+                }
+                suffixStartIndex--;
+              }
+              if (suffixStartIndex >= prefixEndIndex) {
+                result.lastName = parts[suffixStartIndex];
+              }
+              if (prefixEndIndex < suffixStartIndex) {
+                const middleParts = parts.slice(prefixEndIndex, suffixStartIndex);
+                if (middleParts.length > 0) {
+                  result.middleName = middleParts.map((part) => this.stripTrailingPeriodIfName(part)).join(" ");
+                }
               }
             }
           }
@@ -521,103 +528,6 @@ if (typeof console === 'undefined') {
     }
   });
 
-  // src/utils/phonetic-index.js
-  var require_phonetic_index = __commonJS({
-    "src/utils/phonetic-index.js"(exports, module) {
-      function soundex(str) {
-        if (!str || str.length === 0) return "";
-        const s = str.toLowerCase();
-        const firstChar = s.charAt(0).toUpperCase();
-        const encoding = {
-          "b": "1",
-          "f": "1",
-          "p": "1",
-          "v": "1",
-          "c": "2",
-          "g": "2",
-          "j": "2",
-          "k": "2",
-          "q": "2",
-          "s": "2",
-          "x": "2",
-          "z": "2",
-          "d": "3",
-          "t": "3",
-          "l": "4",
-          "m": "5",
-          "n": "5",
-          "r": "6"
-        };
-        let result = firstChar;
-        let lastCode = "";
-        for (let i = 1; i < s.length && result.length < 4; i++) {
-          const char = s.charAt(i);
-          const code = encoding[char];
-          if (!code) continue;
-          if (code === lastCode) continue;
-          result += code;
-          lastCode = code;
-        }
-        while (result.length < 4) {
-          result += "0";
-        }
-        return result;
-      }
-      function getFirstLetterCode(str) {
-        if (!str || str.length === 0) return "";
-        return str.charAt(0).toLowerCase();
-      }
-      function getPhoneticKey(name) {
-        if (!name || name.length === 0) return "";
-        const firstLetter = getFirstLetterCode(name);
-        const soundexCode = soundex(name);
-        return `${firstLetter}${soundexCode}`;
-      }
-      function getBucketKey(name) {
-        if (!name || name.length === 0) return "";
-        const firstLetter = name.charAt(0).toLowerCase();
-        const len = name.length;
-        let lengthCat;
-        if (len <= 3) lengthCat = "T";
-        else if (len <= 6) lengthCat = "S";
-        else if (len <= 10) lengthCat = "M";
-        else lengthCat = "L";
-        return `${firstLetter}${lengthCat}`;
-      }
-      function phoneticSimilarity(name1, name2) {
-        if (!name1 || !name2) return 0;
-        if (name1 === name2) return 1;
-        const key1 = getPhoneticKey(name1);
-        const key2 = getPhoneticKey(name2);
-        if (key1 === key2) return 0.9;
-        const soundex1 = key1.substring(1);
-        const soundex2 = key2.substring(1);
-        if (soundex1 === soundex2) return 0.8;
-        if (soundex1.substring(0, 3) === soundex2.substring(0, 3)) return 0.7;
-        if (key1.charAt(0) === key2.charAt(0)) return 0.5;
-        return 0;
-      }
-      if (typeof module !== "undefined" && module.exports) {
-        module.exports = {
-          soundex,
-          getFirstLetterCode,
-          getPhoneticKey,
-          getBucketKey,
-          phoneticSimilarity
-        };
-      }
-      if (typeof window !== "undefined") {
-        window.PhoneticIndex = {
-          soundex,
-          getFirstLetterCode,
-          getPhoneticKey,
-          getBucketKey,
-          phoneticSimilarity
-        };
-      }
-    }
-  });
-
   // src/utils/string-distance.js
   var require_string_distance = __commonJS({
     "src/utils/string-distance.js"(exports, module) {
@@ -752,8 +662,6 @@ if (typeof console === 'undefined') {
           this.saveDelay = 5e3;
           this.maxBatchSize = 100;
           this.isBatchingEnabled = true;
-          this.phoneticIndex = /* @__PURE__ */ new Map();
-          this.usePhoneticIndexing = false;
           if (typeof window !== "undefined") {
             window.addEventListener("beforeunload", () => this.forceSave());
           }
@@ -795,11 +703,6 @@ if (typeof console === 'undefined') {
             if (stored) {
               const parsed = JSON.parse(stored);
               this.mappings = new Map(parsed);
-              if (this.usePhoneticIndexing) {
-                for (const [key] of this.mappings) {
-                  this.addToPhoneticIndex(key);
-                }
-              }
             }
           } catch (error) {
             console.error("Error loading mappings:", error);
@@ -952,18 +855,12 @@ if (typeof console === 'undefined') {
           }
           if (this.isBatchingEnabled) {
             this.pendingSaves.add(canonicalKey);
-            if (!this.mappings.has(canonicalKey)) {
-              this.addToPhoneticIndex(canonicalKey);
-            }
             if (this.pendingSaves.size >= this.maxBatchSize) {
               await this.flushPendingSaves();
             } else {
               this.scheduleSave();
             }
           } else {
-            if (!this.mappings.has(canonicalKey)) {
-              this.addToPhoneticIndex(canonicalKey);
-            }
             await this.saveMappings();
           }
         }
@@ -1016,53 +913,6 @@ if (typeof console === 'undefined') {
               await this.saveMappings();
             }
           }
-        }
-        /**
-         * Add a mapping to the phonetic index
-         * @param {string} canonicalKey - Canonical key of the mapping
-         * @private
-         */
-        addToPhoneticIndex(canonicalKey) {
-          if (!this.usePhoneticIndexing) return;
-          const { getPhoneticKey, getBucketKey } = require_phonetic_index();
-          const phoneticKey = getPhoneticKey(canonicalKey);
-          const bucketKey = getBucketKey(canonicalKey);
-          if (!this.phoneticIndex.has(phoneticKey)) {
-            this.phoneticIndex.set(phoneticKey, /* @__PURE__ */ new Set());
-          }
-          this.phoneticIndex.get(phoneticKey).add(canonicalKey);
-          const bucketIndexKey = `bucket:${bucketKey}`;
-          if (!this.phoneticIndex.has(bucketIndexKey)) {
-            this.phoneticIndex.set(bucketIndexKey, /* @__PURE__ */ new Set());
-          }
-          this.phoneticIndex.get(bucketIndexKey).add(canonicalKey);
-        }
-        /**
-         * Get candidate keys from phonetic index
-         * @param {string} query - Query string
-         * @returns {Set} Set of candidate canonical keys
-         * @private
-         */
-        getPhoneticCandidates(query) {
-          if (!this.usePhoneticIndexing) {
-            return new Set(this.mappings.keys());
-          }
-          const { getPhoneticKey, getBucketKey, phoneticSimilarity } = require_phonetic_index();
-          const phoneticKey = getPhoneticKey(query);
-          const bucketKey = getBucketKey(query);
-          const candidates = /* @__PURE__ */ new Set();
-          const phoneticMatches = this.phoneticIndex.get(phoneticKey);
-          if (phoneticMatches) {
-            phoneticMatches.forEach((key) => candidates.add(key));
-          }
-          const bucketMatches = this.phoneticIndex.get(`bucket:${bucketKey}`);
-          if (bucketMatches) {
-            bucketMatches.forEach((key) => candidates.add(key));
-          }
-          if (candidates.size === 0) {
-            return new Set(this.mappings.keys());
-          }
-          return candidates;
         }
         /**
          * Retrieve a learned mapping

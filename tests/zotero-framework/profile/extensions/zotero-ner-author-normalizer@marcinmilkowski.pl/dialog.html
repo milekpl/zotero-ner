@@ -3,37 +3,53 @@
 <head>
   <title>Author Name Normalizer</title>
   <style>
-    body { 
-      font-family: -moz-dialog, Arial, sans-serif; 
-      padding: 20px; 
-      margin: 0; 
+    html, body {
+      font-family: -moz-dialog, Arial, sans-serif;
+      padding: 12px;
+      margin: 0;
       background: #f9f9f9;
       color: #333;
     }
     h1 { margin-top: 0; }
-    .summary { 
-      background: #e8f4fd; 
-      padding: 15px; 
-      margin: 10px 0; 
-      border: 1px solid #b3d9ff; 
-      border-radius: 4px; 
+    .summary {
+      background: #e8f4fd;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #b3d9ff;
+      border-radius: 4px;
     }
     .summary-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
-    .variant-group { 
-      margin: 15px 0; 
-      padding: 15px; 
-      border: 1px solid #ddd; 
-      border-radius: 4px; 
+    .variant-group {
+      margin: 6px 0;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
       background: white;
     }
+    .variant-group h3 {
+      margin: 0 0 4px 0;
+      font-size: 1em;
+      color: #0066cc;
+    }
     .variant-group h4 { margin: 0 0 10px 0; color: #0066cc; }
-    .primary { 
-      font-weight: bold; 
-      color: #0066cc; 
+    .variant-group-header {
+      margin-bottom: 6px;
+    }
+    .variant-group-summary {
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    .surname-variant {
+      font-style: italic;
+    }
+    .primary {
+      font-weight: bold;
+      color: #0066cc;
       margin-bottom: 10px;
       padding: 5px;
       background: #f0f8ff;
@@ -71,9 +87,11 @@
       background: #eef5ff;
     }
     .variant-pill.active {
-      background: #007acc;
-      border-color: #007acc;
-      color: #fff;
+      background: #ffd700 !important;
+      border-color: #b8860b !important;
+      color: #000 !important;
+      box-shadow: 0 0 0 1px #ffd700;
+      font-weight: 600;
     }
     .variant-pill.recommended {
       border-color: #2563eb;
@@ -86,10 +104,14 @@
       font-style: italic;
     }
     .radio-group {
-      margin: 10px 0;
+      margin: 6px 0;
     }
     .radio-group input[type="radio"] {
       margin-right: 5px;
+    }
+    .radio-group label {
+      word-wrap: break-word;
+      max-width: 100%;
     }
     .confidence {
       font-size: 0.9em;
@@ -124,15 +146,44 @@
       margin-bottom: 6px;
     }
     .custom-normalization input[type="text"] {
-      width: 100%;
-      padding: 6px 8px;
+      width: 150px;
+      padding: 4px 6px;
       border: 1px solid #c9d1d9;
       border-radius: 3px;
-      font-size: 0.95em;
+      font-size: 0.9em;
     }
     .custom-normalization input[type="text"]:disabled {
       background: #f0f0f0;
-      color: #777;
+      color: #555;
+    }
+    .card-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e8e8e8;
+    }
+    .card-actions button {
+      margin: 0;
+      padding: 4px 10px;
+      font-size: 0.85em;
+    }
+    .card-actions .apply-btn {
+      background: #007acc;
+      color: white;
+      border-color: #0066a8;
+    }
+    .card-actions .apply-btn:hover:not(:disabled) {
+      background: #0066a8;
+    }
+    .card-actions .not-variants-btn {
+      background: #f9f9f9;
+      color: #666;
+      border-color: #ccc;
+    }
+    .card-actions .not-variants-btn:hover:not(:disabled) {
+      background: #f0f0f0;
+      color: #333;
     }
     .progress { 
       margin: 10px 0; 
@@ -159,7 +210,7 @@
       background: linear-gradient(90deg, #0066cc 0%, #007acc 50%, #0066cc 100%);
       background-size: 200% 100%;
       animation: indeterminate-progress 1.5s ease-in-out infinite;
-      width: 30% !important;
+      width: 0%;
     }
     @keyframes indeterminate-progress {
       0% { background-position: 100% 0; }
@@ -216,12 +267,12 @@
       flex-wrap: wrap;
     }
     #variant-filter-input {
-      flex: 1 1 260px;
-      max-width: 420px;
-      padding: 6px 10px;
+      flex: 1 1 150px;
+      max-width: 200px;
+      padding: 4px 6px;
       border: 1px solid #c9d1d9;
       border-radius: 4px;
-      font-size: 0.95em;
+      font-size: 0.85em;
       background: #fff;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
@@ -240,46 +291,48 @@
     }
     #variant-layout {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-      gap: 20px;
-      align-items: start;
+      grid-template-columns: 1fr 260px;
+      grid-template-rows: auto;
+      gap: 10px;
+      width: 100%;
     }
     #variant-groups-column {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
+      overflow-y: auto;
+      max-height: calc(100vh - 250px);
     }
     .variant-detail {
-      padding: 16px;
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 250px;
+      width: 250px;
+      padding: 8px;
       border: 1px solid #d0d7de;
       border-radius: 6px;
       background: #fff;
       box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+      max-height: calc(100vh - 250px);
+      overflow-y: auto;
+      align-self: start;
       position: sticky;
       top: 0;
-      max-height: calc(100vh - 220px);
-      overflow: hidden;
-      display: block;
-      transition: box-shadow 0.2s ease;
-    }
-    .variant-detail.hidden {
-      display: none;
     }
     .variant-detail h4 {
-      margin: 0 0 6px 0;
+      margin: 0 0 4px 0;
       color: #005a9c;
-      font-size: 1.05em;
+      font-size: 0.95em;
     }
     .variant-detail-context {
-      font-size: 0.9em;
+      font-size: 0.8em;
       color: #586069;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .variant-detail-empty {
-      font-size: 0.9em;
+      font-size: 0.85em;
       color: #69737d;
-      line-height: 1.4;
-      padding: 12px 0;
+      padding: 8px 0;
     }
     .variant-detail.empty #variant-detail-items,
     .variant-detail.empty .variant-detail-context {
@@ -289,15 +342,65 @@
       display: none;
     }
     .variant-detail-items {
-      list-style: disc;
-      padding-left: 18px;
+      list-style: none;
+      padding-left: 0;
       margin: 0;
-      max-height: calc(100vh - 320px);
+      max-height: 200px;
       overflow-y: auto;
+      font-size: 0.85em;
     }
     .variant-detail-items li {
       margin: 4px 0;
-      line-height: 1.35;
+      padding: 3px 5px;
+      background: #fafbfc;
+      border-radius: 3px;
+    }
+    .variant-detail-items li:hover {
+      background: #f0f4f8;
+    }
+    .item-author {
+      color: #6a737e;
+      font-size: 0.9em;
+      font-weight: 500;
+    }
+    .item-title {
+      color: #24292e;
+    }
+    .item-link {
+      color: #005a9c;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .item-link:visited {
+      color: #005a9c;
+    }
+    .item-link:hover {
+      text-decoration: underline;
+    }
+    .item-year {
+      color: #6a737e;
+      font-size: 0.9em;
+    }
+    .item-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .item-details .item-author {
+      flex: 0 0 auto;
+    }
+    .item-details .item-link {
+      flex: 1 1 auto;
+      min-width: 150px;
+      color: #005a9c;
+      text-decoration: none;
+    }
+    .item-details .item-link:hover {
+      text-decoration: underline;
+    }
+    .item-details .item-year {
+      flex: 0 0 auto;
     }
     @media (max-width: 960px) {
       #variant-layout {
@@ -311,8 +414,7 @@
   </style>
 </head>
 <body>
-  <h1>Author Name Normalizer</h1>
-  <p>Review and apply author name normalizations for your library.</p>
+  <h1 style="display:none;">Author Name Normalizer</h1>
 
   <!-- Summary header for full-library analysis -->
   <div id="summary-group" class="summary" style="display: none;">
@@ -335,7 +437,6 @@
   <!-- Variant groups + detail layout -->
   <div id="variant-section">
     <h3>Creator Variant Groups</h3>
-    <p id="variant-groups-description">Review variant groups discovered in your library. Each entry represents multiple creator spellings that may refer to the same person.</p>
     <div id="variant-filter-bar">
       <input type="search" id="variant-filter-input" placeholder="Filter variant groups…" aria-label="Filter variant groups">
       <span id="variant-filter-summary">Showing all groups</span>
@@ -362,6 +463,8 @@
 
   <!-- Action buttons -->
   <div style="text-align: right; margin-top: 20px;">
+    <button id="export-button" style="margin-right: auto;">Export JSON</button>
+    <button id="apply-all-button" disabled style="margin-right: 10px;">Apply All Selected</button>
     <button id="apply-button" disabled>Apply Selected</button>
     <button id="cancel-button">Cancel</button>
   </div>
@@ -400,12 +503,86 @@
       },
       updateProgressBar: function(percent) {
         const fill = document.getElementById('progress-fill');
-        if (fill) fill.style.width = percent + '%';
+        if (fill) {
+          fill.classList.remove('indeterminate');
+          fill.style.width = percent + '%';
+        }
       },
       updateProgressLabel: function(text) {
         const label = document.getElementById('progress-label');
         if (label) label.textContent = text;
+      },
+      setProgressIndeterminate: function(indeterminate) {
+        const fill = document.getElementById('progress-fill');
+        if (fill) {
+          if (indeterminate) {
+            fill.classList.add('indeterminate');
+          } else {
+            fill.classList.remove('indeterminate');
+          }
+        }
       }
+    };
+
+    // Zotero API access helper - robust pattern for dialog context
+    var ZoteroNER_ZoteroAPI = {
+      /**
+       * Get Zotero API reference from dialog context
+       * Tries multiple patterns in order of preference
+       * @returns {Object|null} Zotero API or null if unavailable
+       */
+      getZotero: function() {
+        // Pattern 1: window.opener.Zotero (for dialogs opened via openDialog)
+        if (window.opener && window.opener.Zotero) {
+          return window.opener.Zotero;
+        }
+
+        // Pattern 2: parent frame Zotero (for iframes)
+        let current = window;
+        while (current.parent && current.parent !== current) {
+          if (current.parent.Zotero) {
+            return current.parent.Zotero;
+          }
+          current = current.parent;
+        }
+
+        // Pattern 3: Global Zotero (may not be available in dialog context)
+        if (typeof Zotero !== 'undefined') {
+          return Zotero;
+        }
+
+        return null;
+      },
+
+      /**
+       * Get Zotero.NER / Zotero.NameNormalizer reference
+       * @returns {Object|null} NameNormalizer API or null if unavailable
+       */
+      getNameNormalizer: function() {
+        const zotero = this.getZotero();
+        if (!zotero) return null;
+
+        // Prefer Zotero.NameNormalizer (modern)
+        if (zotero.NameNormalizer) {
+          return zotero.NameNormalizer;
+        }
+
+        // Fall back to Zotero.NER (legacy alias)
+        if (zotero.NER) {
+          return zotero.NER;
+        }
+
+        return null;
+      },
+
+      /**
+       * Check if Zotero APIs are available
+       * @returns {boolean}
+       */
+      isAvailable: function() {
+        return this.getZotero() !== null;
+      },
+
     };
 
     // Embedded controller
@@ -419,14 +596,84 @@
     variantDetailState: null,
     filterText: '',
     currentProgressState: null,
+    lastProgressTime: null,
+    lastHeartbeat: null,
+    progressUpdateTimer: null,
 
       init: function() {
         console.log('Dialog initialization started');
         this.userSelections = new Map();
         this.variantDetailState = null;
         this.filterText = '';
-  this.currentProgressState = null;
+        this.currentProgressState = null;
+
+        // Set up event delegation for clickable item links
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest('.item-link');
+          if (link) {
+            event.preventDefault();
+            const itemKey = link.getAttribute('data-item-key');
+            // Show debug in the detail panel
+            const debugEl = document.getElementById('variant-detail-items');
+            if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+              debugEl.firstChild.textContent = 'DEBUG: Clicked itemKey=' + itemKey;
+            }
+            if (itemKey) {
+              // Try to select the item in Zotero using multiple methods
+              const opener = window.opener;
+              if (opener) {
+                try {
+                  // Method 1: Use ZoteroPane (internal API, most reliable)
+                  if (opener.ZoteroPane && opener.ZoteroPane.selectItem) {
+                    // Try to resolve key to ID if possible
+                    if (opener.Zotero && opener.Zotero.Items && opener.Zotero.Items.getByLibraryAndKeyAsync) {
+                      const libraryID = opener.Zotero.Libraries.userLibraryID;
+                      opener.Zotero.Items.getByLibraryAndKeyAsync(libraryID, itemKey).then(item => {
+                        if (item && item.id) {
+                          opener.ZoteroPane.selectItem(item.id);
+                        } else {
+                          // Fallback: try with key (may not work)
+                          opener.ZoteroPane.selectItem(itemKey);
+                        }
+                      }).catch(e => {
+                        console.error('Failed to get item by key:', e);
+                      });
+                      return;
+                    } else {
+                      opener.ZoteroPane.selectItem(itemKey);
+                      return;
+                    }
+                  }
+                  // Method 2: Use Zotero.NameNormalizer.selectItem (our helper)
+                  if (opener.Zotero && opener.Zotero.NameNormalizer && opener.Zotero.NameNormalizer.selectItem) {
+                    opener.Zotero.NameNormalizer.selectItem(itemKey);
+                    return;
+                  }
+                  // Method 3: Use Zotero.launchURL with zotero:// URI (least reliable)
+                  if (opener.Zotero && opener.Zotero.launchURL) {
+                    const url = 'zotero://select/library/items/' + itemKey;
+                    opener.Zotero.launchURL(url);
+                    return;
+                  }
+                  console.error('No method available to select item');
+                } catch (e) {
+                  console.error('Failed to select item:', e);
+                  if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+                    debugEl.firstChild.textContent = 'DEBUG: Error selecting item: ' + e.message;
+                  }
+                }
+              } else {
+                if (debugEl && debugEl.firstChild && debugEl.firstChild.className === 'debug-info') {
+                  debugEl.firstChild.textContent = 'DEBUG: No opener window';
+                }
+              }
+            }
+          }
+        });
+
         this.setupFilterInput();
+        this.setupKeyboardShortcuts();
+        this.setupExportShortcut();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -548,12 +795,15 @@
       },
 
       log: function(message) {
-        console.log('Zotero NER Dialog: ' + message);
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const logLine = 'NER-DIALOG:' + timestamp + ' ' + message;
+        console.log(logLine);
         try {
           if (typeof Zotero !== 'undefined' && typeof Zotero.debug === 'function') {
             Zotero.debug('Zotero NER Dialog: ' + message);
           }
         } catch (e) {}
+        // Note: XPCOM file logging removed (dead code, never worked in modern browsers)
       },
 
       alert: function(title, message) {
@@ -578,6 +828,249 @@
         input.addEventListener('input', (event) => {
           this.handleFilterInput(event.target.value);
         });
+      },
+
+      setupKeyboardShortcuts: function() {
+        document.addEventListener('keydown', (event) => {
+          // Ignore shortcuts when typing in input fields
+          const tagName = event.target.tagName.toLowerCase();
+          if (tagName === 'input' || tagName === 'textarea') {
+            return;
+          }
+
+          const isMod = event.ctrlKey || event.metaKey;
+
+          // Ctrl/Cmd + Enter - Apply selected
+          if (isMod && event.key === 'Enter') {
+            event.preventDefault();
+            const applyBtn = document.getElementById('apply-button');
+            if (applyBtn && !applyBtn.disabled) {
+              this.applySelected();
+            }
+            return;
+          }
+
+          // Ctrl/Cmd + A - Apply all
+          if (isMod && event.key.toLowerCase() === 'a') {
+            event.preventDefault();
+            const applyAllBtn = document.getElementById('apply-all-button');
+            if (applyAllBtn && !applyAllBtn.disabled) {
+              this.applyAllSelected();
+            }
+            return;
+          }
+
+          // Ctrl/Cmd + F - Focus filter
+          if (isMod && event.key.toLowerCase() === 'f') {
+            event.preventDefault();
+            const filterInput = document.getElementById('variant-filter-input');
+            if (filterInput) {
+              filterInput.focus();
+              filterInput.select();
+            }
+            return;
+          }
+
+          // Escape - Cancel/close
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            window.close();
+            return;
+          }
+
+          // Arrow keys - Navigate pills within current group
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+              event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            this.handlePillNavigation(event);
+            return;
+          }
+
+          // Enter/Space - Activate focused pill
+          if (event.key === 'Enter' || event.key === ' ') {
+            const focusedPill = document.querySelector('.variant-pill:focus');
+            if (focusedPill) {
+              event.preventDefault();
+              focusedPill.click();
+            }
+            return;
+          }
+        });
+      },
+
+      handlePillNavigation: function(event) {
+        const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+        const pills = Array.from(document.querySelectorAll('.variant-pill'));
+        const focusedIndex = pills.findIndex(p => p === document.activeElement);
+
+        if (focusedIndex === -1) {
+          // No pill focused, focus first or last based on direction
+          const targetIndex = direction === 1 ? 0 : pills.length - 1;
+          if (pills[targetIndex]) {
+            pills[targetIndex].focus();
+          }
+        } else {
+          // Navigate to adjacent pill
+          let newIndex = focusedIndex + direction;
+          if (newIndex < 0) newIndex = pills.length - 1;
+          if (newIndex >= pills.length) newIndex = 0;
+
+          if (pills[newIndex]) {
+            pills[newIndex].focus();
+          }
+        }
+
+        event.preventDefault();
+      },
+
+      setupExportShortcut: function() {
+        // Export button click
+        const exportBtn = document.getElementById('export-button');
+        if (exportBtn) {
+          exportBtn.addEventListener('click', () => {
+            console.log('Export button clicked');
+            this.exportToJSON();
+          });
+        }
+
+        // Ctrl+S keyboard shortcut
+        document.addEventListener('keydown', (event) => {
+          const isMod = event.ctrlKey || event.metaKey;
+          if (isMod && event.key.toLowerCase() === 's') {
+            event.preventDefault();
+            console.log('Ctrl+S pressed');
+            this.exportToJSON();
+          }
+        });
+      },
+
+      exportToJSON: function() {
+        if (!this.analysisResults || !this.analysisResults.suggestions) {
+          this.alert('Export', 'No data to export.');
+          return;
+        }
+
+        const suggestions = this.analysisResults.suggestions;
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          totalVariantGroups: suggestions.length,
+          totalUniqueSurnames: this.analysisResults.totalUniqueSurnames || 0,
+          variantGroups: []
+        };
+
+        suggestions.forEach((suggestion, index) => {
+          const selection = this.userSelections ? this.userSelections.get(index) : null;
+          const totalOccurrences = (suggestion.variants || []).reduce((sum, v) => sum + (v.frequency || 0), 0);
+
+          const group = {
+            index: index,
+            type: suggestion.type,
+            surname: suggestion.surname || '',
+            primary: suggestion.primary || '',
+            variantCount: suggestion.variants ? suggestion.variants.length : 0,
+            totalOccurrences: totalOccurrences,
+            recommendedNormalization: this.getDefaultNormalizationValue(suggestion),
+            variants: []
+          };
+
+          if (suggestion.variants) {
+            suggestion.variants.forEach(variant => {
+              const variantData = {
+                name: variant.name || (variant.firstName ? `${variant.firstName} ${variant.lastName || ''}` : ''),
+                firstName: variant.firstName || '',
+                lastName: variant.lastName || '',
+                frequency: variant.frequency || 0,
+                items: []
+              };
+
+              if (variant.items) {
+                variant.items.forEach(item => {
+                  variantData.items.push({
+                    title: item.title || 'Untitled',
+                    year: item.year || item.date || '',
+                    author: item.author || '',
+                    key: item.key || ''
+                  });
+                });
+              }
+
+              group.variants.push(variantData);
+            });
+          }
+
+          if (selection) {
+            group.userSelection = {
+              mode: selection.mode || 'primary',
+              value: selection.value || selection.customValue || '',
+              apply: selection.apply !== false,
+              variantIndex: selection.variantIndex
+            };
+          }
+
+          exportData.variantGroups.push(group);
+        });
+
+        const json = JSON.stringify(exportData, null, 2);
+        const timestamp = new Date().toISOString().split('T')[0];
+        const defaultName = `zotero-ner-variant-groups-${timestamp}.json`;
+
+        // Try to use native file picker via XPCOM
+        let filePath = null;
+        try {
+          const CcLocal = (typeof Cc !== 'undefined') ? Cc : Components.classes;
+          const CiLocal = (typeof Ci !== 'undefined') ? Ci : Components.interfaces;
+
+          const fp = CcLocal['@mozilla.org/filepicker;1'].createInstance(CiLocal.nsIFilePicker);
+          fp.init(window, 'Save JSON Export', CiLocal.nsIFilePicker.modeSave);
+          fp.defaultString = defaultName;
+          fp.defaultExtension = 'json';
+          fp.appendFilter('JSON Files', '*.json');
+
+          const result = fp.show();
+          if (result === CiLocal.nsIFilePicker.returnOK || result === CiLocal.nsIFilePicker.returnReplace) {
+            filePath = fp.file.path;
+          }
+        } catch (e) {
+          console.error('FilePicker error:', e);
+        }
+
+        if (filePath) {
+          // Write file using XPCOM components
+          try {
+            const CcLocal = (typeof Cc !== 'undefined') ? Cc : Components.classes;
+            const CiLocal = (typeof Ci !== 'undefined') ? Ci : Components.interfaces;
+
+            const file = CcLocal['@mozilla.org/file/local;1'].createInstance(CiLocal.nsIFile);
+            file.initWithPath(filePath);
+
+            // Ensure parent directory exists
+            const parent = file.parent;
+            if (parent && !parent.exists()) {
+              parent.create(CiLocal.nsIFile.DIRECTORY_TYPE, 0o755);
+            }
+
+            const stream = CcLocal['@mozilla.org/network/file-output-stream;1'].createInstance(CiLocal.nsIFileOutputStream);
+            stream.init(file, 0x02 | 0x08 | 0x20, 0o644, 0);
+            stream.write(json, json.length);
+            stream.close();
+
+            this.log('Exported to ' + filePath);
+            this.alert('Export', 'Successfully exported to:\n' + filePath);
+          } catch (e) {
+            console.error('Export error:', e);
+            this.alert('Export Error', 'Failed to write file:\n' + e.message);
+          }
+        } else {
+          // Fallback: download
+          const blob = new Blob([json], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
       },
 
       handleFilterInput: function(rawValue) {
@@ -638,6 +1131,9 @@
       initialize: async function() {
         this.log('Dialog initialize started');
 
+        // Track when analysis is complete (set by updateAnalysisResults)
+        this.analysisComplete = false;
+
         let params = null;
 
         try {
@@ -697,28 +1193,17 @@
         }
 
         let analysisResults = null;
+
         if (params) {
-          // First try resolving known analysisResults properties
-          analysisResults = this.resolveAnalysisResults(params, 'dialog params');
-
-          // If resolution failed, but the params object itself looks like the analysis results,
-          // attempt to sanitize it directly. This covers callers that passed the plain object
-          // as the params bag instead of under the analysisResults key.
-          if (!analysisResults) {
-            const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
-            if (direct) {
-              analysisResults = direct;
-              this.analysisResultsSource = 'dialog params direct';
-            }
-          }
-
-          if (params.items) {
-            this.items = params.items;
-          }
+          params = this.unwrapDialogParams(params);
         }
 
+        // Try to resolve analysisResults from params
+        if (params) {
+          analysisResults = this.resolveAnalysisResults(params, 'dialog params');
+        }
 
-            this.resetSelections();
+        // Try other sources if needed
         if (!analysisResults && window.opener && window.opener.ZoteroNERAnalysisResultsJSON) {
           analysisResults = this.safeParseJSON(window.opener.ZoteroNERAnalysisResultsJSON, 'opener.ZoteroNERAnalysisResultsJSON');
         }
@@ -735,17 +1220,37 @@
           analysisResults = this.sanitizeAnalysisResults(window.ZoteroNERAnalysisResults, 'window.ZoteroNERAnalysisResults direct');
         }
 
+        // If still no results but params looks like results itself
+        if (!analysisResults && params && typeof params === 'object' && !params.loading) {
+          const direct = this.sanitizeAnalysisResults(params, 'dialog params direct');
+          if (direct) {
+            analysisResults = direct;
+            this.analysisResultsSource = 'dialog params direct';
+          }
+        }
+
+        if (params && params.items) {
+          this.items = params.items;
+        }
+
         if (!analysisResults) {
           this.log('No analysis results found');
           this.showEmptyState('No analysis results were provided to the dialog.');
           this.updateProgress();
           return;
         }
-        
-        // Check if this is a loading state
-        if (analysisResults.loading === true) {
-          this.log('Dialog opened in loading state');
+
+        // Check if this is a loading state OR if suggestions are NULL (stale cached data)
+        // We need fresh analysis if:
+        // 1. loading === true (explicitly waiting for analysis)
+        // 2. suggestions is NULL (stale cached data with no results)
+        if (analysisResults.loading === true || analysisResults.suggestions === null) {
+          const reason = analysisResults.loading === true ? 'loading=true' : 'suggestions=NULL';
+          this.log('Dialog opened in loading state (' + reason + ')');
+          // Always show loading state first to ensure progress bar is visible immediately
           this.showLoadingState();
+          // Then start progress tracking for timeout detection
+          this.startProgressTracking();
           return;
         }
 
@@ -759,10 +1264,15 @@
         this.updateSummaryHeader();
         this.populateVariantGroupList();
         this.refreshApplyButtonState();
+        // Hide progress container when showing results
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
         this.updateProgress();
       },
 
       showEmptyState: function(message) {
+        // Ensure progress bar is hidden
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        
         if (this.analysisResults) {
           this.updateSummaryHeader();
         } else {
@@ -839,13 +1349,15 @@
         }
 
         if (!this.userSelections.has(index)) {
+          // Default to NOT applying - user must explicitly select a normalization
+          // This prevents accidental bulk changes to the library
           const defaultValue = this.getDefaultNormalizationValue(suggestion);
           this.userSelections.set(index, {
             mode: 'primary',
             value: defaultValue,
             variantIndex: null,
             customValue: defaultValue,
-            apply: true
+            apply: false  // Changed from true to require explicit opt-in
           });
         }
 
@@ -911,6 +1423,265 @@
         return false;
       },
 
+      // Per-card apply: apply a single suggestion and remove its card from the UI
+      applyCard: async function(index, suggestion) {
+        this.log('applyCard called: index=' + index + ', suggestion.type=' + (suggestion ? suggestion.type : 'null'));
+        const selection = this.ensureUserSelection(index, suggestion);
+        if (!selection) {
+          this.log('applyCard: no selection found, returning false');
+          return false;
+        }
+
+        this.log('applyCard: selection.mode=' + selection.mode + ', apply=' + selection.apply + ', value=' + selection.value + ', customValue=' + selection.customValue);
+
+        // Check if there's a valid selection to apply
+        const normalizedValue = (selection.value || selection.customValue || '').trim();
+        this.log('applyCard: normalizedValue="' + normalizedValue + '"');
+
+        // For per-card Apply button: if no explicit apply flag but we have a normalized value, allow it
+        // This allows the button to work even if user hasn't explicitly selected a radio option yet
+        if (!normalizedValue) {
+          this.log('applyCard: early return - no normalized value');
+          return false;
+        }
+
+        if (selection.apply === false && selection.mode !== 'primary') {
+          this.log('applyCard: early return - apply=false and not in primary mode');
+          return false;
+        }
+
+        // Prepare this specific suggestion for application
+        const preparedSuggestion = Object.assign({}, suggestion);
+        preparedSuggestion.originalPrimary = suggestion.primary;
+        preparedSuggestion.userSelection = Object.assign({}, selection);
+        preparedSuggestion.variants = (suggestion.variants || []).map(variant => {
+          const variantClone = Object.assign({}, variant);
+          if (Array.isArray(variantClone.items)) {
+            variantClone.items = variantClone.items.map(item => Object.assign({}, item));
+          }
+          return variantClone;
+        });
+
+        // Update the primary value with the selected normalization
+        preparedSuggestion.primary = normalizedValue;
+
+        if (selection.mode === 'variant' && typeof selection.variantIndex === 'number') {
+          preparedSuggestion.selectedVariant = preparedSuggestion.variants[selection.variantIndex] || null;
+        }
+
+        if (selection.mode === 'custom') {
+          preparedSuggestion.customNormalization = normalizedValue;
+        }
+
+        // Mark as applied
+        selection.applied = true;
+        this.log('applyCard: marked as applied, looking for card');
+
+        // Apply the normalization to the database
+        try {
+          // Try to use the main window's Zotero API which has proper Zotero context
+          let results;
+          const zotero = ZoteroNER_ZoteroAPI.getZotero();
+          this.log('applyCard: zotero available=' + (zotero ? 'yes' : 'no'));
+          
+          const nameNormalizer = ZoteroNER_ZoteroAPI.getNameNormalizer();
+          this.log('applyCard: nameNormalizer available=' + (nameNormalizer ? 'yes' : 'no'));
+          this.log('applyCard: nameNormalizer.applyNormalizationSuggestions=' + (nameNormalizer && typeof nameNormalizer.applyNormalizationSuggestions));
+
+          if (nameNormalizer && typeof nameNormalizer.applyNormalizationSuggestions === 'function') {
+            this.log('applyCard: calling applyNormalizationSuggestions with 1 suggestion');
+            results = await nameNormalizer.applyNormalizationSuggestions(
+              [preparedSuggestion],  // Apply only this one suggestion
+              false,
+              {
+                declinedSuggestions: [],
+                progressCallback: (event) => this.handleApplyProgress(event)
+              }
+            );
+
+            this.log('applyCard: normalization applied successfully, results:', results);
+          } else {
+            this.log('applyCard: ERROR - nameNormalizer not available or missing method');
+            throw new Error('Zotero NameNormalizer API not available');
+          }
+        } catch (error) {
+          this.log('applyCard: EXCEPTION caught: ' + error.message);
+          console.error('Error applying normalization in applyCard:', error);
+          this.alert('Error', 'Failed to apply normalization: ' + error.message);
+          return false;
+        }
+
+        // Find and remove the card
+        const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
+        this.log('applyCard: card found=' + (card ? 'yes' : 'no'));
+
+        if (card) {
+          this.log('applyCard: removing card with animation');
+          card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(-20px)';
+          setTimeout(() => {
+            this.log('applyCard: timeout fired, removing card DOM element');
+            card.remove();
+            this.checkAllCardsApplied();
+          }, 300);
+        }
+
+        return true;
+      },
+
+      // Mark card as "not variants" (distinct authors) and remove from UI
+      markNotVariants: function(index, suggestion) {
+        const selection = this.ensureUserSelection(index, suggestion);
+        if (!selection) {
+          return false;
+        }
+
+        // Mark as declined (not variants)
+        selection.apply = false;
+        selection.notVariants = true;
+
+        // Store user preference to never propose this normalization again
+        this.storeNotVariantsPreference(suggestion);
+
+        // Find and remove the card with animation
+        const card = document.querySelector(`.variant-group[data-suggestion-index="${index}"]`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(-20px)';
+          setTimeout(() => {
+            card.remove();
+            this.checkAllCardsApplied();
+          }, 300);
+        }
+
+        return true;
+      },
+
+      // Store user preference for "not variants" (distinct authors)
+      storeNotVariantsPreference: function(suggestion) {
+        // Create a unique key for this suggestion based on its characteristics
+        const key = this.getNotVariantsKey(suggestion);
+
+        // Get existing preferences
+        const existingPrefs = this.getNotVariantsPreferences();
+        if (!existingPrefs.includes(key)) {
+          existingPrefs.push(key);
+          this.saveNotVariantsPreferences(existingPrefs);
+        }
+
+        this.log('Stored "not variants" preference for: ' + key);
+      },
+
+      // Generate a unique key for identifying this suggestion
+      // Sanitize values to prevent special characters from breaking the key format
+      getNotVariantsKey: function(suggestion) {
+        const sanitize = function(value) {
+          return (value || '').replace(/[:\\/\n\r\t]/g, '_').substring(0, 100);
+        };
+        if (suggestion.type === 'given-name') {
+          return `given-name:${sanitize(suggestion.surname)}:${sanitize(suggestion.primary)}`;
+        }
+        return `surname:${sanitize(suggestion.primary)}`;
+      },
+
+      // Get stored "not variants" preferences
+      getNotVariantsPreferences: function() {
+        try {
+          const prefs = window.localStorage.getItem('zotero-ner-not-variants');
+          return prefs ? JSON.parse(prefs) : [];
+        } catch (e) {
+          return [];
+        }
+      },
+
+      // Save "not variants" preferences
+      saveNotVariantsPreferences: function(prefs) {
+        try {
+          const json = JSON.stringify(prefs);
+          window.localStorage.setItem('zotero-ner-not-variants', json);
+        } catch (e) {
+          this.log('Failed to save not-variants preferences: ' + e.message);
+          // localStorage may fail in private browsing or when quota exceeded
+          // The preference won't persist, but the UI interaction still works
+        }
+      },
+
+      // Check if all cards have been applied/declined
+      checkAllCardsApplied: function() {
+        const remainingCards = document.querySelectorAll('.variant-group');
+        if (remainingCards.length === 0) {
+          // All cards have been handled - update empty message
+          const emptyMsg = ZoteroNER_HTMLUtils.getElement('empty-message');
+          if (emptyMsg) {
+            const content = document.createElement('div');
+            content.className = 'empty-message-content';
+            const p = document.createElement('p');
+            p.textContent = 'All variant groups have been processed. You can close this dialog.';
+            content.appendChild(p);
+            emptyMsg.innerHTML = '';
+            emptyMsg.appendChild(content);
+            emptyMsg.style.display = 'block';
+          }
+          // Disable the main apply buttons since there are no more cards
+          this.setApplyEnabled(false);
+        }
+      },
+
+      // Build the per-card action buttons (Apply and Not Variants)
+      buildCardActions: function(index, suggestion) {
+        this.log('buildCardActions: creating buttons for index=' + index);
+        const container = ZoteroNER_HTMLUtils.createElement('div', { class: 'card-actions' });
+
+        // Apply button
+        const applyBtn = ZoteroNER_HTMLUtils.createElement('button', {
+          type: 'button',
+          class: 'apply-btn',
+          'data-suggestion-index': String(index)
+        });
+        applyBtn.textContent = 'Apply';
+
+        // Not Variants button (Distinct Authors)
+        const notVariantsBtn = ZoteroNER_HTMLUtils.createElement('button', {
+          type: 'button',
+          class: 'not-variants-btn',
+          'data-suggestion-index': String(index),
+          title: 'Mark these as distinct authors - this will not be proposed again'
+        });
+        notVariantsBtn.textContent = 'Not Variants';
+
+        // Add click handlers
+        applyBtn.addEventListener('click', async (event) => {
+          this.log('Apply button clicked for index=' + index);
+          // Prevent multiple clicks during processing
+          applyBtn.disabled = true;
+          applyBtn.textContent = 'Applying...';
+
+          try {
+            // Ensure the selection is marked as apply=true before applying
+            const currentSelection = this.ensureUserSelection(index, suggestion);
+            if (currentSelection) {
+              currentSelection.apply = true;
+            }
+            await this.applyCard(index, suggestion);
+          } finally {
+            // Re-enable button after processing
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Apply';
+          }
+        });
+
+        notVariantsBtn.addEventListener('click', (event) => {
+          this.markNotVariants(index, suggestion);
+        });
+
+        container.appendChild(applyBtn);
+        container.appendChild(notVariantsBtn);
+
+        return container;
+      },
+
       getDefaultNormalizationValue: function(suggestion) {
         if (!suggestion) {
           return '';
@@ -949,14 +1720,16 @@
         const groupNumber = index + 1;
         if (suggestion.type === 'given-name') {
           const surname = this.titleCase(suggestion.surname || suggestion.primary || '');
+          const safeSurname = this.escapeHTML(surname);
           return surname
-            ? `Given name variants · ${surname}`
-            : `Given name variants · Group ${groupNumber}`;
+            ? `Given name variants <span class="surname-variant">${safeSurname}</span>`
+            : `Given name variants Group ${groupNumber}`;
         }
 
         const surname = this.titleCase(suggestion.primary || '');
+        const safeSurname = this.escapeHTML(surname);
         return surname
-          ? `Surname variants · ${surname}`
+          ? `Surname variants <span class="surname-variant">${safeSurname}</span>`
           : `Variant Group ${groupNumber}`;
       },
 
@@ -995,9 +1768,10 @@
           return `${this.titleCase(name)}${frequency}`;
         }
 
+        // Preserve original casing of the variant name - don't title-case it
         const surnameDisplay = typeof variant.name === 'string'
-          ? this.titleCase(variant.name)
-          : this.titleCase(this.formatNameString(variant.name));
+          ? variant.name
+          : this.formatNameString(variant.name);
         return `${surnameDisplay}${frequency}`;
       },
 
@@ -1012,9 +1786,10 @@
           return `Normalize to ${this.titleCase(variant.firstName || variant.name || '')} (${occurrences})`;
         }
 
+        // Preserve original casing for surname variants
         const variantSurname = typeof variant.name === 'string'
-          ? this.titleCase(variant.name)
-          : this.titleCase(this.formatNameString(variant.name));
+          ? variant.name
+          : this.formatNameString(variant.name);
         return `Normalize to ${variantSurname} (${occurrences})`;
       },
 
@@ -1077,20 +1852,23 @@
       },
 
       getVariantDetailTitle: function(suggestion, variant) {
-  const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+        const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
+        const safeLabel = this.escapeHTML(label);
         if (suggestion.type === 'given-name') {
-          return `Occurrences for ${label}`;
+          return `Occurrences for ${safeLabel}`;
         }
-        return `Occurrences for surname variant ${label}`;
+        return `Occurrences for <span class="surname-variant">${safeLabel}</span>`;
       },
 
       showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
+        const variant = suggestion.variants[variantIndex];
+        const items = Array.isArray(variant?.items) ? variant.items : [];
+
         if (!suggestion || !Array.isArray(suggestion.variants)) {
           this.clearVariantDetails();
           return;
         }
 
-        const variant = suggestion.variants[variantIndex];
         if (!variant) {
           this.clearVariantDetails();
           return;
@@ -1112,9 +1890,17 @@
         panel.classList.remove('hidden');
         panel.style.display = 'block';
 
+        // Scroll the column so the selected variant group aligns with the detail panel
+        const groupContainer = ZoteroNER_HTMLUtils.getElement('variant-groups-container');
+        const variantGroup = groupContainer?.querySelector(`[data-suggestion-index="${suggestionIndex}"]`);
+        const scrollContainer = ZoteroNER_HTMLUtils.getElement('variant-groups-column');
+        if (variantGroup && scrollContainer) {
+          variantGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         const titleEl = ZoteroNER_HTMLUtils.getElement('variant-detail-title');
         if (titleEl) {
-          titleEl.textContent = this.getVariantDetailTitle(suggestion, variant);
+          titleEl.innerHTML = this.getVariantDetailTitle(suggestion, variant);
         }
 
         const contextEl = ZoteroNER_HTMLUtils.getElement('variant-detail-context');
@@ -1135,12 +1921,14 @@
 
           if (items.length === 0) {
             const emptyLi = document.createElement('li');
-            emptyLi.textContent = 'No sample items available for this variant.';
+            emptyLi.className = 'variant-meta';
+            emptyLi.textContent = 'No items found for this variant.';
             listEl.appendChild(emptyLi);
           } else {
             items.forEach(item => {
               const li = document.createElement('li');
-              li.textContent = this.formatItemSummary(item);
+              const html = this.formatItemSummaryHTML(item);
+              li.innerHTML = html;
               listEl.appendChild(li);
             });
 
@@ -1183,9 +1971,58 @@
         }
 
         const title = item.title || 'Untitled';
-        const trimmedTitle = title.length > 80 ? title.slice(0, 77) + '…' : title;
         const year = item.year || item.date || '';
-        return year ? `${trimmedTitle} (${year})` : trimmedTitle;
+        const author = item.author || '';
+
+        // Build display: Author - Title (Year) or Title (Year) if no author
+        const yearStr = year ? ` (${year})` : '';
+        const authorStr = author ? `${author} — ` : '';
+
+        // Truncate title if too long
+        const maxTitleLength = 100;
+        const trimmedTitle = title.length > maxTitleLength ? title.slice(0, maxTitleLength) + '…' : title;
+
+        return authorStr + trimmedTitle + yearStr;
+      },
+
+      formatItemSummaryHTML: function(item) {
+        if (!item) {
+          return '<span class="item-title">Untitled item</span>';
+        }
+
+        const title = item.title || 'Untitled';
+        const year = item.year || item.date || '';
+        const author = item.author || '';
+        const itemKey = item.key || '';
+
+        // Truncate title if too long
+        const maxTitleLength = 100;
+        const trimmedTitle = title.length > maxTitleLength ? title.slice(0, maxTitleLength) + '…' : title;
+
+        // Escape HTML for safe rendering
+        const safeTitle = this.escapeHTML(trimmedTitle);
+        const safeAuthor = this.escapeHTML(author);
+        const safeYear = this.escapeHTML(year);
+
+        let html = '<div class="item-details">';
+
+        if (safeAuthor) {
+          html += `<span class="item-author">${safeAuthor}</span>`;
+        }
+
+        // Make title clickable with zotero://select/ URL
+        if (itemKey) {
+          html += `<a href="#" class="item-link" data-item-key="${this.escapeHTML(itemKey)}">${safeTitle}</a>`;
+        } else {
+          html += `<span class="item-title">${safeTitle}</span>`;
+        }
+
+        if (safeYear) {
+          html += `<span class="item-year">(${safeYear})</span>`;
+        }
+
+        html += '</div>';
+        return html;
       },
 
       buildSelectionControls: function(index, suggestion) {
@@ -1200,7 +2037,7 @@
           mode: 'primary',
           label: recommendedLabelText,
           checked: selection.mode === 'primary',
-          selectionUpdate: () => ({ mode: 'primary', value: recommendedValue })
+          selectionUpdate: () => ({ mode: 'primary', value: recommendedValue, apply: true })
         });
         choiceGroup.appendChild(primaryRow);
 
@@ -1228,7 +2065,8 @@
               return {
                 mode: 'variant',
                 variantIndex,
-                value: variantValue
+                value: variantValue,
+                apply: true
               };
             }
           });
@@ -1299,7 +2137,8 @@
               mode: 'custom',
               value: input.value,
               customValue: input.value,
-              variantIndex: null
+              variantIndex: null,
+              apply: true
             });
           }
         });
@@ -1385,14 +2224,15 @@
             return;
           }
 
+          this.log('populateVariantGroupList: rendering card for index=' + index + ', type=' + suggestion.type);
           visibleCount++;
           renderedIndexes.push(index);
           this.ensureUserSelection(index, suggestion);
-          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group' });
+          const groupElement = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group', 'data-suggestion-index': String(index) });
 
           const header = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-header' });
           const title = ZoteroNER_HTMLUtils.createElement('h3');
-          title.textContent = this.getGroupTitle(index, suggestion);
+          title.innerHTML = this.getGroupTitle(index, suggestion);
           header.appendChild(title);
 
           const summary = ZoteroNER_HTMLUtils.createElement('div', { class: 'variant-group-summary' });
@@ -1429,6 +2269,10 @@
               variantsContainer.appendChild(relatedSection);
             }
           }
+
+          // Add per-card action buttons
+          const cardActions = this.buildCardActions(index, suggestion);
+          variantsContainer.appendChild(cardActions);
 
           groupElement.appendChild(variantsContainer);
           container.appendChild(groupElement);
@@ -1512,7 +2356,9 @@
 
       setApplyEnabled: function(enabled) {
         const applyButton = ZoteroNER_HTMLUtils.getElement('apply-button');
+        const applyAllButton = ZoteroNER_HTMLUtils.getElement('apply-all-button');
         if (applyButton) applyButton.disabled = !enabled || this.isProcessing;
+        if (applyAllButton) applyAllButton.disabled = !enabled || this.isProcessing;
       },
 
       setDialogBusy: function(isBusy) {
@@ -1520,7 +2366,9 @@
         ZoteroNER_HTMLUtils.setHidden('progress-container', !isBusy);
 
         const applyButton = ZoteroNER_HTMLUtils.getElement('apply-button');
+        const applyAllButton = ZoteroNER_HTMLUtils.getElement('apply-all-button');
         if (applyButton) applyButton.disabled = isBusy;
+        if (applyAllButton) applyAllButton.disabled = isBusy;
 
         this.updateProgress();
       },
@@ -1727,10 +2575,12 @@
         let applyError = null;
 
         try {
-          // Try to use the main window's Zotero.NER which has proper Zotero context
+          // Try to use the main window's Zotero API which has proper Zotero context
           let results;
-          if (window.opener && window.opener.Zotero && window.opener.Zotero.NER) {
-            results = await window.opener.Zotero.NER.applyNormalizationSuggestions(
+          const nameNormalizer = ZoteroNER_ZoteroAPI.getNameNormalizer();
+
+          if (nameNormalizer) {
+            results = await nameNormalizer.applyNormalizationSuggestions(
               preparedSuggestions,
               false,
               {
@@ -1749,7 +2599,7 @@
               progressCallback: (event) => this.handleApplyProgress(event)
             });
           } else {
-            throw new Error('Zotero database analyzer is not available in this context.');
+            throw new Error('Zotero API not available. Cannot apply normalizations.');
           }
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
@@ -1786,27 +2636,152 @@
           }
         }
       },
-      
+
+      applyAllSelected: async function() {
+        // Count how many normalizations are selected
+        let selectedCount = 0;
+        for (const [index, selection] of this.userSelections) {
+          if (selection.apply !== false && selection.mode !== 'keep') {
+            selectedCount++;
+          }
+        }
+
+        if (selectedCount === 0) {
+          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Select at least one normalization to apply.');
+          return;
+        }
+
+        // Show confirmation dialog for bulk operations
+        const confirmed = window.confirm(
+          `You are about to apply ${selectedCount} normalization(s) to your library.\n\n` +
+          `This will modify author names in ${selectedCount} item(s).\n\n` +
+          `Are you sure you want to continue?`
+        );
+
+        if (!confirmed) {
+          this.log('User cancelled Apply All operation');
+          return;
+        }
+
+        // Proceed with applying all selected normalizations
+        this.log('User confirmed Apply All for ' + selectedCount + ' normalizations');
+        await this.applySelected();
+      },
+
+      startProgressTracking: function() {
+        this.log('Starting progress tracking');
+
+        // Track when analysis is complete (set by updateAnalysisResults)
+        this.analysisComplete = false;
+
+        // Track last progress update time for adaptive timeout
+        this.lastProgressTime = Date.now();
+        this.lastHeartbeat = Date.now();
+
+        const ADAPTIVE_TIMEOUT_MS = 120000;        // 120 seconds max for large libraries
+        const PROGRESS_UPDATE_TIMEOUT_MS = 45000;  // 45 seconds since last progress = stuck
+        const HEARTBEAT_TIMEOUT_MS = 30000;        // 30 seconds without heartbeat = stalled
+
+        const analysisStartTime = Date.now();
+        const self = this;
+
+        // Clear any existing interval
+        if (this.checkAnalysisInterval) {
+          clearInterval(this.checkAnalysisInterval);
+          this.checkAnalysisInterval = null;
+        }
+
+        // Set up the timeout check interval
+        this.checkAnalysisInterval = setInterval(() => {
+          // Check if analysis completed (flag set by updateAnalysisResults)
+          if (self.analysisComplete) {
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            const suggestionCount = (self.analysisResults && self.analysisResults.suggestions) ? self.analysisResults.suggestions.length : 0;
+            self.log('Analysis completed with ' + suggestionCount + ' suggestions after ' + (Date.now() - analysisStartTime) + 'ms');
+          } else if (self.analysisResults && self.analysisResults.suggestions) {
+            // Results arrived but analysisComplete flag not set - complete now
+            clearInterval(self.checkAnalysisInterval);
+            self.checkAnalysisInterval = null;
+            self.log('Analysis results received (timeout check), suggestions: ' + self.analysisResults.suggestions.length);
+          } else {
+            // Adaptive timeout: check max time, last progress, and heartbeat
+            const timeSinceStart = Date.now() - analysisStartTime;
+            const timeSinceProgress = Date.now() - self.lastProgressTime;
+            const timeSinceHeartbeat = Date.now() - (self.lastHeartbeat || self.lastProgressTime);
+
+            if (timeSinceStart > ADAPTIVE_TIMEOUT_MS) {
+              // Absolute timeout: analysis running too long
+              clearInterval(self.checkAnalysisInterval);
+              self.checkAnalysisInterval = null;
+              self.log('ERROR: Analysis timeout after ' + timeSinceStart + 'ms (adaptive)');
+              self.showEmptyState('Analysis timed out. The library may be too large.');
+            } else if (timeSinceHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+              // No heartbeat - analysis may be stalled
+              self.log('No heartbeat for ' + timeSinceHeartbeat + 'ms, checking status...');
+              self.lastHeartbeat = Date.now();  // Reset to avoid repeated warnings
+            } else if (timeSinceProgress > PROGRESS_UPDATE_TIMEOUT_MS) {
+              // No progress update, but heartbeat still coming - CPU busy, not stuck
+              self.log('No progress update for ' + timeSinceProgress + 'ms (CPU busy, not stuck)');
+              // Don't reset lastProgressTime - we want to track actual progress
+            }
+          }
+        }, 500);
+
+        // Note: showLoadingState() is now called separately in initialize()
+        // before startProgressTracking() to ensure progress bar appears immediately
+      },
+
       showLoadingState: function() {
         this.log('Showing loading state');
-        
+
         // Hide empty message, show progress
         ZoteroNER_HTMLUtils.setHidden('empty-message', true);
         ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         ZoteroNER_HTMLUtils.setHidden('variant-section', true);
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
-        
-        // Set initial loading message
         ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
-        ZoteroNER_HTMLUtils.updateProgressBar(0);
-        
+        // Use indeterminate animation so user sees progress even if analysis is fast
+        ZoteroNER_HTMLUtils.setProgressIndeterminate(true);
         this.setApplyEnabled(false);
       },
       
       handleAnalysisProgress: function(progress) {
+        // Always update timestamps first
+        this.lastProgressTime = Date.now();
+        this.lastHeartbeat = Date.now();
+
+        this.log('handleAnalysisProgress: stage=' + (progress.stage || 'unknown') + ', percent=' + (progress.percent !== undefined ? progress.percent : 'N/A') + ', processed=' + (progress.processed || 'N/A') + ', total=' + (progress.total || 'N/A'));
+
+        if (!progress) {
+          this.log('handleAnalysisProgress: received null progress');
+          return;
+        }
+
+        // Debounce rapid updates to prevent UI jank
+        if (this.progressUpdateTimer) {
+          clearTimeout(this.progressUpdateTimer);
+        }
+
+        this.progressUpdateTimer = setTimeout(() => {
+          this.updateProgressUI(progress);
+        }, 100);
+      },
+
+      receiveHeartbeat: function() {
+        // Check if dialog is still open/valid
+        if (!document.getElementById('progress-container')) {
+          return;  // Dialog closing, ignore heartbeat
+        }
+        this.lastHeartbeat = Date.now();
+        // Note: Do NOT update lastProgressTime - heartbeat != actual progress
+      },
+
+      updateProgressUI: function(progress) {
+        // Ensure progress container is visible while updating
         if (!progress) return;
 
-        this.log('Analysis progress: ' + JSON.stringify(progress));
+        ZoteroNER_HTMLUtils.setHidden('progress-container', false);
 
         let message = 'Analyzing library...';
         let percent = 0;
@@ -1826,38 +2801,64 @@
         } else if (progress.stage === 'generating_suggestions') {
           message = 'Generating normalization suggestions...';
           percent = 95;
+        } else if (progress.stage === 'debug') {
+          message = progress.message || 'Analyzing...';
+          percent = progress.percent || 0;
         }
 
         ZoteroNER_HTMLUtils.updateProgressLabel(message);
 
-        // Update progress bar with visual feedback
         const fill = document.getElementById('progress-fill');
         if (fill) {
           if (isIndeterminate) {
             fill.classList.add('indeterminate');
           } else {
             fill.classList.remove('indeterminate');
-            fill.style.width = Math.max(percent, 3) + '%'; // Min 3% for visibility
+            fill.style.width = Math.max(percent, 3) + '%';
           }
         }
       },
       
       updateAnalysisResults: function(analysisResults) {
+
+        // Mark analysis as complete to prevent timeout error
+        this.analysisComplete = true;
+        
+        // Clear the timeout interval if it's still running
+        if (this.checkAnalysisInterval) {
+          clearInterval(this.checkAnalysisInterval);
+          this.checkAnalysisInterval = null;
+        }
+
+        // Clear any pending progress update timer
+        if (this.progressUpdateTimer) {
+          clearTimeout(this.progressUpdateTimer);
+          this.progressUpdateTimer = null;
+        }
+
         if (!analysisResults) {
           this.showEmptyState('Analysis completed but no results were returned.');
+          ZoteroNER_HTMLUtils.setHidden('progress-container', true);
           return;
         }
-        
+
         this.log('Updating dialog with analysis results');
         this.log('Results contain: ' + (analysisResults.suggestions ? analysisResults.suggestions.length : 0) + ' suggestions');
-        
+
         this.analysisResults = analysisResults;
         this.resetSelections();
         this.clearVariantDetails();
         
-        // Show the variant section
-        ZoteroNER_HTMLUtils.setHidden('variant-section', false);
-        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        // Show 100% progress for a moment before hiding
+        ZoteroNER_HTMLUtils.updateProgressLabel('Analysis complete!');
+        ZoteroNER_HTMLUtils.updateProgressBar(100);
+        
+        // Hide progress container after a brief delay to show completion
+        setTimeout(() => {
+          ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+          ZoteroNER_HTMLUtils.setHidden('summary-group', false);
+          ZoteroNER_HTMLUtils.setHidden('variant-section', false);
+        }, 500);
         
         this.updateSummaryHeader();
         this.populateVariantGroupList();
@@ -1869,6 +2870,10 @@
     // Event listeners
     document.getElementById('apply-button').addEventListener('click', function() {
       ZoteroNER_NormalizationDialog.applySelected();
+    });
+
+    document.getElementById('apply-all-button').addEventListener('click', function() {
+      ZoteroNER_NormalizationDialog.applyAllSelected();
     });
 
     document.getElementById('cancel-button').addEventListener('click', function() {

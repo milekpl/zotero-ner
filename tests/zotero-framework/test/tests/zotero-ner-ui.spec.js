@@ -249,5 +249,54 @@ describe('Zotero Name Normalizer UI Tests', function() {
                 }
             }
         });
+
+        it('should have export button visible', async function() {
+            const win = Services.wm.getMostRecentWindow('navigator:browser');
+            if (!win) {
+                this.skip();
+                return;
+            }
+
+            const payload = makeDeterministicPayload();
+            dialog = await openDialogWithPayload(payload);
+
+            const doc = dialog.document;
+            const exportBtn = doc.getElementById('export-button');
+            assert.ok(exportBtn, 'export button exists');
+            assert.isFalse(exportBtn.hidden, 'export button is visible');
+        });
+
+        it('should generate valid export JSON structure', async function() {
+            const win = Services.wm.getMostRecentWindow('navigator:browser');
+            if (!win) {
+                this.skip();
+                return;
+            }
+
+            const payload = makeDeterministicPayload();
+            dialog = await openDialogWithPayload(payload);
+
+            const controller = dialog.ZoteroNER_NormalizationDialog;
+            assert.ok(controller, 'controller exists');
+
+            // Verify the data structure that will be exported
+            const exportData = controller.analysisResults;
+            assert.ok(exportData, 'export data exists');
+            assert.isNumber(exportData.totalVariantGroups, 'totalVariantGroups is number');
+            assert.isNumber(exportData.totalUniqueSurnames, 'totalUniqueSurnames is number');
+            assert.isArray(exportData.suggestions, 'suggestions is array');
+
+            if (exportData.suggestions.length > 0) {
+                const suggestion = exportData.suggestions[0];
+                assert.isString(suggestion.type, 'suggestion type is string');
+                assert.isArray(suggestion.variants, 'variants is array');
+
+                if (suggestion.variants.length > 0) {
+                    const variant = suggestion.variants[0];
+                    assert.isNumber(variant.frequency, 'variant frequency is number');
+                    assert.isArray(variant.items, 'variant items is array');
+                }
+            }
+        });
     });
 });

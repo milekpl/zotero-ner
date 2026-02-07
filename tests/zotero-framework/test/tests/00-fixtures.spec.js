@@ -102,6 +102,21 @@ async function createTestFixtures() {
         // Friston: Multiple occurrences for detection
         { itemType: 'journalArticle', title: 'The Free Energy Principle', creators: [{ lastName: 'Friston', firstName: 'Karl', creatorType: 'author' }], date: '2010', publicationTitle: 'Nature Reviews Neuroscience' },
         { itemType: 'journalArticle', title: 'The Free Energy Principle for Action', creators: [{ lastName: 'Friston', firstName: 'Karl', creatorType: 'author' }], date: '2011', publicationTitle: 'Neuroscience' },
+
+        // van Lambalgen: Dutch surname with lowercase "van" prefix (NOT "Van")
+        { itemType: 'journalArticle', title: 'Logic as Marr\'s Computational Level', creators: [{ lastName: 'van Lambalgen', firstName: 'Michiel', creatorType: 'author' }], date: '2015', publicationTitle: 'Cognitive Science' },
+        { itemType: 'journalArticle', title: 'Semantic Interpretation in Nonmonotonic Logic', creators: [{ lastName: 'Van Lambalgen', firstName: 'Michiel', creatorType: 'author' }], date: '2005', publicationTitle: 'Journal of Logic' },
+        { itemType: 'journalArticle', title: 'Human Reasoning and Cognitive Science', creators: [{ lastName: 'van Lambalgen', firstName: 'Michiel', creatorType: 'author' }], date: '2008', publicationTitle: 'Cognition' },
+
+        // de Jong: Dutch surname with lowercase "de" prefix (NOT "De")
+        { itemType: 'journalArticle', title: 'Levels of Explanation in Psychology', creators: [{ lastName: 'de Jong', firstName: 'Huib', creatorType: 'author' }], date: '2002', publicationTitle: 'Psychology Review' },
+        { itemType: 'journalArticle', title: 'Causal and Functional Explanations', creators: [{ lastName: 'de Jong', firstName: 'Huib', creatorType: 'author' }], date: '2003', publicationTitle: 'Psychology Science' },
+        { itemType: 'journalArticle', title: 'Functional Explanation in Psychology', creators: [{ lastName: 'de Jong', firstName: 'Huib', creatorType: 'author' }], date: '2013', publicationTitle: 'Philosophy of Science' },
+
+        // McCulloch: Scottish surname with "Mc" prefix (NOT "Mcc")
+        { itemType: 'journalArticle', title: 'A Logical Calculus of Ideas', creators: [{ lastName: 'McCulloch', firstName: 'Warren', creatorType: 'author' }], date: '1943', publicationTitle: 'Bulletin of Mathematical Biology' },
+        { itemType: 'journalArticle', title: 'The Limiting Information Capacity', creators: [{ lastName: 'McCulloch', firstName: 'Warren', creatorType: 'author' }], date: '1952', publicationTitle: 'Bell System Technical' },
+        { itemType: 'journalArticle', title: 'Information in the Head', creators: [{ lastName: 'McCULLOCH', firstName: 'Warren', creatorType: 'author' }], date: '1955', publicationTitle: 'Scientific American' },
     ];
     
     for (const data of testData) {
@@ -212,6 +227,27 @@ function getExpectedNormalizationGroups() {
             expectedPrimary: 'Karl',
             surname: 'Friston',
             count: 4
+        },
+        // van Lambalgen: Dutch surname - "van" stays lowercase
+        vanlambalgen: {
+            variants: ['van Lambalgen', 'Van Lambalgen'],
+            expectedPrimary: 'van Lambalgen',
+            surname: 'van Lambalgen',
+            count: 3
+        },
+        // de Jong: Dutch surname - "de" stays lowercase
+        dejong: {
+            variants: ['de Jong', 'De Jong'],
+            expectedPrimary: 'de Jong',
+            surname: 'de Jong',
+            count: 3
+        },
+        // McCulloch: Scottish surname - "Mc" with capital C
+        mcculloch: {
+            variants: ['McCulloch', 'McCULLOCH'],
+            expectedPrimary: 'McCulloch',
+            surname: 'McCulloch',
+            count: 3
         }
     };
 }

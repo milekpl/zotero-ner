@@ -1,36 +1,74 @@
 # Zotero Name Normalizer
 
-A Zotero 7/8 extension that normalizes author names in Zotero libraries.
+Normalize author name variants in your Zotero library (diacritics, initials,
+spelling and ordering) so bibliographies, searches and author counts are
+consistent and reliable.
 
-## Status
+Short description
+-----------------
 
-**Fully functional** - Extension loads in Zotero 8, displays UI menu, opens dialogs with all normalization options available. While the extension has been tested, it is still in the early stages of development and may contain bugs. Please report any issues you encounter. Remember to make the backup copy of your library, which is found in your Zotero profile. The analysis does not affect the library, but normalization is irreversible.
+Zotero Name Normalizer scans a Zotero library, groups creator name variants
+into candidate normalization suggestions, and provides an interactive dialog
+to review, edit, and apply normalizations safely. Intended for researchers,
+librarians and anyone who maintains large Zotero collections.
 
-## Problem Solved
+![Screenshot](screenshot.png)
 
-Academic metadata contains author names in various formats:
-- Jerry Alan Fodor vs Jerry A. Fodor vs Jerry Fodor vs J.A. Fodor
-- Inconsistent handling of Spanish double surnames
-- Prefixes like "van", "de", "la" often misplaced
+Status
+------
 
-This plugin normalizes them to a single, consistent format. This is how you can avoid having multiple names of a single author. Without normalizing, you might have the same author listed as multiple distinct authors in your References, and multiple references in the same paper, such as `(Fodor 1990)`, `(J. Fodor 1990)`, and `(Jerry A. Fodor 1990)`, even they are the same person. Removing these manually requires substantial effort, and in my own library, I found almost 500 such cases, even if I try to clean up found problems when I compile references.
+Fully functional and tested on Zotero 7/8. Analysis is non-destructive — you
+must explicitly apply normalizations for changes to be written to your
+library. Always keep a recent library backup before running bulk operations.
 
-# ![Screenshot](screenshot.png)
+Why use this
+------------
 
-## Features
+- Fix diacritics vs ASCII mismatches (e.g. "Miłkowski" vs "Milkowski")
+- Unify initials, abbreviations and full given names ("J. A. Fodor" → "Jerry A. Fodor")
+- Correct misplaced prefixes and compound surnames
+- Reduce duplicate author entries and improve citation consistency
 
-- **Name parsing**: Parses author names and identifies components
-- **Variant generation**: Creates multiple normalized forms for user selection
-- **Learning system**: Remembers user preferences for future suggestions
-- **Zotero integration**: Seamlessly integrates with Zotero's interface
-- **Batch processing**: Process multiple items at once
+Key features
+------------
 
-## Development
+- Full-library analysis to detect surname and given-name variants
+- Interactive review dialog with item previews and variant frequency info
+- Normalization of surnames is sensitive to prefixes and compound surnames (such as "van" or "de la")
+- Per-group and bulk apply/decline operations via Zotero API
+- Learning engine to remember user choices for future suggestions
+- Exportable JSON reports for offline inspection and debugging
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for setup instructions, architecture details, and technical information.
+For developer setup and build/test instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## License
+Usage
+-----
 
-GPL-3.0
+1. Open Zotero and install the extension (development mode or packaged XPI)
+2. Run a full-library analysis from the Name Normalizer menu
+3. Review suggested variant groups in the dialog and apply per-group or
+	 bulk normalizations
+4. Optionally export analysis results as JSON for offline review
 
-© 2026, Marcin Miłkowski
+Notes & troubleshooting
+-----------------------
+
+- Analysis is non-destructive. Normalizations are applied only when you
+	explicitly confirm them in the dialog.
+- On modern Zotero builds the extension writes exported JSON to the Zotero
+	data directory by default (no filepicker). Check the Error Console
+	(Tools → Developer → Error Console) for details when exporting.
+- If you encounter errors, include console logs and a short description of
+	your Zotero version and the action you performed when reporting an issue.
+
+Contributing
+------------
+
+Contributions welcome. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for
+developer setup and architecture notes. Please open issues for bugs and
+feature requests; pull requests should include tests when applicable.
+
+License
+-------
+
+GPL-3.0 © 2026 Marcin Miłkowski
