@@ -5,15 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.1] - 2026-02-13
 
-- **Collection Scope**: Collection-based learned mapping limitation
-  - Store mappings with collection scope
-  - Retrieve scoped mappings with fallback to global
-  - Get available scopes and clear scope data
-  - Scope priority for items in multiple collections
+- **Bug Fix**: Fixed "Not in transaction" error when normalizing large numbers of field entries
+  - Changed `item.save()` to `item.saveTx()` for proper transaction handling
+  - Applied to FieldItemProcessor, FieldNormalizerDialog, and ZoteroDBAnalyzer
 
-## [1.3.0] - 2026-02-09
+
+## [1.3.0] - 2026-02-13
 
 ### Added
 

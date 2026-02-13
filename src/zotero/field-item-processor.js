@@ -176,8 +176,8 @@ class FieldItemProcessor {
           );
         }
 
-        // Save the item (not saveAll - individual saves)
-        await item.save();
+        // Save the item using saveTx for proper transaction handling
+        await item.saveTx();
 
         results.push({
           itemID: normalization.itemID,

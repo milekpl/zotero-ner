@@ -2474,7 +2474,7 @@ class ZoteroDBAnalyzer {
 
         if (updated) {
           item.setCreators(normalizedCreators);
-          await item.save();
+          await item.saveTx();
           updatedCreators++;
 
           if (progressCallback) {

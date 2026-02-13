@@ -997,6 +997,129 @@
         }
       },
 
+      confirm: async function(title, message) {
+        // Create custom modal for cross-browser compatible confirm with custom title
+        return new Promise((resolve) => {
+          // Remove any existing modal
+          const existing = document.getElementById('zoteroner-custom-confirm');
+          if (existing) existing.remove();
+
+          // Create modal overlay
+          const overlay = document.createElement('div');
+          overlay.id = 'zoteroner-custom-confirm';
+          overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          `;
+
+          // Create modal dialog
+          const dialog = document.createElement('div');
+          dialog.style.cssText = `
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            min-width: 350px;
+            max-width: 500px;
+            overflow: hidden;
+          `;
+
+          // Header
+          const header = document.createElement('div');
+          header.style.cssText = `
+            background: #f0f0f0;
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 1px solid #ddd;
+          `;
+          header.textContent = title;
+
+          // Body
+          const body = document.createElement('div');
+          body.style.cssText = `
+            padding: 20px 16px;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+          `;
+          body.textContent = message;
+
+          // Buttons
+          const buttons = document.createElement('div');
+          buttons.style.cssText = `
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+          `;
+
+          const createButton = (label, isPrimary) => {
+            const btn = document.createElement('button');
+            btn.textContent = label;
+            btn.setAttribute('role', 'button');
+            btn.setAttribute('aria-label', label);
+            btn.style.cssText = `
+              padding: 8px 16px;
+              border-radius: 4px;
+              border: 1px solid ${isPrimary ? '#4a90d9' : '#aaa'};
+              background: ${isPrimary ? '#4a90d9' : '#fff'};
+              color: ${isPrimary ? '#fff' : '#333'};
+              font-size: 13px;
+              cursor: pointer;
+            `;
+            btn.addEventListener('click', () => {
+              overlay.remove();
+              resolve(label === 'OK');
+            });
+            return btn;
+          };
+
+          buttons.appendChild(createButton('Cancel', false));
+          buttons.appendChild(createButton('OK', true));
+
+          dialog.appendChild(header);
+          dialog.appendChild(body);
+          dialog.appendChild(buttons);
+          overlay.appendChild(dialog);
+          document.body.appendChild(overlay);
+
+          // Cleanup handler for event listeners
+          const cleanup = () => {
+            document.removeEventListener('keydown', escHandler);
+          };
+
+          // Close on escape
+          const escHandler = (e) => {
+            if (e.key === 'Escape') {
+              overlay.remove();
+              cleanup();
+              resolve(false);
+            }
+          };
+          document.addEventListener('keydown', escHandler);
+
+          // Close on clicking outside the dialog
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.remove();
+              cleanup();
+              resolve(false);
+            }
+          });
+        });
+      },
+
       setupFilterInput: function() {
         const input = ZoteroNER_HTMLUtils.getElement('variant-filter-input');
         if (!input) {
@@ -1153,7 +1276,8 @@
               return;
             }
 
-            const confirmed = window.confirm(
+            const confirmed = await this.confirm(
+              'Confirming Changes',
               'You are about to apply ' + pendingCount + ' normalization(s) to your library.\n\n' +
               'This will modify field values in ' + pendingCount + ' item(s).\n\n' +
               'Are you sure you want to continue?'
@@ -2437,7 +2561,8 @@
         }
 
         // Confirm before applying
-        const confirmed = window.confirm(
+        const confirmed = await this.confirm(
+          'Confirming Changes',
           'Normalize ' + group.itemCount + ' item(s) from:\n' +
           group.variants.map(v => '  - ' + v).join('\n') +
           '\n\nTo: ' + inputValue
@@ -2452,7 +2577,7 @@
             for (const v of group.variantData) {
               for (const item of v.items) {
                 item.setField(this.fieldResultsZoteroField, inputValue);
-                await item.save();
+                await item.saveTx();
                 applied++;
               }
             }
@@ -2556,7 +2681,7 @@
                 const currentValue = item.getField(this.fieldResultsZoteroField);
                 if (change.fromValues.includes(currentValue)) {
                   item.setField(this.fieldResultsZoteroField, change.toValue);
-                  await item.save();
+                  await item.saveTx();
                   applied++;
                 }
               }

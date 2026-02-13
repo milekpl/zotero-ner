@@ -86,7 +86,7 @@ async function createTestItem() {
     item.setField('title', 'Test Article for Zotero Name Normalizer');
     item.setField('date', '2024-01-01');
     item.setField('abstractNote', 'Test abstract');
-    await item.save();
+    await item.saveTx();
     return item;
 }
 
