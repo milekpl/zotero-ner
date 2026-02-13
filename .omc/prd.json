@@ -1,46 +1,71 @@
 {
-  "project": "Zotero Name Normalizer - Progress Bar Fix",
-  "branchName": "ralph/fix-progress-bar",
-  "description": "Fix progress bar being stuck at 3% by adding progress callbacks to findDiacriticVariantsByAuthor function",
+  "project": "Zotero Name Normalizer - Field Normalization Bug Fixes",
+  "branchName": "ralph/fix-field-normalization-params",
+  "description": "Fix parametrization bugs in field normalization feature that prevent dialog from receiving fieldType parameter",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add progress callbacks to findDiacriticVariantsByAuthor",
-      "description": "As a user, I want to see the progress bar update during surname analysis so that I know the analysis is progressing and not frozen.",
+      "title": "Fix fieldType parameter preservation in unwrapDialogParams",
+      "description": "As a user, I want the field normalization dialog to receive the fieldType parameter so that it opens the correct field normalization UI instead of falling back to author normalization.",
       "acceptanceCriteria": [
-        "Progress callback is called at start (0%)",
-        "Progress callback is called periodically during analysis",
-        "Progress callback is called at end (~80%)",
-        "Works for small (<50 authors), medium (100-500), and large (1000+) libraries",
-        "Code passes linting (npm run lint)"
+        "unwrapDialogParams extracts fieldType from XPCOM property bag",
+        "unwrapDialogParams extracts collectionId from XPCOM property bag",
+        "Tests verify fieldType is preserved through unwrapDialogParams",
+        "Dialog initializes field normalization when fieldType is provided"
       ],
       "priority": 1,
       "passes": false
     },
     {
       "id": "US-002",
-      "title": "Write unit tests for progress callback",
-      "description": "As a developer, I want unit tests for the progress callback functionality so that I can verify the fix works correctly and prevent regressions.",
+      "title": "Integrate Learning Engine with processFieldItems",
+      "description": "As a user, I want field normalization to suggest learned variants so that I don't have to manually normalize every variant repeatedly.",
       "acceptanceCriteria": [
-        "Test progress callback is called during analysis",
-        "Test progress percent increases over time",
-        "Test edge cases: empty input (0 authors)",
-        "Test edge cases: small dataset (<50 authors)",
-        "All tests pass (npm test)"
+        "processFieldItems calls learningEngine.getScopedMapping for each field value",
+        "Variants from learning engine are displayed to user",
+        "alreadyLearned flag is set based on existing mappings",
+        "Tests verify LearningEngine.getScopedMapping is called correctly"
       ],
       "priority": 2,
       "passes": false
     },
     {
       "id": "US-003",
-      "title": "Verify fix with existing tests",
-      "description": "As a maintainer, I want to ensure the fix doesn't break existing functionality so that the extension continues to work correctly.",
+      "title": "Add collectionId parameter handling to initializeFieldNormalization",
+      "description": "As a user, I want to normalize fields within a specific collection scope so that my normalizations apply only to selected collections.",
       "acceptanceCriteria": [
-        "All existing tests pass",
-        "No regressions in zotero-db-analyzer tests",
-        "Integration tests pass if present"
+        "initializeFieldNormalization reads collectionId from params",
+        "collectionId is passed to learning engine for scoped lookups",
+        "Collection scope selector displays actual collections from Zotero",
+        "Tests verify collectionId parameter is processed correctly"
       ],
       "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "Add field normalization integration tests",
+      "description": "As a developer, I want tests for field normalization so that regressions can be caught before deployment.",
+      "acceptanceCriteria": [
+        "handleFieldNormalizeAction has unit tests",
+        "Field normalization dialog initialization has tests",
+        "Tests cover success and error paths",
+        "All existing tests pass"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "Clean up code quality issues",
+      "description": "As a maintainer, I want minor code quality issues fixed so that the codebase remains maintainable.",
+      "acceptanceCriteria": [
+        "getZotero() logs error when all fallbacks fail",
+        "Unused CSS classes removed or made functional",
+        "Duplicate menu ID constants consolidated or removed",
+        "JSDoc @returns matches actual return value"
+      ],
+      "priority": 5,
       "passes": false
     }
   ]

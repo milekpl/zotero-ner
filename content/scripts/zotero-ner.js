@@ -133,6 +133,10 @@ if (typeof Zotero === 'undefined') {
       rootURI: null,
       windowStates: new Map(),
       menuItemId: 'zotero-name-normalizer-menuitem',
+      fieldMenuItemId: 'zotero-name-normalizer-field-menu',
+      publisherMenuItemId: 'zotero-name-normalizer-publisher',
+      locationMenuItemId: 'zotero-name-normalizer-location',
+      journalMenuItemId: 'zotero-name-normalizer-journal',
 
       // Direct module references (already instantiated)
       nameParser: initializedModules.nameParser || null,
@@ -224,6 +228,17 @@ if (typeof Zotero === 'undefined') {
           this.showDialogForFullLibrary();
         });
         state.commandHandler = commandHandler;
+
+        // Define addElements FIRST (before ensureMenuItem uses it)
+        // addElements calls ensureMenuItem which adds the main menu item
+        // and ensureFieldMenuItems which adds the field normalization submenu
+        const addElements = () => {
+          ensureMenuItem();
+          ensureFieldMenuItems();
+          const currentState = this.windowStates.get(win) || {};
+          currentState.uiInitialized = true;
+          this.windowStates.set(win, currentState);
+        };
 
         const ensureMenuItem = () => {
           this.log('Attempting to add menu item');
@@ -337,14 +352,112 @@ if (typeof Zotero === 'undefined') {
           }
         };
 
-        const addElements = () => {
-          ensureMenuItem();
-          state.uiInitialized = true;
-          this.windowStates.set(win, state);
+        // Add field normalization submenu
+        const ensureFieldMenuItems = () => {
+          try {
+            // Check if submenu already exists
+            let fieldSubmenu = doc.getElementById(this.fieldMenuItemId);
+            if (fieldSubmenu) {
+              this.log('Field menu already exists');
+              return;
+            }
+
+            // Find tools popup using same selectors as ensureMenuItem
+            let toolsPopup = null;
+            const popupSelectors = [
+              '#menu_ToolsPopup',
+              '#menu-tools-popup',
+              '#menu-tools-menupopup',
+              '#zotero-pane-tools-menupopup',
+              '#zotero-tools-menupopup',
+              '#tools-menupopup',
+            ];
+
+            for (const selector of popupSelectors) {
+              const candidate = doc.querySelector(selector);
+              if (candidate) {
+                toolsPopup = candidate;
+                break;
+              }
+            }
+
+            // Last resort: heuristically look for a Tools menu popup
+            if (!toolsPopup) {
+              const possiblePopups = Array.from(doc.querySelectorAll('menupopup'));
+              toolsPopup = possiblePopups.find((popup) => {
+                const parent = popup.parentElement;
+                const parentId = (parent?.id || '').toLowerCase();
+                const parentClasses = (parent?.className || '').toLowerCase();
+                const parentLabel = (parent?.getAttribute('label') || '').toLowerCase();
+                const popupId = (popup.id || '').toLowerCase();
+                const popupLabel = (popup.getAttribute('label') || '').toLowerCase();
+                const keywords = ['tools', 'narz', 'narzedzia'];
+                const containsKeyword = (value) =>
+                  value && keywords.some((keyword) => value.includes(keyword));
+                return (
+                  containsKeyword(parentId) ||
+                  containsKeyword(parentClasses) ||
+                  containsKeyword(parentLabel) ||
+                  containsKeyword(popupId) ||
+                  containsKeyword(popupLabel)
+                );
+              });
+            }
+
+            if (!toolsPopup) {
+              this.log('Could not locate Tools menu popup for field items');
+              return;
+            }
+
+            this.log('Found toolsPopup for field items: ' + (toolsPopup.id || '[no id]'));
+
+            // Add separator before field menu
+            const separator = doc.createXULElement ? doc.createXULElement('menuseparator') : doc.createElement('menuseparator');
+            toolsPopup.appendChild(separator);
+
+            // Create "Normalize Field Data" submenu
+            fieldSubmenu = doc.createXULElement ? doc.createXULElement('menu') : doc.createElement('menu');
+            fieldSubmenu.id = this.fieldMenuItemId;
+            fieldSubmenu.setAttribute('label', 'Normalize Field Data');
+            toolsPopup.appendChild(fieldSubmenu);
+
+            const popup = doc.createXULElement ? doc.createXULElement('menupopup') : doc.createElement('menupopup');
+            fieldSubmenu.appendChild(popup);
+
+            // Publisher menu item
+            const publisherItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
+            publisherItem.id = this.publisherMenuItemId;
+            publisherItem.setAttribute('label', 'Publisher');
+            publisherItem.addEventListener('command', () => {
+              this.showDialogForField('publisher');
+            });
+            popup.appendChild(publisherItem);
+
+            // Location menu item
+            const locationItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
+            locationItem.id = this.locationMenuItemId;
+            locationItem.setAttribute('label', 'Location');
+            locationItem.addEventListener('command', () => {
+              this.showDialogForField('location');
+            });
+            popup.appendChild(locationItem);
+
+            // Journal menu item
+            const journalItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
+            journalItem.id = this.journalMenuItemId;
+            journalItem.setAttribute('label', 'Journal');
+            journalItem.addEventListener('command', () => {
+              this.showDialogForField('journal');
+            });
+            popup.appendChild(journalItem);
+
+            this.log('Added field normalization menu items');
+          } catch (err) {
+            this.log('Error adding field menu items: ' + err.message);
+          }
         };
 
         // Add immediately
-        addElements();
 
         // Retry after delays
         if (typeof win.setTimeout === 'function') {
@@ -433,7 +546,7 @@ if (typeof Zotero === 'undefined') {
                 // Create progress callback to update dialog
                 const progressCallback = (progress) => {
                   // Use Zotero.debug which outputs to stderr in test mode
-                  Zotero.debug('Zotero NER: Progress=' + progress.stage + ' ' + progress.percent + '%');
+                  Zotero.debug('Zotero Name Normalizer: Progress=' + progress.stage + ' ' + progress.percent + '%');
 
                   const targetWindow = self.currentDialogWindow;
                   if (targetWindow && targetWindow.ZoteroNERController) {
@@ -441,7 +554,7 @@ if (typeof Zotero === 'undefined') {
                     // Also send heartbeat on progress
                     targetWindow.ZoteroNERController.receiveHeartbeat();
                   } else {
-                    Zotero.debug('Zotero NER: ERROR - targetWindow=' + (!!targetWindow) + ' ZoteroNERController=' + !!(targetWindow && targetWindow.ZoteroNERController));
+                    Zotero.debug('Zotero Name Normalizer: ERROR - targetWindow=' + (!!targetWindow) + ' ZoteroNERController=' + !!(targetWindow && targetWindow.ZoteroNERController));
                   }
                 };
 
@@ -517,6 +630,67 @@ if (typeof Zotero === 'undefined') {
           // Update dialog with error state
           if (this.currentDialogWindow && this.currentDialogWindow.ZoteroNERController) {
             this.currentDialogWindow.ZoteroNERController.showEmptyState('Analysis failed: ' + error.message);
+          }
+        }
+      },
+
+      /**
+       * Show dialog for field normalization
+       * @param {string} fieldType - Type of field to normalize (publisher, location, journal)
+       */
+      showDialogForField: async function(fieldType) {
+        try {
+          console.log('ZOTERO-NER: showDialogForField called for: ' + fieldType);
+          this.log('showDialogForField called for: ' + fieldType);
+
+          // Check for selected items (optional - will use whole library if none selected)
+          let itemIDs = [];
+          let selectedCount = 0;
+          try {
+            const zoteroPane = Zotero.getActiveZoteroPane();
+            if (zoteroPane) {
+              const items = zoteroPane.getSelectedItems();
+              if (items && items.length > 0) {
+                itemIDs = items.map(item => item.id);
+                selectedCount = items.length;
+              }
+            }
+          } catch (e) {
+            this.log('Could not get selected items: ' + e.message);
+          }
+
+          this.log(selectedCount > 0
+            ? 'Selected ' + selectedCount + ' items for ' + fieldType + ' normalization'
+            : 'No items selected - will use whole library');
+
+          // Open dialog with field type
+          // Dialog will load items based on collection scope selection
+          const params = {
+            items: itemIDs,  // Empty array = whole library
+            fieldType: fieldType,
+            selectedCount: selectedCount
+          };
+
+          const mainWindow = Zotero.getMainWindow();
+          if (!mainWindow) {
+            Zotero.alert(null, 'Zotero Name Normalizer', 'Could not get main window');
+            return;
+          }
+
+          // Set params on main window before opening dialog (as backup to window.arguments)
+          mainWindow.ZoteroFieldNormalizationParams = params;
+
+          mainWindow.openDialog(
+            'chrome://zoteronamenormalizer/content/dialog.html',
+            'zotero-field-normalizer-dialog',
+            'chrome,centerscreen,resizable=yes,width=750,height=550',
+            params
+          );
+
+        } catch (error) {
+          this.log('Error in showDialogForField: ' + error.message);
+          if (typeof Zotero !== 'undefined' && typeof Zotero.logError === 'function') {
+            Zotero.logError(error);
           }
         }
       },

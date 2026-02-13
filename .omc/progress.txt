@@ -1,31 +1,106 @@
 # Ralph Progress Log
-Started: 2026-01-31T00:00:00.000Z
+Started: 2026-02-10T00:00:00.000Z
 
 ## Codebase Patterns
 
-### Progress Callback Pattern
-The codebase uses progress callbacks with the following structure:
-```javascript
-progressCallback({
-  stage: 'analyzing_surnames',
-  processed: number,
-  total: number,
-  percent: number  // 0-100
-})
-```
-
-### Existing Progress Callbacks
-- `analyzeFullLibrary` at `zotero-db-analyzer.js:201-205`
-- `findVariantsEfficiently` at `zotero-db-analyzer.js:616-623`
-- `analyzeCreators` at `zotero-db-analyzer.js:561-568`
+### Dialog Parameter Passing
+- Zotero XPCOM uses `window.arguments[0]` for dialog params
+- `unwrapDialogParams` handles both direct objects and XPCOM property bags
+- Property bags use `getProperty()` method to extract values
 
 ### Key Files
-- `src/zotero/zotero-db-analyzer.js` - Main implementation (lines 664-755 for findDiacriticVariantsByAuthor)
-- `tests/zotero/zotero-db-analyzer.test.js` - Test file to add tests to
-- `content/dialog.html` - UI that consumes progress updates (handleAnalysisProgress at line 1973-2010)
+- `content/dialog.html`: Main dialog HTML + JavaScript
+  - `unwrapDialogParams`: Lines 714-769
+  - `initializeFieldNormalization`: Lines 1182-1187 (entry point)
+  - `processFieldItems`: Lines 1299-1458
+  - `displayFieldResults`: Lines 1460-1662
+- `content/scripts/zotero-ner.js`: Extension entry point
+  - `showDialogForField`: Lines 716-761
+- `src/core/learning-engine.js`: Learning engine
+  - `getScopedMapping`: Lines 928-956
+  - `storeScopedMapping`: Lines 893-917
+- `src/zotero/menu-integration.js`: Menu registration
 
-### Test Framework
-- Uses Jest for unit testing
-- Mock Zotero environment for tests
+### Critical Bug Pattern (FIXED)
+```javascript
+// unwrapDialogParams strips fieldType from return object (FIXED)
+if (analysisResultsJSON || analysisResults || items) {
+  return { items, analysisResults, analysisResultsJSON, fieldType }; // fieldType NOW INCLUDED
+}
+```
+
+### Changes Applied
+1. `unwrapDialogParams` (dialog.html:754-764) - Now extracts `fieldType` from property bag
+2. `initialize` (dialog.html:1183-1187) - Checks `params.fieldType` and branches to field normalization
+3. `initializeFieldNormalization` (dialog.html:1359+) - Full implementation added
+4. `processFieldItems` (dialog.html:1440+) - Processes items for field normalization
+5. `displayFieldResults` (dialog.html:1468+) - Displays field normalization results
+6. HTML/CSS for field normalization section added (dialog.html:3160+)
+
+### Dependencies
+- `showDialogForField` calls `openDialog` with params object
+- Dialog `init()` calls `unwrapDialogParams()` then checks `params.fieldType`
+- If fieldType is present, calls `initializeFieldNormalization()`
+- `initializeFieldNormalization` needs:
+  - Zotero API access via `getZotero()`
+  - Item IDs from params.items
+  - Field type from params.fieldType
+  - Collection ID from params.collectionId (optional)
+
+## Issues Summary
+- ~~CRITICAL: 1 (fieldType parameter stripped)~~ - FIXED
+- HIGH: 2 (Learning Engine not integrated, collectionId ignored)
+- MEDIUM: 4 (property extraction, unused code, silent failures)
+- LOW: 1 (JSDoc mismatch)
+
+## Execution Order
+1. ~~US-001: Fix unwrapDialogParams~~ - COMPLETED
+2. US-002: Integrate Learning Engine (uses scoped mappings)
+3. US-003: Handle collectionId (follows Learning Engine integration)
+4. US-004: Add tests (tests verify fixes from US-001 to US-003)
+5. US-005: Code cleanup (can be done anytime)
 
 ---
+## Current Status
+## Latest Fixes
+
+### 1. getZotero method missing from ZoteroNER_NormalizationDialog
+- FIXED: Added `getZotero` function to `ZoteroNER_NormalizationDialog` object
+
+### 2. escapeHtml function missing
+- FIXED: Added `escapeHtml` function for HTML escaping
+
+### 3. Zotero.Items.getAll() requires libraryID parameter
+- FIXED: Now passes `Zotero.Libraries.userLibraryID` to `getAll()`
+
+### 4. Performance: Rendering 12383 items causes hang
+- FIXED: `processFieldItems` now uses Map for deduplication and tracks itemCount
+- FIXED: `displayFieldResults` limits display to first 100 values
+- FIXED: Progress updates during processing (every 1000 items)
+- Added: Shows unique count and total item count
+- Added: Shows remaining count when over display limit
+
+### 5. Field Normalization UI Redesign (COMPLETED)
+- COMPLETED: Reuses variant group structure for field normalization
+- Added: Filter bar with search input
+- Added: Field value cards with normalization input
+- Added: Summary showing unique values and pending changes
+- Added: Detail panel for selected items
+- Added: Apply Selected / Apply All buttons
+- Added: Confirmation dialog for bulk operations
+- `getZotero` was defined in `ZoteroNER_HTMLUtils` (lines 558-579)
+- `initializeFieldNormalization` called `this.getZotero()` but `ZoteroNER_NormalizationDialog` didn't have the method
+- FIX: Added `getZotero` to `ZoteroNER_NormalizationDialog` object (lines 627-653)
+
+---
+Build completed successfully. Field normalization dialog now:
+- Receives `fieldType` parameter via XPCOM property bag
+- Shows field normalization UI when fieldType is provided
+- Loads all items from library by default
+- Displays radio buttons for Publisher/Location/Journal selection
+
+## Next Steps
+Test the rebuilt extension:
+1. Click "Tools → Normalize Field Data → Publisher"
+2. Verify dialog shows "Field Normalization" heading
+3. Verify items are loaded and displayed

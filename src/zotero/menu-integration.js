@@ -21,12 +21,134 @@ class MenuIntegration {
    */
   registerMenuItems() {
     // This would register the actual menu items in Zotero
-    // Examples: 
-    // - Right-click context menu on items
-    // - Tools menu option
-    // - Item pane button
-    
-    console.log('Registered menu items for name normalization');
+    // Add to Zotero Tools menu
+
+    console.log('Registered menu items for data normalization');
+
+    // Register field-specific menu items
+    this.registerFieldMenuItems();
+  }
+
+  /**
+   * Register field-specific menu items under Tools > Normalize Field Data
+   * Creates submenu with Publisher, Location, and Journal normalization options
+   */
+  registerFieldMenuItems() {
+    if (typeof Zotero === 'undefined') {
+      console.log('Zotero context not available, skipping field menu registration');
+      return;
+    }
+
+    try {
+      const mainWindow = Zotero.getMainWindow();
+      if (!mainWindow) {
+        console.log('Could not get Zotero main window');
+        return;
+      }
+
+      const doc = mainWindow.document;
+      if (!doc) {
+        console.log('Could not get main window document');
+        return;
+      }
+
+      // Find the Tools menu
+      const toolsMenu = doc.querySelector('#menu_ToolsPopup');
+      if (!toolsMenu) {
+        console.log('Could not find Tools menu');
+        return;
+      }
+
+      // Add separator before the new submenu
+      const separator = doc.createElement('menuseparator');
+      toolsMenu.appendChild(separator);
+
+      // Create the "Normalize Field Data" submenu
+      const fieldSubmenu = doc.createElement('menu');
+      fieldSubmenu.setAttribute('label', 'Normalize Field Data');
+      fieldSubmenu.setAttribute('id', 'zotero-ner-field-normalization-menu');
+
+      // Create menu items for each field type
+      const fieldTypes = [
+        { id: 'publisher', label: 'Publisher' },
+        { id: 'location', label: 'Location' },
+        { id: 'journal', label: 'Journal' }
+      ];
+
+      for (const fieldType of fieldTypes) {
+        const menuItem = doc.createElement('menuitem');
+        menuItem.setAttribute('id', `zotero-ner-normalize-${fieldType.id}`);
+        menuItem.setAttribute('label', `Normalize ${fieldType.label}`);
+        menuItem.addEventListener('command', async () => {
+          await this.handleFieldNormalizeAction(fieldType.id);
+        });
+        fieldSubmenu.appendChild(menuItem);
+      }
+
+      toolsMenu.appendChild(fieldSubmenu);
+
+      console.log('Registered field normalization menu items: Publisher, Location, Journal');
+    } catch (error) {
+      console.error('Error registering field menu items:', error);
+    }
+  }
+
+  /**
+   * Handle field-specific normalize action for selected items
+   * Opens the dialog with field type parameter
+   * @param {string} fieldType - Type of field to normalize (publisher, location, journal)
+   * @returns {Promise<Object>} Result object with success/error status
+   */
+  async handleFieldNormalizeAction(fieldType) {
+    if (typeof Zotero === 'undefined') {
+      throw new Error('This feature requires Zotero context');
+    }
+
+    try {
+      // Get selected items from Zotero
+      const zoteroPane = Zotero.getActiveZoteroPane();
+      if (!zoteroPane) {
+        Zotero.alert(null, 'Zotero Name Normalizer', 'Could not get Zotero pane');
+        return { success: false, error: 'Could not get Zotero pane' };
+      }
+
+      const items = zoteroPane.getSelectedItems();
+      if (!items || items.length === 0) {
+        Zotero.alert(null, 'Zotero Name Normalizer', 'Please select items to normalize');
+        return { success: false, error: 'No items selected' };
+      }
+
+      console.log(`Handling ${fieldType} normalization for ${items.length} items`);
+
+      // Open the field normalization dialog with field type parameter
+      const mainWindow = Zotero.getMainWindow();
+      if (!mainWindow) {
+        Zotero.alert(null, 'Zotero Name Normalizer', 'Could not get main window');
+        return { success: false, error: 'Could not get main window' };
+      }
+
+      // Pass items and fieldType as dialog parameters
+      const params = {
+        items: items.map(item => item.id),  // Pass item IDs
+        fieldType: fieldType
+      };
+
+      // Open the dialog - it will handle field normalization
+      mainWindow.openDialog(
+        'chrome://zoteronamenormalizer/content/dialog.html',
+        'zotero-field-normalizer-dialog',
+        'chrome,centerscreen,resizable=yes,width=750,height=550',
+        params
+      );
+
+      return {
+        success: true,
+        message: `Opening ${fieldType} normalization dialog`
+      };
+    } catch (error) {
+      Zotero.debug(`MenuIntegration: Error in handleFieldNormalizeAction: ${error.message}`);
+      throw error;
+    }
   }
 
   /**

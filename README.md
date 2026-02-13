@@ -63,8 +63,7 @@ Location normalization handles:
 - Country suffixes: "New York, NY" vs "New York, NY, USA"
 - Ampersand vs "and": "London & New York" vs "London and New York"
 
-Does NOT group different cities together (e.g., "New York" stays separate from
-"Oxford, New York" or "London, New York").
+Does NOT group different cities together (e.g., "New York" stays separate from "Oxford, New York" or "London, New York").
 
 ### Journals
 
@@ -73,8 +72,7 @@ Journal normalization uses strict matching to avoid grouping different journals:
 - "The" prefix: "The Journal of Philosophy" ↔ "Journal of Philosophy"
 - Ampersand vs "and": "Journal of Science & Technology" ↔ "Journal of Science and Technology"
 
-Does NOT group different journals together (e.g., "Journal of Neuroscience" stays
-separate from "Journal of Cognitive Neuroscience").
+Does NOT group different journals together (e.g., "Journal of Neuroscience" stays separate from "Journal of Cognitive Neuroscience").
 
 ### How It Works
 
@@ -83,8 +81,6 @@ separate from "Journal of Cognitive Neuroscience").
 2. Review the suggested groups - each shows variants and item counts
 3. Edit the normalized value if needed, or apply the suggested normalization
 4. Confirm to apply changes to your library
-
-For developer setup and build/test instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Usage
 -----

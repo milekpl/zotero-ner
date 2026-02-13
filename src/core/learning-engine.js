@@ -4,6 +4,18 @@
 class LearningEngine {
   // Constants for similarity calculations
   static get CONFIDENCE_THRESHOLD() { return 0.8; }
+
+  // Scoped mappings key for storage
+  static get SCOPED_MAPPINGS_KEY() { return 'field_normalizer_scoped_mappings'; }
+
+  // Field types for scoped mappings
+  static get FIELD_TYPES() {
+    return {
+      PUBLISHER: 'publisher',
+      LOCATION: 'location',
+      JOURNAL: 'journal'
+    };
+  }
   static get JARO_WINKLER_WEIGHT() { return 0.5; }
   static get LCS_WEIGHT() { return 0.3; }
   static get INITIAL_MATCHING_WEIGHT() { return 0.2; }
@@ -42,6 +54,10 @@ class LearningEngine {
     this.loadSettings();
     this.loadDistinctPairs();
     this.loadSkippedPairs();
+
+    // Scoped mappings initialization
+    this.scopedMappings = new Map();
+    this.loadScopedMappings();
   }
 
   /**
@@ -55,13 +71,15 @@ class LearningEngine {
     } else {
       // For Node.js environment, use a simple in-memory store
       // In a real Zotero extension, this would use Zotero's storage APIs
-      if (!global._nameNormalizerStorage) {
-        global._nameNormalizerStorage = {};
+      // Use globalThis for cross-environment compatibility
+      const globalObj = typeof globalThis !== 'undefined' ? globalThis : (typeof global !== 'undefined' ? global : {});
+      if (!globalObj._nameNormalizerStorage) {
+        globalObj._nameNormalizerStorage = {};
       }
       return {
-        getItem: (key) => global._nameNormalizerStorage[key] || null,
-        setItem: (key, value) => { global._nameNormalizerStorage[key] = value; },
-        removeItem: (key) => { delete global._nameNormalizerStorage[key]; }
+        getItem: (key) => globalObj._nameNormalizerStorage[key] || null,
+        setItem: (key, value) => { globalObj._nameNormalizerStorage[key] = value; },
+        removeItem: (key) => { delete globalObj._nameNormalizerStorage[key]; }
       };
     }
   }
@@ -1036,6 +1054,125 @@ class LearningEngine {
     return {
       skippedCount: this.skippedPairs ? this.skippedPairs.size : 0
     };
+  }
+
+  // ============ Scoped Mappings Methods ============
+
+  /**
+   * Load scoped mappings from storage
+   */
+  async loadScopedMappings() {
+    try {
+      const storage = this.getStorage();
+      const stored = storage.getItem(LearningEngine.SCOPED_MAPPINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Convert back to Map
+        this.scopedMappings = new Map(parsed);
+      }
+    } catch (error) {
+      console.error('Error loading scoped mappings:', error);
+      this.scopedMappings = new Map();
+    }
+  }
+
+  /**
+   * Save scoped mappings to storage
+   */
+  async saveScopedMappings() {
+    try {
+      const storage = this.getStorage();
+      const serialized = JSON.stringify([...this.scopedMappings.entries()]);
+      storage.setItem(LearningEngine.SCOPED_MAPPINGS_KEY, serialized);
+    } catch (error) {
+      console.error('Error saving scoped mappings:', error);
+    }
+  }
+
+  /**
+   * Create a scoped key for mapping lookups
+   * Format: ${scope}::${fieldType}::${canonicalKey}
+   * @param {string} rawValue - Raw value to create key for
+   * @param {string} fieldType - Field type (publisher, location, journal)
+   * @param {string|null} collectionId - Collection ID or null for global scope
+   * @returns {string} Scoped key
+   */
+  createScopedKey(rawValue, fieldType, collectionId) {
+    const scope = collectionId || 'global';
+    const canonicalKey = this.createCanonicalKey(rawValue);
+    return `${scope}::${fieldType}::${canonicalKey}`;
+  }
+
+  /**
+   * Store a scoped mapping
+   * @param {string} rawValue - Original raw value
+   * @param {string} normalizedValue - User-accepted normalized form
+   * @param {string} fieldType - Field type (publisher, location, journal)
+   * @param {string|null} collectionId - Collection ID or null for global scope
+   */
+  async storeScopedMapping(rawValue, normalizedValue, fieldType, collectionId) {
+    const scopedKey = this.createScopedKey(rawValue, fieldType, collectionId);
+    const now = Date.now();
+
+    if (this.scopedMappings.has(scopedKey)) {
+      // Update existing mapping
+      const existing = this.scopedMappings.get(scopedKey);
+      existing.normalized = normalizedValue;
+      existing.lastUsed = now;
+      existing.usageCount = (existing.usageCount || 0) + 1;
+    } else {
+      // Create new mapping
+      this.scopedMappings.set(scopedKey, {
+        raw: rawValue,
+        normalized: normalizedValue,
+        fieldType: fieldType,
+        scope: collectionId || 'global',
+        timestamp: now,
+        lastUsed: now,
+        usageCount: 1
+      });
+    }
+
+    await this.saveScopedMappings();
+  }
+
+  /**
+   * Get a scoped mapping
+   * First checks exact scope (collectionId), then global scope (collectionId === null)
+   * NO fallback to global mappings
+   * @param {string} rawValue - Raw value to look up
+   * @param {string} fieldType - Field type (publisher, location, journal)
+   * @param {string|null} collectionId - Collection ID or null for global scope
+   * @returns {string|null} Normalized form if found
+   */
+  getScopedMapping(rawValue, fieldType, collectionId) {
+    const canonicalKey = this.createCanonicalKey(rawValue);
+
+    // Check exact scope first
+    const scope = collectionId || 'global';
+    const scopedKey = `${scope}::${fieldType}::${canonicalKey}`;
+    const scopedMapping = this.scopedMappings.get(scopedKey);
+
+    if (scopedMapping) {
+      // Update usage
+      scopedMapping.lastUsed = Date.now();
+      scopedMapping.usageCount = (scopedMapping.usageCount || 0) + 1;
+      return scopedMapping.normalized;
+    }
+
+    // If collectionId is not null, check global scope (collectionId === null)
+    if (collectionId !== null) {
+      const globalKey = `global::${fieldType}::${canonicalKey}`;
+      const globalMapping = this.scopedMappings.get(globalKey);
+
+      if (globalMapping) {
+        globalMapping.lastUsed = Date.now();
+        globalMapping.usageCount = (globalMapping.usageCount || 0) + 1;
+        return globalMapping.normalized;
+      }
+    }
+
+    return null;
   }
 }
 

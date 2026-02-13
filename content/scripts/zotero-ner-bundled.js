@@ -629,6 +629,18 @@ if (typeof console === 'undefined') {
         static get CONFIDENCE_THRESHOLD() {
           return 0.8;
         }
+        // Scoped mappings key for storage
+        static get SCOPED_MAPPINGS_KEY() {
+          return "field_normalizer_scoped_mappings";
+        }
+        // Field types for scoped mappings
+        static get FIELD_TYPES() {
+          return {
+            PUBLISHER: "publisher",
+            LOCATION: "location",
+            JOURNAL: "journal"
+          };
+        }
         static get JARO_WINKLER_WEIGHT() {
           return 0.5;
         }
@@ -669,6 +681,8 @@ if (typeof console === 'undefined') {
           this.loadSettings();
           this.loadDistinctPairs();
           this.loadSkippedPairs();
+          this.scopedMappings = /* @__PURE__ */ new Map();
+          this.loadScopedMappings();
         }
         /**
          * Get the storage object based on environment
@@ -679,16 +693,17 @@ if (typeof console === 'undefined') {
           } else if (typeof window !== "undefined" && window.localStorage) {
             return window.localStorage;
           } else {
-            if (!global._nameNormalizerStorage) {
-              global._nameNormalizerStorage = {};
+            const globalObj = typeof globalThis !== "undefined" ? globalThis : typeof global !== "undefined" ? global : {};
+            if (!globalObj._nameNormalizerStorage) {
+              globalObj._nameNormalizerStorage = {};
             }
             return {
-              getItem: (key) => global._nameNormalizerStorage[key] || null,
+              getItem: (key) => globalObj._nameNormalizerStorage[key] || null,
               setItem: (key, value) => {
-                global._nameNormalizerStorage[key] = value;
+                globalObj._nameNormalizerStorage[key] = value;
               },
               removeItem: (key) => {
-                delete global._nameNormalizerStorage[key];
+                delete globalObj._nameNormalizerStorage[key];
               }
             };
           }
@@ -1468,6 +1483,106 @@ if (typeof console === 'undefined') {
           return {
             skippedCount: this.skippedPairs ? this.skippedPairs.size : 0
           };
+        }
+        // ============ Scoped Mappings Methods ============
+        /**
+         * Load scoped mappings from storage
+         */
+        async loadScopedMappings() {
+          try {
+            const storage = this.getStorage();
+            const stored = storage.getItem(_LearningEngine.SCOPED_MAPPINGS_KEY);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              this.scopedMappings = new Map(parsed);
+            }
+          } catch (error) {
+            console.error("Error loading scoped mappings:", error);
+            this.scopedMappings = /* @__PURE__ */ new Map();
+          }
+        }
+        /**
+         * Save scoped mappings to storage
+         */
+        async saveScopedMappings() {
+          try {
+            const storage = this.getStorage();
+            const serialized = JSON.stringify([...this.scopedMappings.entries()]);
+            storage.setItem(_LearningEngine.SCOPED_MAPPINGS_KEY, serialized);
+          } catch (error) {
+            console.error("Error saving scoped mappings:", error);
+          }
+        }
+        /**
+         * Create a scoped key for mapping lookups
+         * Format: ${scope}::${fieldType}::${canonicalKey}
+         * @param {string} rawValue - Raw value to create key for
+         * @param {string} fieldType - Field type (publisher, location, journal)
+         * @param {string|null} collectionId - Collection ID or null for global scope
+         * @returns {string} Scoped key
+         */
+        createScopedKey(rawValue, fieldType, collectionId) {
+          const scope = collectionId || "global";
+          const canonicalKey = this.createCanonicalKey(rawValue);
+          return `${scope}::${fieldType}::${canonicalKey}`;
+        }
+        /**
+         * Store a scoped mapping
+         * @param {string} rawValue - Original raw value
+         * @param {string} normalizedValue - User-accepted normalized form
+         * @param {string} fieldType - Field type (publisher, location, journal)
+         * @param {string|null} collectionId - Collection ID or null for global scope
+         */
+        async storeScopedMapping(rawValue, normalizedValue, fieldType, collectionId) {
+          const scopedKey = this.createScopedKey(rawValue, fieldType, collectionId);
+          const now = Date.now();
+          if (this.scopedMappings.has(scopedKey)) {
+            const existing = this.scopedMappings.get(scopedKey);
+            existing.normalized = normalizedValue;
+            existing.lastUsed = now;
+            existing.usageCount = (existing.usageCount || 0) + 1;
+          } else {
+            this.scopedMappings.set(scopedKey, {
+              raw: rawValue,
+              normalized: normalizedValue,
+              fieldType,
+              scope: collectionId || "global",
+              timestamp: now,
+              lastUsed: now,
+              usageCount: 1
+            });
+          }
+          await this.saveScopedMappings();
+        }
+        /**
+         * Get a scoped mapping
+         * First checks exact scope (collectionId), then global scope (collectionId === null)
+         * NO fallback to global mappings
+         * @param {string} rawValue - Raw value to look up
+         * @param {string} fieldType - Field type (publisher, location, journal)
+         * @param {string|null} collectionId - Collection ID or null for global scope
+         * @returns {string|null} Normalized form if found
+         */
+        getScopedMapping(rawValue, fieldType, collectionId) {
+          const canonicalKey = this.createCanonicalKey(rawValue);
+          const scope = collectionId || "global";
+          const scopedKey = `${scope}::${fieldType}::${canonicalKey}`;
+          const scopedMapping = this.scopedMappings.get(scopedKey);
+          if (scopedMapping) {
+            scopedMapping.lastUsed = Date.now();
+            scopedMapping.usageCount = (scopedMapping.usageCount || 0) + 1;
+            return scopedMapping.normalized;
+          }
+          if (collectionId !== null) {
+            const globalKey = `global::${fieldType}::${canonicalKey}`;
+            const globalMapping = this.scopedMappings.get(globalKey);
+            if (globalMapping) {
+              globalMapping.lastUsed = Date.now();
+              globalMapping.usageCount = (globalMapping.usageCount || 0) + 1;
+              return globalMapping.normalized;
+            }
+          }
+          return null;
         }
       };
       if (typeof module !== "undefined" && module.exports) {
@@ -4497,7 +4612,105 @@ if (typeof console === 'undefined') {
          * Register menu items with Zotero
          */
         registerMenuItems() {
-          console.log("Registered menu items for name normalization");
+          console.log("Registered menu items for data normalization");
+          this.registerFieldMenuItems();
+        }
+        /**
+         * Register field-specific menu items under Tools > Normalize Field Data
+         * Creates submenu with Publisher, Location, and Journal normalization options
+         */
+        registerFieldMenuItems() {
+          if (typeof Zotero === "undefined") {
+            console.log("Zotero context not available, skipping field menu registration");
+            return;
+          }
+          try {
+            const mainWindow = Zotero.getMainWindow();
+            if (!mainWindow) {
+              console.log("Could not get Zotero main window");
+              return;
+            }
+            const doc = mainWindow.document;
+            if (!doc) {
+              console.log("Could not get main window document");
+              return;
+            }
+            const toolsMenu = doc.querySelector("#menu_ToolsPopup");
+            if (!toolsMenu) {
+              console.log("Could not find Tools menu");
+              return;
+            }
+            const separator = doc.createElement("menuseparator");
+            toolsMenu.appendChild(separator);
+            const fieldSubmenu = doc.createElement("menu");
+            fieldSubmenu.setAttribute("label", "Normalize Field Data");
+            fieldSubmenu.setAttribute("id", "zotero-ner-field-normalization-menu");
+            const fieldTypes = [
+              { id: "publisher", label: "Publisher" },
+              { id: "location", label: "Location" },
+              { id: "journal", label: "Journal" }
+            ];
+            for (const fieldType of fieldTypes) {
+              const menuItem = doc.createElement("menuitem");
+              menuItem.setAttribute("id", `zotero-ner-normalize-${fieldType.id}`);
+              menuItem.setAttribute("label", `Normalize ${fieldType.label}`);
+              menuItem.addEventListener("command", async () => {
+                await this.handleFieldNormalizeAction(fieldType.id);
+              });
+              fieldSubmenu.appendChild(menuItem);
+            }
+            toolsMenu.appendChild(fieldSubmenu);
+            console.log("Registered field normalization menu items: Publisher, Location, Journal");
+          } catch (error) {
+            console.error("Error registering field menu items:", error);
+          }
+        }
+        /**
+         * Handle field-specific normalize action for selected items
+         * Opens the dialog with field type parameter
+         * @param {string} fieldType - Type of field to normalize (publisher, location, journal)
+         * @returns {Promise<Object>} Result object with success/error status
+         */
+        async handleFieldNormalizeAction(fieldType) {
+          if (typeof Zotero === "undefined") {
+            throw new Error("This feature requires Zotero context");
+          }
+          try {
+            const zoteroPane = Zotero.getActiveZoteroPane();
+            if (!zoteroPane) {
+              Zotero.alert(null, "Zotero Name Normalizer", "Could not get Zotero pane");
+              return { success: false, error: "Could not get Zotero pane" };
+            }
+            const items = zoteroPane.getSelectedItems();
+            if (!items || items.length === 0) {
+              Zotero.alert(null, "Zotero Name Normalizer", "Please select items to normalize");
+              return { success: false, error: "No items selected" };
+            }
+            console.log(`Handling ${fieldType} normalization for ${items.length} items`);
+            const mainWindow = Zotero.getMainWindow();
+            if (!mainWindow) {
+              Zotero.alert(null, "Zotero Name Normalizer", "Could not get main window");
+              return { success: false, error: "Could not get main window" };
+            }
+            const params = {
+              items: items.map((item) => item.id),
+              // Pass item IDs
+              fieldType
+            };
+            mainWindow.openDialog(
+              "chrome://zoteronamenormalizer/content/dialog.html",
+              "zotero-field-normalizer-dialog",
+              "chrome,centerscreen,resizable=yes,width=750,height=550",
+              params
+            );
+            return {
+              success: true,
+              message: `Opening ${fieldType} normalization dialog`
+            };
+          } catch (error) {
+            Zotero.debug(`MenuIntegration: Error in handleFieldNormalizeAction: ${error.message}`);
+            throw error;
+          }
         }
         /**
          * Handle normalize action for selected items
