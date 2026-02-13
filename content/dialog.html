@@ -411,6 +411,133 @@
         max-height: none;
       }
     }
+    /* Field normalization section */
+    #field-normalization-section {
+      display: none;
+      padding: 10px;
+    }
+    #field-normalization-section h2 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    #field-filter-bar {
+      margin: 12px 0 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #field-filter-input {
+      flex: 1 1 150px;
+      max-width: 200px;
+      padding: 4px 6px;
+      border: 1px solid #c9d1d9;
+      border-radius: 4px;
+      font-size: 0.85em;
+      background: #fff;
+    }
+    #field-filter-input:focus {
+      outline: none;
+      border-color: #007acc;
+      box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.15);
+    }
+    #field-filter-summary {
+      font-size: 0.9em;
+      color: #4b5563;
+      white-space: nowrap;
+    }
+    #field-layout {
+      display: block;
+      width: 100%;
+    }
+    #field-values-column {
+      width: 100%;
+      overflow-y: auto;
+      max-height: calc(100vh - 250px);
+    }
+    #field-detail-panel {
+      display: none; /* Not used for field normalization */
+    }
+    .field-group {
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      margin: 0 0 8px 0;
+      background: #fff;
+    }
+    .field-group.selected {
+      background-color: #e3f2fd;
+      border-color: #2196f3;
+    }
+    .field-group-header {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .field-group-header:last-child {
+      border-bottom: none;
+    }
+    .field-value-display {
+      font-weight: 600;
+      font-size: 1em;
+      color: #222;
+    }
+    .field-count {
+      font-size: 0.85em;
+      color: #555;
+      margin-top: 2px;
+    }
+    .field-normalized-section {
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-top: 1px solid #eee;
+    }
+    .field-normalized-label {
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .field-normalized-input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #c9d1d9;
+      border-radius: 4px;
+      font-size: 0.9em;
+      box-sizing: border-box;
+    }
+    .field-normalized-input:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+    .field-pill {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.85em;
+      cursor: pointer;
+      margin: 2px;
+      border: 1px solid transparent;
+    }
+    .field-pill-normalized {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-color: #a5d6a7;
+    }
+    .field-pill-unnormalized {
+      background: #fff3e0;
+      color: #e65100;
+      border-color: #ffcc80;
+    }
+    .field-pill.selected {
+      box-shadow: 0 0 0 2px #2196f3;
+    }
+    @media (max-width: 960px) {
+      #field-layout {
+        grid-template-columns: 1fr;
+      }
+      #field-detail-panel {
+        position: static;
+        max-height: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -472,6 +599,8 @@
   <script type="application/javascript" src="chrome://zoteronamenormalizer/content/scripts/zotero-ner-bundled.js"></script>
   <script type="application/javascript">
     /* global Zotero, ZoteroNER */
+
+    console.log('DIALOG-SCRIPT: Inline script starting');
 
     // HTML DOM utils
     const ZoteroNER_HTMLUtils = {
@@ -600,6 +729,49 @@
     lastHeartbeat: null,
     progressUpdateTimer: null,
 
+      /**
+       * Get Zotero API reference from dialog context
+       * Tries multiple patterns in order of preference
+       * @returns {Object|null} Zotero API or null if unavailable
+       */
+      getZotero: function() {
+        // Pattern 1: window.opener.Zotero (for dialogs opened via openDialog)
+        if (window.opener && window.opener.Zotero) {
+          return window.opener.Zotero;
+        }
+
+        // Pattern 2: parent frame Zotero (for iframes)
+        let current = window;
+        while (current.parent && current.parent !== current) {
+          if (current.parent.Zotero) {
+            return current.parent.Zotero;
+          }
+          current = current.parent;
+        }
+
+        // Pattern 3: Global Zotero (may not be available in dialog context)
+        if (typeof Zotero !== 'undefined') {
+          return Zotero;
+        }
+
+        return null;
+      },
+
+      /**
+       * Escape HTML special characters
+       * @param {string} str - String to escape
+       * @returns {string} Escaped string
+       */
+      escapeHtml: function(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      },
+
       init: function() {
         console.log('Dialog initialization started');
         this.userSelections = new Map();
@@ -674,6 +846,7 @@
         this.setupFilterInput();
         this.setupKeyboardShortcuts();
         this.setupExportShortcut();
+        this.setupFieldEventListeners();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
           this.alert('Error', 'Failed to initialize: ' + error.message);
@@ -707,6 +880,7 @@
           let items;
           let analysisResults;
           let analysisResultsJSON;
+          let fieldType;
 
           try {
             items = raw.getProperty('items');
@@ -726,11 +900,16 @@
             this.log('Unable to read analysisResultsJSON from param bag: ' + err.message);
           }
 
-          if (analysisResultsJSON || analysisResults || items) {
+          try {
+            fieldType = raw.getProperty('fieldType');
+          } catch (err) {}
+
+          if (analysisResultsJSON || analysisResults || items || fieldType) {
             return {
               items,
               analysisResults,
-              analysisResultsJSON
+              analysisResultsJSON,
+              fieldType
             };
           }
         }
@@ -943,6 +1122,73 @@
         });
       },
 
+      setupFieldEventListeners: function() {
+        // Apply field button
+        const applyFieldBtn = document.getElementById('apply-field-button');
+        if (applyFieldBtn) {
+          applyFieldBtn.addEventListener('click', async () => {
+            const result = await this.applySelectedFieldNormalizations();
+            if (result.success && result.applied > 0) {
+              this.alert('Field Normalizer', 'Successfully normalized ' + result.applied + ' item(s).');
+              window.close();
+            } else if (result.success) {
+              this.alert('Field Normalizer', 'No changes to apply.');
+            } else {
+              this.alert('Field Normalizer', 'Error: ' + result.error);
+            }
+          });
+        }
+
+        // Apply all field button
+        const applyAllFieldBtn = document.getElementById('apply-all-field-button');
+        if (applyAllFieldBtn) {
+          applyAllFieldBtn.addEventListener('click', async () => {
+            let pendingCount = 0;
+            this.fieldSelections.forEach(selection => {
+              if (selection.apply) pendingCount++;
+            });
+
+            if (pendingCount === 0) {
+              this.alert('Field Normalizer', 'No normalizations selected.');
+              return;
+            }
+
+            const confirmed = window.confirm(
+              'You are about to apply ' + pendingCount + ' normalization(s) to your library.\n\n' +
+              'This will modify field values in ' + pendingCount + ' item(s).\n\n' +
+              'Are you sure you want to continue?'
+            );
+
+            if (confirmed) {
+              const result = await this.applySelectedFieldNormalizations();
+              if (result.success && result.applied > 0) {
+                this.alert('Field Normalizer', 'Successfully normalized ' + result.applied + ' item(s).');
+                window.close();
+              } else {
+                this.alert('Field Normalizer', 'Error: ' + result.error);
+              }
+            }
+          });
+        }
+
+        // Cancel field button
+        const cancelFieldBtn = document.getElementById('cancel-field-button');
+        if (cancelFieldBtn) {
+          cancelFieldBtn.addEventListener('click', () => {
+            window.close();
+          });
+        }
+
+        // Field filter input
+        const fieldFilterInput = document.getElementById('field-filter-input');
+        if (fieldFilterInput) {
+          fieldFilterInput.addEventListener('input', () => {
+            this.filterText = fieldFilterInput.value;
+            this.populateFieldValues();
+          });
+        }
+      },
+
       exportToJSON: async function() {
         if (!this.analysisResults || !this.analysisResults.suggestions) {
           this.alert('Export', 'No data to export.');
@@ -1132,6 +1378,7 @@
         try {
           if (typeof window.arguments !== 'undefined' && window.arguments.length > 0) {
             params = window.arguments[0];
+            this.log('Read window.arguments');
           }
         } catch (err) {
           this.log('Unable to read window arguments: ' + err.message);
@@ -1139,6 +1386,7 @@
 
         if (params) {
           params = this.unwrapDialogParams(params);
+          this.log('Unwrapped dialog params');
         }
 
         if (!params && window.ZoteroNERDialogParams) {
@@ -1147,6 +1395,15 @@
 
         if (!params && window.ZoteroNERDialogParamsJSON) {
           params = { analysisResultsJSON: window.ZoteroNERDialogParamsJSON };
+        }
+
+        this.log('params.fieldType = ' + (params && params.fieldType));
+
+        // Check for field normalization params
+        if (params && params.fieldType) {
+          this.log('Field normalization requested for type: ' + params.fieldType);
+          await this.initializeFieldNormalization(params);
+          return;
         }
 
         if (!params && window.opener) {
@@ -1314,6 +1571,1002 @@
           emptyMsg.innerHTML = html;
           emptyMsg.style.display = 'block';
         }
+      },
+
+      /**
+       * Initialize field normalization mode
+       */
+      initializeFieldNormalization: async function(params) {
+        this.log('Initializing field normalization for: ' + params.fieldType);
+
+        // Set window title based on field type
+        const fieldTypeLabel = params.fieldType ? params.fieldType.charAt(0).toUpperCase() + params.fieldType.slice(1) : 'Field';
+        document.title = fieldTypeLabel + ' Normalization';
+
+        // Show field normalization section, hide author normalization sections
+        const fieldSection = document.getElementById('field-normalization-section');
+        const variantSection = document.getElementById('variant-section');
+        const summaryGroup = document.getElementById('summary-group');
+        const emptyMessage = document.getElementById('empty-message');
+        const actionButtons = document.querySelector('div[style="text-align: right; margin-top: 20px;"]');
+
+        if (fieldSection) {
+          fieldSection.style.display = 'block';
+        }
+        if (variantSection) {
+          variantSection.style.display = 'none';
+        }
+        if (summaryGroup) {
+          summaryGroup.style.display = 'none';
+        }
+        if (emptyMessage) {
+          emptyMessage.style.display = 'none';
+        }
+        if (actionButtons) {
+          actionButtons.style.display = 'none';
+        }
+
+        // Map UI field types to actual Zotero field names
+        const fieldTypeMap = {
+          'publisher': 'publisher',
+          'location': 'place',
+          'journal': 'publicationTitle'
+        };
+
+        // Set field type based on params
+        const fieldType = params.fieldType || 'publisher';
+        const zoteroField = fieldTypeMap[fieldType] || fieldType;
+
+        // Update UI label
+        const labelEl = document.getElementById('field-type-label');
+        if (labelEl) {
+          labelEl.textContent = fieldType;
+        }
+
+        // Get Zotero and items
+        const Zotero = this.getZotero();
+        if (!Zotero) {
+          this.log('Zotero not available');
+          this.showEmptyState('Zotero is not available. Field normalization requires Zotero.');
+          return;
+        }
+
+        // Load all items from user's library
+        let items = [];
+        try {
+          const libraryID = Zotero.Libraries.userLibraryID;
+          if (!libraryID) {
+            throw new Error('Could not determine user library ID');
+          }
+          items = await Zotero.Items.getAll(libraryID);
+          this.log('Found ' + items.length + ' items in library');
+        } catch (err) {
+          this.log('Error loading items: ' + err.message);
+          this.showEmptyState('Failed to load items: ' + err.message);
+          return;
+        }
+
+        if (items.length === 0) {
+          this.showEmptyState('No items found in library.');
+          return;
+        }
+
+        this.log('Loaded ' + items.length + ' items for field normalization');
+
+        // Show loading state
+        this.showLoadingState('Processing ' + items.length + ' items...');
+
+        try {
+          // Process items for field normalization
+          // Pass both zoteroField (for getting values) and fieldType (for similarity logic)
+          const results = await this.processFieldItems(items, zoteroField, fieldType, null);
+          this.log('processFieldItems completed, calling displayFieldResults');
+
+          // Display results
+          await this.displayFieldResults(results, fieldType, zoteroField, null);
+          this.log('displayFieldResults completed');
+
+        } catch (err) {
+          this.log('Error in field normalization: ' + err.message);
+          this.showEmptyState('Field normalization failed: ' + err.message);
+        }
+      },
+
+      /**
+       * Process items for field normalization with fuzzy matching
+       * Groups similar values like "Oxford University Press" and "Oxford University Press USA"
+       * @param {Array} items - Array of Zotero items
+       * @param {string} zoteroField - The Zotero field name (e.g., 'publicationTitle', 'publisher')
+       * @param {string} fieldType - The UI field type (e.g., 'journal', 'publisher', 'location')
+       * @param {string|null} collectionId - Optional collection ID
+       */
+      processFieldItems: async function(items, zoteroField, fieldType, collectionId) {
+        this.log('Processing ' + items.length + ' items for ' + fieldType + ' normalization');
+
+        // Collect all unique values with their item counts
+        // For publishers and locations, we first split on separators (; and /)
+        const valueMap = new Map();
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const fieldValue = item.getField(zoteroField);
+          if (!fieldValue) continue;
+
+          // Split field values for publishers and locations
+          const parts = this.splitFieldValue(fieldValue, fieldType);
+
+          for (const part of parts) {
+            if (!valueMap.has(part)) {
+              valueMap.set(part, {
+                rawValue: part,
+                itemCount: 0,
+                items: []
+              });
+            }
+            const entry = valueMap.get(part);
+            entry.itemCount++;
+            entry.items.push(item);
+          }
+
+          // Update progress every 1000 items
+          if (i % 1000 === 0) {
+            await new Promise(r => setTimeout(r, 0));
+          }
+        }
+
+        const uniqueValues = Array.from(valueMap.values());
+
+        // Group similar values using fuzzy matching, passing fieldType
+        const groups = this.groupFieldValues(uniqueValues, fieldType);
+
+        // Convert groups to display format
+        let displayItems = [];
+        for (const group of groups) {
+          // Find the most common variant as the default
+          const sortedVariants = group.variants.sort((a, b) => b.itemCount - a.itemCount);
+          const primary = sortedVariants[0];
+
+          displayItems.push({
+            item: primary.items[0], // Reference item for the group
+            rawValue: primary.rawValue,
+            normalized: primary.rawValue, // Will be editable by user
+            variants: group.variants.map(v => v.rawValue),
+            variantData: group.variants,
+            groupKey: group.key,
+            itemCount: group.variants.reduce((sum, v) => sum + v.itemCount, 0),
+            alreadyLearned: false
+          });
+        }
+
+        // Sort by total item count (most common first)
+        displayItems.sort((a, b) => b.itemCount - a.itemCount);
+
+        // Filter out groups with only one variant (nothing to normalize)
+        const itemsWithChanges = displayItems.filter(item => item.variants.length > 1);
+        const filteredCount = displayItems.length - itemsWithChanges.length;
+        if (filteredCount > 0) {
+          this.log('Filtered out ' + filteredCount + ' groups with single variant');
+        }
+        displayItems = itemsWithChanges;
+
+        const results = {
+          fieldType: fieldType,
+          total: items.length,
+          uniqueCount: displayItems.length,
+          items: displayItems,
+          groups: groups
+        };
+
+        this.log('Found ' + results.uniqueCount + ' normalized groups from ' + uniqueValues.length + ' unique values');
+        return results;
+      },
+
+      /**
+       * Group field values that are similar
+       * Uses prefix matching and fuzzy token comparison
+       * @param {Array} values - Array of value objects with rawValue and itemCount
+       * @param {string} fieldType - The type of field (publisher, location, journal)
+       * @returns {Array} - Array of grouped values
+       */
+      groupFieldValues: function(values, fieldType) {
+        const groups = [];
+        const assigned = new Set();
+
+        // Sort by item count (most common first)
+        const sorted = [...values].sort((a, b) => b.itemCount - a.itemCount);
+
+        for (const value of sorted) {
+          if (assigned.has(value.rawValue)) continue;
+
+          // Start a new group
+          const group = {
+            key: this.getFieldValueKey(value.rawValue),
+            variants: [value]
+          };
+          assigned.add(value.rawValue);
+
+          // Find similar values to add to this group
+          for (const other of sorted) {
+            if (assigned.has(other.rawValue)) continue;
+
+            if (this.areFieldValuesSimilar(value.rawValue, other.rawValue, fieldType)) {
+              group.variants.push(other);
+              assigned.add(other.rawValue);
+            }
+          }
+
+          groups.push(group);
+        }
+
+        return groups;
+      },
+
+      /**
+       * Create a key for grouping similar field values
+       */
+      getFieldValueKey: function(value) {
+        // Normalize: lowercase, remove punctuation, get significant words
+        const normalized = value.toLowerCase()
+          .replace(/[&,\.\(\)]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        // Get tokens, keeping the first N significant words as the key
+        const tokens = normalized.split(' ').filter(t => t.length > 0);
+
+        // For publishers, first 3 words usually identify the publisher
+        // e.g., "Oxford University Press" key = "oxford university press"
+        // e.g., "Oxford University Press USA" key = "oxford university press"
+        return tokens.slice(0, 4).join(' ');
+      },
+
+      /**
+       * Split a field value by separators for multi-value fields
+       * @param {string} value - The field value to split
+       * @param {string} fieldType - The type of field (publisher, location, journal)
+       * @returns {string[]} - Array of split values
+       */
+      splitFieldValue: function(value, fieldType) {
+        if (!value || typeof value !== 'string') {
+          return [value || ''];
+        }
+
+        // Journals are typically single values - no splitting
+        if (fieldType === 'journal') {
+          return [value];
+        }
+
+        // For publishers and locations, split on ; and /
+        // Note: We don't split on comma because it's part of city/state format (e.g., "Cambridge, MA")
+        const parts = value.split(/;\s*|\/\s*/);
+
+        // Filter out empty strings and trim
+        return parts.map(p => p.trim()).filter(p => p.length > 0);
+      },
+
+      /**
+       * Check if two journal names are similar using strict rules
+       * Only allows: exact match, "The" prefix difference, & vs "and"
+       * @param {string} val1 - First journal name
+       * @param {string} val2 - Second journal name
+       * @returns {boolean} - True if similar
+       */
+      areJournalsSimilar: function(val1, val2) {
+        // Normalize: lowercase, remove punctuation
+        const norm1 = val1.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+        const norm2 = val2.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        // Exact match (case-insensitive)
+        if (norm1 === norm2) return true;
+
+        // Check for "The" prefix difference
+        // "The Journal of Philosophy" vs "Journal of Philosophy"
+        const removeThe = (s) => s.replace(/^the\s+/, '');
+        if (removeThe(norm1) === removeThe(norm2)) return true;
+
+        // Check for "&" vs "and" substitution
+        const withAnd1 = norm1.replace(/\s*&\s*/g, ' and ');
+        const withAnd2 = norm2.replace(/\s*&\s*/g, ' and ');
+        if (withAnd1 === withAnd2) return true;
+
+        // Also check with "The" removed
+        if (removeThe(withAnd1) === removeThe(withAnd2)) return true;
+
+        return false;
+      },
+
+      /**
+       * Normalize a location value by expanding/contracting US state abbreviations
+       * @param {string} loc - Location string
+       * @returns {string} - Normalized location
+       */
+      normalizeLocationState: function(loc) {
+        // US state abbreviations to full names
+        const stateAbbrToName = {
+          'al': 'alabama', 'ak': 'alaska', 'az': 'arizona', 'ar': 'arkansas',
+          'ca': 'california', 'co': 'colorado', 'ct': 'connecticut', 'de': 'delaware',
+          'fl': 'florida', 'ga': 'georgia', 'hi': 'hawaii', 'id': 'idaho',
+          'il': 'illinois', 'in': 'indiana', 'ia': 'iowa', 'ks': 'kansas',
+          'ky': 'kentucky', 'la': 'louisiana', 'me': 'maine', 'md': 'maryland',
+          'ma': 'massachusetts', 'mi': 'michigan', 'mn': 'minnesota', 'ms': 'mississippi',
+          'mo': 'missouri', 'mt': 'montana', 'ne': 'nebraska', 'nv': 'nevada',
+          'nh': 'new hampshire', 'nj': 'new jersey', 'nm': 'new mexico', 'ny': 'new york',
+          'nc': 'north carolina', 'nd': 'north dakota', 'oh': 'ohio', 'ok': 'oklahoma',
+          'or': 'oregon', 'pa': 'pennsylvania', 'ri': 'rhode island', 'sc': 'south carolina',
+          'sd': 'south dakota', 'tn': 'tennessee', 'tx': 'texas', 'ut': 'utah',
+          'vt': 'vermont', 'va': 'virginia', 'wa': 'washington', 'wv': 'west virginia',
+          'wi': 'wisconsin', 'wy': 'wyoming', 'dc': 'district of columbia'
+        };
+
+        // Common state abbreviation variants (e.g., "Mass" -> "ma", "Penn" -> "pa")
+        const stateVariants = {
+          'mass': 'ma', 'penn': 'pa', 'conn': 'ct', ' Minn': 'mn',
+          'ill': 'il', 'ken': 'ky', 'tenn': 'tn', 'wash': 'wa',
+          'col': 'co', 'ariz': 'az', 'okla': 'ok', 'n y': 'ny',
+          'n j': 'nj', 'n m': 'nm', 'n c': 'nc', 'n d': 'nd',
+          'w va': 'wv', 'wisc': 'wi', 'wis': 'wi', 'mich': 'mi',
+          'minn': 'mn', 'miss': 'ms', 'mont': 'mt', 'neb': 'ne',
+          'okla': 'ok', 'ore': 'or', 'penna': 'pa', 'penna': 'pa',
+          'ten': 'tn', 'tex': 'tx', 'wash': 'wa', 'washington d c': 'dc'
+        };
+
+        // Replace state names with abbreviations and vice versa
+        let result = loc;
+
+        // First replace common variants (Mass -> ma, Penn -> pa)
+        for (const [variant, abbr] of Object.entries(stateVariants)) {
+          const variantRegex = new RegExp('\\b' + variant + '\\b', 'gi');
+          result = result.replace(variantRegex, abbr);
+        }
+
+        // Then replace full names
+        for (const [abbr, name] of Object.entries(stateAbbrToName)) {
+          // Replace abbreviations with standard form (abbreviation)
+          const abbrRegex = new RegExp('\\b' + abbr + '\\b', 'gi');
+          result = result.replace(abbrRegex, abbr);
+          // Replace full names with abbreviations
+          const nameRegex = new RegExp('\\b' + name + '\\b', 'gi');
+          result = result.replace(nameRegex, abbr);
+        }
+
+        return result;
+      },
+
+      /**
+       * Check if two location values are similar using strict rules
+       * Only allows: exact match, punctuation differences, "&" vs "and"
+       * Allows state abbreviation differences (e.g., "Cambridge, MA" = "Cambridge, Mass.")
+       * Allows suffix differences (e.g., "New York, NY" vs "New York, NY, USA")
+       * Does NOT allow grouping different cities together (e.g., "New York" vs "Oxford, New York")
+       * @param {string} val1 - First location value
+       * @param {string} val2 - Second location value
+       * @returns {boolean} - True if similar
+       */
+      areLocationsSimilar: function(val1, val2) {
+        // Normalize: lowercase, remove punctuation except & and :
+        const norm1 = val1.toLowerCase().replace(/[,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+        const norm2 = val2.toLowerCase().replace(/[,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        // Exact match (case-insensitive)
+        if (norm1 === norm2) return true;
+
+        // Normalize state abbreviations (e.g., "mass" -> "ma", "massachusetts" -> "ma")
+        const stateNorm1 = this.normalizeLocationState(norm1);
+        const stateNorm2 = this.normalizeLocationState(norm2);
+        if (stateNorm1 === stateNorm2) return true;
+
+        // Check for "&" vs "and" substitution
+        const withAnd1 = stateNorm1.replace(/\s*&\s*/g, ' and ');
+        const withAnd2 = stateNorm2.replace(/\s*&\s*/g, ' and ');
+        if (withAnd1 === withAnd2) return true;
+
+        // Check for ":" vs ", " substitution (e.g., "Oxford: New York" vs "Oxford, New York")
+        const normalizePunct = (s) => s.replace(/:\s*/g, ', ').replace(/,\s*/g, ', ');
+        if (normalizePunct(withAnd1) === normalizePunct(withAnd2)) return true;
+
+        // Check if one is a prefix of the other (main location)
+        // "New York, NY" vs "New York, NY, USA"
+        const tokens1 = withAnd1.split(' ').filter(t => t.length > 0);
+        const tokens2 = withAnd2.split(' ').filter(t => t.length > 0);
+
+        const shorter = tokens1.length < tokens2.length ? tokens1 : tokens2;
+        const longer = tokens1.length < tokens2.length ? tokens2 : tokens1;
+
+        if (longer.slice(0, shorter.length).join(' ') === shorter.join(' ')) {
+          // Check if the extra words are common location suffixes (country, etc.)
+          const suffix = longer.slice(shorter.length).join(' ');
+          const commonSuffixes = ['usa', 'uk', 'england', 'united kingdom', 'united states'];
+          const suffixTokens = suffix.split(' ').filter(t => t.length > 0);
+
+          // Allow if suffix is short (1-2 words) and all are common suffixes
+          if (suffixTokens.length <= 2 && suffixTokens.every(t => commonSuffixes.includes(t))) {
+            return true;
+          }
+        }
+
+        return false;
+      },
+
+      /**
+       * Check if two field values are similar enough to be grouped
+       * @param {string} val1 - First field value
+       * @param {string} val2 - Second field value
+       * @param {string} fieldType - The type of field (publisher, location, journal)
+       * @returns {boolean} - True if similar
+       */
+      areFieldValuesSimilar: function(val1, val2, fieldType) {
+        // For journals and locations, use strict matching
+        // They are proper nouns that should not be grouped unless truly equivalent
+        if (fieldType === 'journal') {
+          return this.areJournalsSimilar(val1, val2);
+        }
+        if (fieldType === 'location') {
+          return this.areLocationsSimilar(val1, val2);
+        }
+
+        const norm1 = val1.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+        const norm2 = val2.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        // Exact match
+        if (norm1 === norm2) return true;
+
+        const tokens1 = norm1.split(' ').filter(t => t.length > 0);
+        const tokens2 = norm2.split(' ').filter(t => t.length > 0);
+
+        // Check if one is a prefix of the other (main publisher name)
+        // "Oxford University Press" vs "Oxford University Press USA"
+        const shorter = tokens1.length < tokens2.length ? tokens1 : tokens2;
+        const longer = tokens1.length < tokens2.length ? tokens2 : tokens1;
+
+        if (longer.slice(0, shorter.length).join(' ') === shorter.join(' ')) {
+          // Check if the extra words are common suffixes (country, state, etc.)
+          const suffix = longer.slice(shorter.length).join(' ');
+          const commonSuffixes = ['usa', 'uk', 'n y', 'ny', 'london', 'new york', 'berlin', 'paris', 'massachusetts', 'cambridge', 'oxford', 'harvard', 'mit', 'press', 'edition', 'inc', 'ltd', 'co'];
+          const suffixTokens = suffix.split(' ').filter(t => t.length > 0);
+
+          // Allow if suffix is short (1-2 words) and all are common
+          if (suffixTokens.length <= 2 && suffixTokens.every(t => commonSuffixes.includes(t))) {
+            return true;
+          }
+          // Allow if suffix looks like a location abbreviation
+          if (suffixTokens.length === 1 && suffixTokens[0].length <= 4) {
+            return true;
+          }
+        }
+
+        // Check for "&" vs "and" substitution
+        const withAnd1 = norm1.replace(/\s*&\s*/g, ' and ');
+        const withAnd2 = norm2.replace(/\s*&\s*/g, ' and ');
+        if (withAnd1 === withAnd2) return true;
+
+        // Check if they're very similar (Jaccard similarity > 0.6)
+        const set1 = new Set(tokens1);
+        const set2 = new Set(tokens2);
+        const intersection = new Set([...set1].filter(x => set2.has(x)));
+        const union = new Set([...set1, ...set2]);
+
+        if (union.size > 0) {
+          const similarity = intersection.size / union.size;
+          if (similarity > 0.6) return true;
+        }
+
+        return false;
+      },
+
+      /**
+       * Display field normalization results
+       */
+      displayFieldResults: async function(results, fieldType, zoteroField, collectionId) {
+        this.log('>>> displayFieldResults ENTER');
+        this.log('Displaying field normalization results for ' + fieldType);
+
+        // Store field results for later use
+        this.fieldResults = results;
+        this.fieldResultsZoteroField = zoteroField;
+        this.fieldSelections = new Map();
+
+        // Hide author normalization containers
+        ZoteroNER_HTMLUtils.setHidden('progress-container', true);
+        ZoteroNER_HTMLUtils.setHidden('summary-group', true);
+        ZoteroNER_HTMLUtils.setHidden('variant-section', true);
+        ZoteroNER_HTMLUtils.setHidden('empty-message', true);
+
+        // Show field normalization section
+        const fieldSection = document.getElementById('field-normalization-section');
+        if (fieldSection) {
+          fieldSection.style.display = 'block';
+        }
+
+        // Update title
+        const titleEl = document.getElementById('field-normalization-title');
+        if (titleEl) {
+          const typeLabel = fieldType.charAt(0).toUpperCase() + fieldType.slice(1);
+          titleEl.textContent = typeLabel + ' Normalization';
+        }
+
+        // Hide progress
+        const progressEl = document.getElementById('field-progress-container');
+        if (progressEl) {
+          progressEl.style.display = 'none';
+        }
+
+        this.log('Field display: items=' + (results.items ? results.items.length : 'null'));
+
+        if (!results.items || results.items.length === 0) {
+          this.log('No ' + fieldType + ' values found');
+          ZoteroNER_HTMLUtils.setHidden('field-summary', true);
+          ZoteroNER_HTMLUtils.setHidden('field-values-column', true);
+          const emptyMsg = document.getElementById('field-empty-message');
+          if (emptyMsg) {
+            emptyMsg.style.display = 'block';
+            emptyMsg.innerHTML = '<p>No ' + fieldType + ' values found.</p>';
+          }
+          return;
+        }
+
+        this.log('Field display: showing ' + results.items.length + ' items');
+
+        // Show summary
+        ZoteroNER_HTMLUtils.setHidden('field-summary', false);
+        ZoteroNER_HTMLUtils.setText('field-total-values', String(results.uniqueCount));
+
+        // Populate field values
+        this.log('Field display: calling populateFieldValues');
+        this.populateFieldValues();
+        this.log('Field display: populateFieldValues returned');
+
+        // Update pending changes count (counts groups with multiple variants)
+        this.log('Field display: calling updateFieldPendingCount');
+        this.updateFieldPendingCount();
+
+        // Enable apply buttons
+        this.log('Field display: calling updateFieldApplyButtonState');
+        this.updateFieldApplyButtonState();
+
+        this.log('Field normalization UI displayed with ' + results.uniqueCount + ' unique values');
+      },
+
+      /**
+       * Populate field value groups (reuses variant group structure)
+       */
+      populateFieldValues: function() {
+        this.log('>>> populateFieldValues ENTER');
+        const container = document.getElementById('field-values-container');
+        if (!container) {
+          this.log('ERROR: field-values-container not found');
+          return false;
+        }
+
+        try {
+        container.innerHTML = '';
+
+        const items = this.fieldResults ? this.fieldResults.items : [];
+        this.log('populateFieldValues: items=' + items.length);
+        const totalItems = items.length;
+
+        if (totalItems === 0) {
+          ZoteroNER_HTMLUtils.setHidden('field-values-column', true);
+          const emptyMsg = document.getElementById('field-empty-message');
+          if (emptyMsg) {
+            emptyMsg.style.display = 'block';
+            emptyMsg.innerHTML = '<p>No values found.</p>';
+          }
+          return false;
+        }
+
+        ZoteroNER_HTMLUtils.setHidden('field-values-column', false);
+        const emptyMsg = document.getElementById('field-empty-message');
+        if (emptyMsg) {
+          emptyMsg.style.display = 'none';
+        }
+
+        const filterQuery = (this.filterText || '').toLowerCase();
+        let visibleCount = 0;
+
+        items.forEach((item, index) => {
+          // Check filter
+          if (filterQuery && !item.rawValue.toLowerCase().includes(filterQuery)) {
+            return;
+          }
+
+          visibleCount++;
+          this.ensureFieldSelection(index, item);
+
+          const groupEl = ZoteroNER_HTMLUtils.createElement('div', {
+            class: 'field-group',
+            'data-field-index': String(index)
+          });
+
+          // Header with field value
+          const headerEl = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-group-header' });
+          const valueEl = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-value-display' });
+          valueEl.textContent = item.rawValue;
+          headerEl.appendChild(valueEl);
+
+          const countEl = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-count' });
+          const variantCount = item.variants ? item.variants.length : 1;
+          countEl.textContent = item.itemCount + ' item' + (item.itemCount > 1 ? 's' : '') +
+            (variantCount > 1 ? ' in ' + variantCount + ' variants' : '');
+          headerEl.appendChild(countEl);
+
+          groupEl.appendChild(headerEl);
+
+          // Show variants if there are multiple
+          if (item.variants && item.variants.length > 1) {
+            const variantsSection = ZoteroNER_HTMLUtils.createElement('div', {
+              class: 'field-variants-section',
+              style: 'padding: 8px 12px; background: #f5f5f5; border-top: 1px solid #eee; font-size: 0.85em;'
+            });
+            const variantsLabel = ZoteroNER_HTMLUtils.createElement('div', {
+              style: 'color: #666; margin-bottom: 4px;'
+            });
+            variantsLabel.textContent = 'Variants:';
+            variantsSection.appendChild(variantsLabel);
+
+            const variantsList = ZoteroNER_HTMLUtils.createElement('div', {
+              style: 'display: flex; flex-wrap: wrap; gap: 4px;'
+            });
+
+            item.variantData.forEach((v, vIndex) => {
+              const pill = ZoteroNER_HTMLUtils.createElement('span', {
+                style: 'display: inline-block; padding: 2px 8px; background: #e0e0e0; border-radius: 12px; font-size: 0.9em;'
+              });
+              pill.textContent = v.rawValue + ' (' + v.itemCount + ')';
+              if (vIndex === 0) {
+                pill.style.fontWeight = 'bold';
+                pill.style.background = '#d4edda';
+              }
+              variantsList.appendChild(pill);
+            });
+
+            variantsSection.appendChild(variantsList);
+            groupEl.appendChild(variantsSection);
+          }
+
+          // Normalized input section
+          const normSection = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-normalized-section' });
+          const normLabel = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-normalized-label' });
+          normLabel.textContent = 'Normalize all variants to:';
+          normSection.appendChild(normLabel);
+
+          const inputRow = ZoteroNER_HTMLUtils.createElement('div', {
+            style: 'display: flex; gap: 8px;'
+          });
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'field-normalized-input';
+          input.style.cssText = 'flex: 1;';
+          input.placeholder = item.rawValue;
+          // Pre-fill with primary variant (first one in sorted list) as suggestion
+          const primaryVariant = item.variantData && item.variantData[0] ? item.variantData[0].rawValue : item.rawValue;
+          input.value = primaryVariant;
+          input.setAttribute('data-idx', index);
+
+          inputRow.appendChild(input);
+
+          // Individual Apply button - use inline onclick
+          const applyBtn = document.createElement('button');
+          applyBtn.type = 'button';
+          applyBtn.style.cssText = 'padding: 6px 12px; cursor: pointer;';
+          applyBtn.textContent = 'Apply';
+          applyBtn.onclick = function() {
+            // Disable button to prevent double-click
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Applying...';
+            // Re-enable after a short delay to allow the function to complete
+            setTimeout(() => {
+              window.applyFieldNormalization(index).then(() => {
+                applyBtn.textContent = 'Applied';
+              }).catch(() => {
+                applyBtn.disabled = false;
+                applyBtn.textContent = 'Apply';
+              });
+            }, 50);
+          };
+          inputRow.appendChild(applyBtn);
+
+          normSection.appendChild(inputRow);
+          groupEl.appendChild(normSection);
+
+          container.appendChild(groupEl);
+        });
+
+        this.updateFieldFilterSummary(visibleCount, totalItems);
+        return true;
+        } catch (err) {
+          this.log('ERROR in populateFieldValues: ' + err.message + '\n' + err.stack);
+        }
+      },
+
+      /**
+       * Ensure a selection exists for a field value
+       */
+      ensureFieldSelection: function(index, item) {
+        if (!this.fieldSelections) {
+          this.fieldSelections = new Map();
+        }
+
+        if (!this.fieldSelections.has(index)) {
+          // Get the actual input value from the DOM - use correct selector for input with data-idx attribute
+          const inputEl = document.querySelector('input[data-idx="' + index + '"]');
+          const inputValue = inputEl ? inputEl.value : item.rawValue;
+
+          // Check if there's a change to apply
+          const hasChange = (inputValue !== item.rawValue);
+
+          this.fieldSelections.set(index, {
+            normalized: inputValue,
+            apply: hasChange,
+            rawValue: item.rawValue
+          });
+        }
+      },
+
+      /**
+       * Handle field normalization input change
+       */
+      handleFieldNormalizationChange: function(index, newValue) {
+        if (!this.fieldSelections) {
+          this.fieldSelections = new Map();
+        }
+
+        const selection = this.fieldSelections.get(index);
+        if (selection) {
+          selection.normalized = newValue;
+          selection.apply = (newValue !== selection.rawValue);
+        }
+
+        this.updateFieldApplyButtonState();
+        this.updateFieldPendingCount();
+      },
+
+      /**
+       * Select a field group (for detail view)
+       */
+      selectFieldGroup: function(index) {
+        const item = this.fieldResults.items[index];
+        if (!item) return;
+
+        // Update selection styling
+        document.querySelectorAll('.field-group').forEach(el => {
+          el.classList.remove('selected');
+        });
+        const groupEl = document.querySelector('[data-field-index="' + index + '"]');
+        if (groupEl) {
+          groupEl.classList.add('selected');
+        }
+
+        // Show detail panel
+        const detailPanel = document.getElementById('field-detail-panel');
+        const detailTitle = document.getElementById('field-detail-title');
+        const detailContext = document.getElementById('field-detail-context');
+        const detailItems = document.getElementById('field-detail-items');
+
+        if (detailTitle) {
+          detailTitle.textContent = 'Items with "' + item.rawValue + '"';
+        }
+
+        if (detailContext) {
+          const selection = this.fieldSelections.get(index);
+          if (selection && selection.apply) {
+            detailContext.innerHTML = '<p style="color: #2e7d32;">Will be normalized to: <strong>' + this.escapeHtml(selection.normalized) + '</strong></p>';
+          } else {
+            detailContext.innerHTML = '<p style="color: #666;">No change scheduled</p>';
+          }
+        }
+
+        if (detailItems) {
+          detailItems.innerHTML = '<p><em>Showing first 10 items...</em></p>';
+        }
+      },
+
+      /**
+       * Update field filter summary text
+       */
+      updateFieldFilterSummary: function(visible, total) {
+        const summaryEl = document.getElementById('field-filter-summary');
+        if (summaryEl) {
+          if (visible === total) {
+            summaryEl.textContent = 'Showing all ' + total + ' values';
+          } else {
+            summaryEl.textContent = 'Showing ' + visible + ' of ' + total + ' values';
+          }
+        }
+      },
+
+      /**
+       * Update pending changes count
+       * Counts groups with multiple variants as "pending" (suggested changes)
+       */
+      updateFieldPendingCount: function() {
+        let pending = 0;
+        if (this.fieldResults && this.fieldResults.items) {
+          // Count groups with more than 1 variant as pending changes
+          for (const item of this.fieldResults.items) {
+            if (item && item.variants && item.variants.length > 1) {
+              pending++;
+            }
+          }
+        }
+        const countEl = document.getElementById('field-pending-changes');
+        if (countEl) {
+          countEl.textContent = String(pending);
+        }
+      },
+
+      /**
+       * Apply a single field normalization (individual Apply button)
+       */
+      applySingleFieldNormalization: async function(index) {
+        this.log('applySingleFieldNormalization: index=' + index);
+
+        const group = this.fieldResults.items[index];
+        if (!group) {
+          this.log('ERROR: group not found for index ' + index);
+          return { success: false, error: 'Group not found' };
+        }
+
+        // Get actual input value from DOM - look for input with data-idx attribute
+        const inputEl = document.querySelector('input[data-idx="' + index + '"]');
+        if (!inputEl) {
+          this.log('ERROR: input element not found for index ' + index);
+          return { success: false, error: 'Input element not found' };
+        }
+
+        const inputValue = inputEl.value.trim();
+        const rawValue = group.rawValue;
+
+        this.log('applySingleFieldNormalization: inputValue="' + inputValue + '", rawValue="' + rawValue + '"');
+
+        // Check if there's a change - allow if input has content
+        // Even if input matches rawValue, we allow it because rawValue is the suggested
+        // normalized form and we want to normalize all variants TO this value
+        if (!inputValue) {
+          this.log('No change to apply (input empty)');
+          this.alert('Field Normalizer', 'Please enter a normalized value.');
+          return { success: false, error: 'No value' };
+        }
+
+        // Always allow applying - the input contains the target normalized value
+        // Whether it matches rawValue or not, applying will normalize all variants to this value
+
+        const Zotero = this.getZotero();
+        if (!Zotero) {
+          return { success: false, error: 'Zotero not available' };
+        }
+
+        // Confirm before applying
+        const confirmed = window.confirm(
+          'Normalize ' + group.itemCount + ' item(s) from:\n' +
+          group.variants.map(v => '  - ' + v).join('\n') +
+          '\n\nTo: ' + inputValue
+        );
+
+        if (!confirmed) return { success: true, applied: 0 };
+
+        // Apply the change
+        let applied = 0;
+        try {
+          if (group.variantData) {
+            for (const v of group.variantData) {
+              for (const item of v.items) {
+                item.setField(this.fieldResultsZoteroField, inputValue);
+                await item.save();
+                applied++;
+              }
+            }
+          }
+          this.alert('Field Normalizer', 'Successfully normalized ' + applied + ' item(s).');
+
+          // Remove the group from the UI (like author normalization)
+          const groupEl = document.querySelector('[data-field-index="' + index + '"]');
+          if (groupEl) {
+            groupEl.remove();
+          }
+
+          // Remove from fieldResults.items
+          if (this.fieldResults && this.fieldResults.items) {
+            this.fieldResults.items[index] = null; // Mark as removed
+          }
+
+          // Update counts
+          this.updateFieldPendingCount();
+          this.updateFieldApplyButtonState();
+
+          // Update unique count display
+          const remainingCount = this.fieldResults ? this.fieldResults.items.filter(i => i !== null).length : 0;
+          const countEl = document.getElementById('field-total-values');
+          if (countEl) {
+            countEl.textContent = String(remainingCount);
+          }
+
+          return { success: true, applied };
+        } catch (err) {
+          this.alert('Field Normalizer', 'Error: ' + err.message);
+          return { success: false, error: err.message };
+        }
+      },
+
+      /**
+       * Update field apply button state
+       */
+      updateFieldApplyButtonState: function() {
+        let hasSelection = false;
+        let hasApply = false;
+
+        this.fieldSelections.forEach(selection => {
+          hasSelection = true;
+          if (selection.apply) hasApply = true;
+        });
+
+        const applyBtn = document.getElementById('apply-field-button');
+        const applyAllBtn = document.getElementById('apply-all-field-button');
+
+        if (applyBtn) applyBtn.disabled = !hasApply;
+        if (applyAllBtn) applyAllBtn.disabled = !hasApply;
+      },
+
+      /**
+       * Apply selected field normalizations
+       */
+      applySelectedFieldNormalizations: async function() {
+        if (!this.fieldResults || !this.fieldResults.items) {
+          return { success: false, error: 'No results to apply' };
+        }
+
+        const Zotero = this.getZotero();
+        if (!Zotero) {
+          return { success: false, error: 'Zotero not available' };
+        }
+
+        const changes = [];
+        this.fieldSelections.forEach((selection, index) => {
+          if (selection.apply) {
+            const group = this.fieldResults.items[index];
+            // Collect all items from all variants in this group
+            const allItemIDs = [];
+            if (group.variantData) {
+              group.variantData.forEach(v => {
+                v.items.forEach(item => {
+                  allItemIDs.push(item.id);
+                });
+              });
+            }
+            changes.push({
+              fromValues: group.variants, // All variant values in this group
+              toValue: selection.normalized,
+              itemIDs: allItemIDs
+            });
+          }
+        });
+
+        if (changes.length === 0) {
+          return { success: true, applied: 0 };
+        }
+
+        // Apply changes
+        let applied = 0;
+        for (const change of changes) {
+          try {
+            // Get items and update them
+            for (const itemID of change.itemIDs) {
+              const item = await Zotero.Items.getAsync(itemID);
+              if (item) {
+                const currentValue = item.getField(this.fieldResultsZoteroField);
+                if (change.fromValues.includes(currentValue)) {
+                  item.setField(this.fieldResultsZoteroField, change.toValue);
+                  await item.save();
+                  applied++;
+                }
+              }
+            }
+          } catch (err) {
+            this.log('Error applying normalization: ' + err.message);
+          }
+        }
+
+        return { success: true, applied: applied };
       },
 
       updateSummaryHeader: function() {
@@ -2957,6 +4210,8 @@
       }
     };
 
+    // Set up event listeners with error handling
+    try {
     // Event listeners
     document.getElementById('apply-button').addEventListener('click', function() {
       ZoteroNER_NormalizationDialog.applySelected();
@@ -2970,12 +4225,105 @@
       window.close();
     });
 
+    // Event delegation for dynamically created field apply buttons
+    document.addEventListener('click', function(event) {
+      ZoteroNER_NormalizationDialog.log('CLICK on: ' + event.target.tagName + ' class=' + (event.target.className || ''));
+      const applyBtn = event.target.closest('.field-apply-button');
+      if (applyBtn) {
+        event.preventDefault();
+        ZoteroNER_NormalizationDialog.log('Apply button detected');
+        const idx = parseInt(applyBtn.getAttribute('data-idx'));
+        ZoteroNER_NormalizationDialog.log('Apply button clicked: idx=' + idx);
+        ZoteroNER_NormalizationDialog.applySingleFieldNormalization(idx);
+        return;
+      }
+    });
+
+    // Event delegation for field inputs
+    document.addEventListener('input', function(event) {
+      const fieldInput = event.target.closest('.field-normalized-input');
+      if (fieldInput) {
+        const idx = parseInt(fieldInput.getAttribute('data-idx'));
+        ZoteroNER_NormalizationDialog.log('INPUT event: idx=' + idx + ', value=' + fieldInput.value);
+        ZoteroNER_NormalizationDialog.handleFieldNormalizationChange(idx, fieldInput.value);
+        return;
+      }
+    });
+
     // Expose controller globally so parent window can call it
     window.ZoteroNERController = ZoteroNER_NormalizationDialog;
     window.ZoteroNER_NormalizationDialog = ZoteroNER_NormalizationDialog;
 
-    // Start
-    ZoteroNER_NormalizationDialog.init();
+    // Global wrapper for field normalization apply
+    window.applyFieldNormalization = function(index) {
+      return ZoteroNER_NormalizationDialog.applySingleFieldNormalization(index);
+    };
+
+    // Start when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        ZoteroNER_NormalizationDialog.init();
+      });
+    } else {
+      ZoteroNER_NormalizationDialog.init();
+    }
+    } catch (err) {
+      console.error('Error setting up event listeners: ' + err.message);
+    }
   </script>
+
+  <!-- Field Normalization Section - Reuses variant layout -->
+  <div id="field-normalization-section">
+    <h2 id="field-normalization-title">Field Normalization</h2>
+
+    <!-- Summary -->
+    <div id="field-summary" class="summary" style="display: none;">
+      <div class="summary-grid">
+        <div><strong>Unique values:</strong> <span id="field-total-values">0</span></div>
+        <div><strong>Pending changes:</strong> <span id="field-pending-changes">0</span></div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="field-progress-container" class="progress" style="display: none;">
+      <div class="progress-bar">
+        <div id="field-progress-fill" class="progress-fill"></div>
+      </div>
+      <span id="field-progress-label">Processing...</span>
+    </div>
+
+    <!-- Filter bar -->
+    <div id="field-filter-bar">
+      <input type="search" id="field-filter-input" placeholder="Filter values…" aria-label="Filter field values">
+      <span id="field-filter-summary">Showing all values</span>
+    </div>
+
+    <!-- Field values list (reuses variant layout) -->
+    <div id="field-layout">
+      <div id="field-values-column">
+        <div id="field-values-container">
+          <!-- Field value groups will be dynamically populated here -->
+        </div>
+      </div>
+      <aside id="field-detail-panel" class="variant-detail">
+        <h4 id="field-detail-title">Field details</h4>
+        <div id="field-detail-context" class="variant-detail-context"></div>
+        <div id="field-detail-items"></div>
+      </aside>
+    </div>
+
+    <!-- Empty state -->
+    <div id="field-empty-message" class="empty-message" style="display: none;">
+      No field values found.
+    </div>
+
+    <!-- Action buttons -->
+    <div style="text-align: right; margin-top: 20px;">
+      <button id="apply-all-field-button" disabled style="margin-right: 10px;">Apply All Changes</button>
+      <button id="apply-field-button" disabled>Apply Selected</button>
+      <button id="cancel-field-button" style="margin-left: 10px;">Cancel</button>
+    </div>
+  </div>
+
 </body>
 </html>

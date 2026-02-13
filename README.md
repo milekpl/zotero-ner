@@ -39,6 +39,51 @@ Key features
 - Learning engine to remember user choices for future suggestions
 - Exportable JSON reports for offline inspection and debugging
 
+Field Normalization
+-------------------
+
+Zotero Name Normalizer also supports normalizing publication metadata fields:
+publishers, publication locations, and journal names. This ensures consistency
+across your library for fields that often have variant spellings.
+
+### Publishers
+
+Publisher normalization handles:
+- Case differences: "Oxford University Press" vs "Oxford university press"
+- Suffix variations: "Oxford University Press" vs "Oxford University Press USA"
+- Ampersand vs "and": "Taylor & Francis" vs "Taylor and Francis"
+- Multi-publisher values: "Oxford University Press; Clarendon Press" is split
+  and processed separately
+
+### Locations
+
+Location normalization handles:
+- Case and punctuation: "Cambridge, MA" vs "Cambridge MA"
+- US state abbreviations: "Cambridge, MA" ↔ "Cambridge, Mass." ↔ "Cambridge, Massachusetts"
+- Country suffixes: "New York, NY" vs "New York, NY, USA"
+- Ampersand vs "and": "London & New York" vs "London and New York"
+
+Does NOT group different cities together (e.g., "New York" stays separate from
+"Oxford, New York" or "London, New York").
+
+### Journals
+
+Journal normalization uses strict matching to avoid grouping different journals:
+- Case differences: "Journal of Neuroscience" vs "journal of neuroscience"
+- "The" prefix: "The Journal of Philosophy" ↔ "Journal of Philosophy"
+- Ampersand vs "and": "Journal of Science & Technology" ↔ "Journal of Science and Technology"
+
+Does NOT group different journals together (e.g., "Journal of Neuroscience" stays
+separate from "Journal of Cognitive Neuroscience").
+
+### How It Works
+
+1. Open the Name Normalizer menu and select "Normalize Publishers",
+   "Normalize Locations", or "Normalize Journals"
+2. Review the suggested groups - each shows variants and item counts
+3. Edit the normalized value if needed, or apply the suggested normalization
+4. Confirm to apply changes to your library
+
 For developer setup and build/test instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Usage
