@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Collection Scope**: Collection-based learned mapping limitation
+  - Store mappings with collection scope
+  - Retrieve scoped mappings with fallback to global
+  - Get available scopes and clear scope data
+  - Scope priority for items in multiple collections
+
 ## [1.3.0] - 2026-02-09
 
 ### Added
@@ -29,12 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Abbreviation expansion (J. -> Journal, Trans. -> Transactions)
   - Conjunction variations (of, and, in)
   - Title case normalization
-
-- **Collection Scope**: Collection-based learned mapping limitation
-  - Store mappings with collection scope
-  - Retrieve scoped mappings with fallback to global
-  - Get available scopes and clear scope data
-  - Scope priority for items in multiple collections
 
 - **FieldItemProcessor**: New processor for field normalization operations
   - Lazy-loaded field registry
