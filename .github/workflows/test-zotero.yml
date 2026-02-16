@@ -16,13 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
       - run: npm install
+
       - run: npm run lint
+
       - run: npm run test:unit
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -36,12 +41,16 @@ jobs:
     needs: lint-and-unit
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-        - run: npm install
+
+      - run: npm install
+
       - run: npm run build
+
       - uses: actions/upload-artifact@v4
         with:
           name: zotero-ner.xpi
@@ -52,36 +61,35 @@ jobs:
     name: Zotero Integration Tests
     runs-on: ubuntu-latest
     needs: build
-    container:
-      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
-          apt-get update
-          apt-get install -y wget libgtk-3-0 libdbus-glib-1-2 xvfb
+          sudo apt-get update
+          sudo apt-get install -y wget libgtk-3-0 libdbus-glib-1-2 xvfb
 
-      - name: Download and install Zotero
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm install
+
+      - name: Download Zotero
         run: |
           wget -q https://www.zotero.org/download/client/dl?platform=linux-x86_64 -O zotero.tar.bz2
           tar xjf zotero.tar.bz2
           mkdir -p $HOME/.zotero
           mv Zotero_linux-x86_64 $HOME/.zotero/zotero
           rm zotero.tar.bz2
-          ls -la $HOME/.zotero/
+          echo "ZOTERO_PATH=$HOME/.zotero/zotero/zotero" >> $GITHUB_ENV
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm install
-
-      - name: Run Zotero-native tests (UI + integration)
+      - name: Run Zotero Integration Tests (headless)
         env:
-          ZOTERO_PATH: $HOME/.zotero/zotero/zotero
+          CI: "true"
         run: |
-          xvfb-run -a node tests/zotero-framework/run-zotero-tests.js --debug
+          xvfb-run -a npm run test:zotero
 
       - name: Upload Zotero test artifacts
         if: failure()
@@ -102,6 +110,6 @@ jobs:
       - run: |
           echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Linting & Unit Tests: Passed (see artifacts)" >> $GITHUB_STEP_SUMMARY
-          echo "- Build: Extension built successfully" >> $GITHUB_STEP_SUMMARY
-          echo "- Zotero Integration: See CI logs" >> $GITHUB_STEP_SUMMARY
+          echo "- Linting & Unit Tests: ${{ needs.lint-and-unit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Zotero Integration: ${{ needs.zotero-integration.result }}" >> $GITHUB_STEP_SUMMARY

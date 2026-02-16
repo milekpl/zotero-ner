@@ -101,5 +101,6 @@ if (ZoteroNameNormalizerRef) {
       timeout: 60000,
     },
     watch: false,
+    headless: !!process.env.CI,
   },
 });
