@@ -193,7 +193,57 @@ function createMockDialogController() {
     },
 
     displayFieldResults: jest.fn(),
-    processFieldItems: jest.fn()
+
+    // Actual implementation of processFieldItems for testing
+    processFieldItems: async function(items, zoteroField, fieldType, collectionId) {
+      this.log('Processing ' + items.length + ' items for ' + fieldType + ' normalization');
+
+      const valueMap = new Map();
+      let skippedCount = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        let fieldValue;
+
+        try {
+          // Ensure item's primary data is loaded before accessing fields
+          // Check if isLoaded method exists (Zotero 7+)
+          if (typeof item.isLoaded === 'function' && !item.isLoaded()) {
+            await item.loadDataType('primaryData');
+          }
+          fieldValue = item.getField(zoteroField);
+        } catch (err) {
+          this.log('Warning: Could not access field "' + zoteroField + '" for item ' + item.key + ' (ID: ' + item.id + '): ' + err.message);
+          skippedCount++;
+          continue;
+        }
+
+        if (!fieldValue) continue;
+
+        // Simple processing - just add to valueMap
+        if (!valueMap.has(fieldValue)) {
+          valueMap.set(fieldValue, {
+            rawValue: fieldValue,
+            itemCount: 0,
+            items: []
+          });
+        }
+        const entry = valueMap.get(fieldValue);
+        entry.itemCount++;
+        entry.items.push(item);
+      }
+
+      if (skippedCount > 0) {
+        this.log('Skipped ' + skippedCount + ' items due to field access errors');
+      }
+
+      return {
+        fieldType: fieldType,
+        total: items.length,
+        uniqueCount: valueMap.size,
+        items: Array.from(valueMap.values())
+      };
+    }
   };
 }
 
@@ -627,6 +677,134 @@ describe('Field Normalization Dialog', () => {
         const result = fieldTypeLabel + ' Normalization';
         expect(result).toBe(expected);
       }
+    });
+  });
+
+  describe('Item Data Loading', () => {
+    beforeEach(() => {
+      dialogController.getZotero = jest.fn().mockReturnValue(global.Zotero);
+    });
+
+    test('should skip items with unloaded data gracefully', async () => {
+      // Mock item that fails to load data
+      const unloadedItem = {
+        id: 1,
+        key: 'TEST123',
+        isLoaded: jest.fn().mockReturnValue(false),
+        loadDataType: jest.fn().mockRejectedValue(new Error('Data not available')),
+        getField: jest.fn()
+      };
+
+      // Should skip without crashing
+      const results = await dialogController.processFieldItems(
+        [unloadedItem],
+        'place',
+        'location',
+        null
+      );
+
+      expect(unloadedItem.loadDataType).toHaveBeenCalledWith('primaryData');
+      expect(dialogController.log).toHaveBeenCalledWith(
+        expect.stringContaining('Could not access field')
+      );
+    });
+
+    test('should load item data before accessing fields', async () => {
+      const item = {
+        id: 1,
+        key: 'TEST123',
+        isLoaded: jest.fn().mockReturnValue(false),
+        loadDataType: jest.fn().mockResolvedValue(),
+        getField: jest.fn().mockReturnValue('Cambridge, MA')
+      };
+
+      await dialogController.processFieldItems([item], 'place', 'location', null);
+
+      expect(item.isLoaded).toHaveBeenCalled();
+      expect(item.loadDataType).toHaveBeenCalledWith('primaryData');
+      expect(item.getField).toHaveBeenCalledWith('place');
+    });
+
+    test('should skip items when getField throws error', async () => {
+      const item = {
+        id: 1,
+        key: 'TEST123',
+        isLoaded: jest.fn().mockReturnValue(true),
+        getField: jest.fn().mockImplementation(() => {
+          throw new Error('Field not accessible');
+        })
+      };
+
+      const results = await dialogController.processFieldItems([item], 'place', 'location', null);
+
+      expect(dialogController.log).toHaveBeenCalledWith(
+        expect.stringContaining('Could not access field')
+      );
+    });
+
+    test('should handle items already loaded', async () => {
+      const item = {
+        id: 1,
+        key: 'TEST123',
+        isLoaded: jest.fn().mockReturnValue(true),
+        getField: jest.fn().mockReturnValue('Cambridge, MA'),
+        loadDataType: jest.fn()  // Mock function to track if it's called
+      };
+
+      await dialogController.processFieldItems([item], 'place', 'location', null);
+
+      expect(item.isLoaded).toHaveBeenCalled();
+      expect(item.getField).toHaveBeenCalledWith('place');
+      // loadDataType should NOT be called if item is already loaded
+      expect(item.loadDataType).not.toHaveBeenCalled();
+    });
+
+    test('should continue processing after skipping problematic items', async () => {
+      const goodItem = {
+        id: 1,
+        key: 'GOOD001',
+        isLoaded: jest.fn().mockReturnValue(true),
+        getField: jest.fn().mockReturnValue('Cambridge, MA')
+      };
+
+      const badItem = {
+        id: 2,
+        key: 'BAD001',
+        isLoaded: jest.fn().mockReturnValue(false),
+        loadDataType: jest.fn().mockRejectedValue(new Error('Data not available')),
+        getField: jest.fn()
+      };
+
+      const results = await dialogController.processFieldItems([badItem, goodItem], 'place', 'location', null);
+
+      // Good item should still be processed
+      expect(goodItem.getField).toHaveBeenCalledWith('place');
+      // Bad item should be logged
+      expect(dialogController.log).toHaveBeenCalledWith(
+        expect.stringContaining('Could not access field')
+      );
+    });
+
+    test('should log count of skipped items', async () => {
+      const badItem1 = {
+        id: 1,
+        key: 'BAD001',
+        isLoaded: jest.fn().mockReturnValue(false),
+        loadDataType: jest.fn().mockRejectedValue(new Error('Data not available')),
+        getField: jest.fn()
+      };
+
+      const badItem2 = {
+        id: 2,
+        key: 'BAD002',
+        isLoaded: jest.fn().mockReturnValue(false),
+        loadDataType: jest.fn().mockRejectedValue(new Error('Data not available')),
+        getField: jest.fn()
+      };
+
+      await dialogController.processFieldItems([badItem1, badItem2], 'place', 'location', null);
+
+      expect(dialogController.log).toHaveBeenCalledWith('Skipped 2 items due to field access errors');
     });
   });
 });

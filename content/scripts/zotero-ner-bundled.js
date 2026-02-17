@@ -3722,6 +3722,36 @@ if (typeof console === 'undefined') {
           return letters === letters.toUpperCase() && letters !== letters.toLowerCase();
         }
         /**
+         * Clean up misplaced name particles from given name
+         * Issue: Names like "Kocku von Stuckrad" are sometimes stored as:
+         *   firstName="Kocku von", lastName="Stuckrad" (incorrect)
+         *   firstName="Kocku", lastName="von Stuckrad" (correct)
+         * When normalizing surname to "von Stuckrad", we need to remove "von" from
+         * the given name to avoid "von Stuckrad, Kocku von"
+         * @param {string} firstName - Given name (may contain misplaced particle)
+         * @param {string} normalizedSurname - Normalized surname (includes particle)
+         * @returns {string} Cleaned given name with particle removed if found
+         */
+        cleanupMisplacedParticle(firstName, normalizedSurname) {
+          if (!firstName || !normalizedSurname) {
+            return firstName;
+          }
+          const particles = ["von", "van", "de", "la", "del", "di", "du", "le", "lo", "da", "des", "dos", "das", "de la"];
+          const firstNameLower = firstName.toLowerCase();
+          const surnameLower = normalizedSurname.toLowerCase();
+          for (const particle of particles) {
+            const escapedParticle = particle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const particleAtEndPattern = new RegExp("\\s+" + escapedParticle + "$", "i");
+            if (particleAtEndPattern.test(firstNameLower)) {
+              const surnameStartsPattern = new RegExp("^" + escapedParticle + "\\s+", "i");
+              if (surnameStartsPattern.test(surnameLower)) {
+                return firstName.replace(particleAtEndPattern, "").trim();
+              }
+            }
+          }
+          return firstName;
+        }
+        /**
          * Parse a name string into components
          * @param {string} name - Full name string
          * @returns {Object} Parsed name components
@@ -4194,10 +4224,14 @@ if (typeof console === 'undefined') {
                   const variantName = (variant.name || "").trim();
                   if (this.stringsEqualIgnoreCase(creatorLastName, variantName)) {
                     newCreator.lastName = normalizedValue;
-                    const creatorFirstName = (creator.firstName || "").trim();
+                    let creatorFirstName = (creator.firstName || "").trim();
                     if (creatorFirstName && this.isUpperCaseName(creatorFirstName)) {
-                      newCreator.firstName = this.toTitleCase(creatorFirstName);
+                      creatorFirstName = this.toTitleCase(creatorFirstName);
                     }
+                    if (creatorFirstName && normalizedValue) {
+                      creatorFirstName = this.cleanupMisplacedParticle(creatorFirstName, normalizedValue);
+                    }
+                    newCreator.firstName = creatorFirstName;
                     updated = true;
                   }
                 } else {

@@ -1868,6 +1868,50 @@ class ZoteroDBAnalyzer {
   }
 
   /**
+   * Clean up misplaced name particles from given name
+   * Issue: Names like "Kocku von Stuckrad" are sometimes stored as:
+   *   firstName="Kocku von", lastName="Stuckrad" (incorrect)
+   *   firstName="Kocku", lastName="von Stuckrad" (correct)
+   * When normalizing surname to "von Stuckrad", we need to remove "von" from
+   * the given name to avoid "von Stuckrad, Kocku von"
+   * @param {string} firstName - Given name (may contain misplaced particle)
+   * @param {string} normalizedSurname - Normalized surname (includes particle)
+   * @returns {string} Cleaned given name with particle removed if found
+   */
+  cleanupMisplacedParticle(firstName, normalizedSurname) {
+    if (!firstName || !normalizedSurname) {
+      return firstName;
+    }
+
+    // Common name particles that can be misplaced (no duplicates)
+    const particles = ['von', 'van', 'de', 'la', 'del', 'di', 'du', 'le', 'lo', 'da', 'des', 'dos', 'das', 'de la'];
+    
+    const firstNameLower = firstName.toLowerCase();
+    const surnameLower = normalizedSurname.toLowerCase();
+    
+    // Check if given name ends with a particle that starts the surname
+    for (const particle of particles) {
+      // Escape special regex characters in particle
+      const escapedParticle = particle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Check for particle at end of firstName (with space before it)
+      const particleAtEndPattern = new RegExp('\\s+' + escapedParticle + '$', 'i');
+      
+      if (particleAtEndPattern.test(firstNameLower)) {
+        // Check if surname starts with this particle
+        const surnameStartsPattern = new RegExp('^' + escapedParticle + '\\s+', 'i');
+        
+        if (surnameStartsPattern.test(surnameLower)) {
+          // Remove particle from end of firstName
+          return firstName.replace(particleAtEndPattern, '').trim();
+        }
+      }
+    }
+    
+    return firstName;
+  }
+
+  /**
    * Parse a name string into components
    * @param {string} name - Full name string
    * @returns {Object} Parsed name components
@@ -2445,11 +2489,20 @@ class ZoteroDBAnalyzer {
               newCreator.lastName = normalizedValue;
 
               // Smart given name capitalization: if firstName is uppercase, apply title-case
-              const creatorFirstName = (creator.firstName || '').trim();
+              let creatorFirstName = (creator.firstName || '').trim();
               if (creatorFirstName && this.isUpperCaseName(creatorFirstName)) {
-                newCreator.firstName = this.toTitleCase(creatorFirstName);
+                creatorFirstName = this.toTitleCase(creatorFirstName);
               }
 
+              // CRITICAL FIX: Clean up misplaced name particles from given name
+              // Issue: "Kocku von Stuckrad" sometimes stored as firstName="Kocku von", lastName="Stuckrad"
+              // When normalizing to "von Stuckrad", we need to remove "von" from given name
+              // to avoid "von Stuckrad, Kocku von"
+              if (creatorFirstName && normalizedValue) {
+                creatorFirstName = this.cleanupMisplacedParticle(creatorFirstName, normalizedValue);
+              }
+
+              newCreator.firstName = creatorFirstName;
               updated = true;
             }
           } else {

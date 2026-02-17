@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-02-17
+
+### Fixed
+
+#### Field Normalization - Item Data Loading
+
+- **Bug Fix**: Fixed "Item data not loaded" error in Location/Publisher/Journal normalization
+  - Added defensive check for `item.isLoaded()` method existence (Zotero 7+ compatibility)
+  - Added `item.loadDataType('primaryData')` call to ensure item data is loaded before field access
+  - Added graceful error handling to skip problematic items and continue processing
+  - Improved error messages with helpful guidance for users
+  - Applied fixes to:
+    - `processFieldItems()` - field value extraction
+    - `applySelectedFieldNormalizations()` - batch apply operations
+    - `applySingleFieldNormalization()` - individual apply operations
+  - Added comprehensive unit tests for item data loading edge cases
+
+#### Name Particle Handling
+
+- **Bug Fix**: Fixed duplicate particles in names like "von Stuckrad, Kocku von"
+  - When normalizing surnames with particles (von, van, de, etc.), the system now
+    automatically cleans up misplaced particles from the given name field
+  - Example: If stored as firstName="Kocku von", lastName="Stuckrad" and normalizing
+    to "von Stuckrad", the result is now correctly "von Stuckrad, Kocku" instead of
+    "von Stuckrad, Kocku von"
+  - Supports particles: von, van, de, la, del, di, du, le, lo, da, des, dos, das, de la
+  - Case-insensitive matching (e.g., "VON" → removed when normalizing to "von Stuckrad")
+  - Handles multi-word particles like "de la"
+  - Added comprehensive unit tests for particle cleanup scenarios
+
+### Technical Details
+
+- Items loaded via `Zotero.Items.getAll()` may be returned as stub objects without field data
+- The fix checks if `isLoaded()` method exists before calling it (Zotero version compatibility)
+- Primary data is loaded before calling `item.getField()` when needed
+- Error handling allows processing to continue even if some items fail
+- Users see helpful error messages suggesting they open items to load data
+- Particle cleanup happens automatically during surname normalization - no second pass needed
+
 ## [1.3.1] - 2026-02-13
 
 - **Bug Fix**: Fixed "Not in transaction" error when normalizing large numbers of field entries

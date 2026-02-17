@@ -1792,7 +1792,17 @@
 
         } catch (err) {
           this.log('Error in field normalization: ' + err.message);
-          this.showEmptyState('Field normalization failed: ' + err.message);
+          this.log('Stack: ' + (err.stack || 'N/A'));
+          
+          let userMessage = 'Field normalization failed: ' + err.message;
+          
+          // Add helpful context for common errors
+          if (err.message.includes('not loaded') || err.message.includes('field') || err.message.includes('place')) {
+            userMessage += '\n\nThis may occur if item data is not fully loaded. ' +
+                           'Try opening a few items in Zotero to load their data, then try again.';
+          }
+          
+          this.showEmptyState(userMessage);
         }
       },
 
@@ -1810,10 +1820,25 @@
         // Collect all unique values with their item counts
         // For publishers and locations, we first split on separators (; and /)
         const valueMap = new Map();
+        let skippedCount = 0;
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
-          const fieldValue = item.getField(zoteroField);
+          let fieldValue;
+
+          try {
+            // Ensure item's primary data is loaded before accessing fields
+            // Check if isLoaded method exists (Zotero 7+)
+            if (typeof item.isLoaded === 'function' && !item.isLoaded()) {
+              await item.loadDataType('primaryData');
+            }
+            fieldValue = item.getField(zoteroField);
+          } catch (err) {
+            this.log('Warning: Could not access field "' + zoteroField + '" for item ' + item.key + ' (ID: ' + item.id + '): ' + err.message);
+            skippedCount++;
+            continue;  // Skip this item and continue processing
+          }
+
           if (!fieldValue) continue;
 
           // Split field values for publishers and locations
@@ -1836,6 +1861,10 @@
           if (i % 1000 === 0) {
             await new Promise(r => setTimeout(r, 0));
           }
+        }
+
+        if (skippedCount > 0) {
+          this.log('Skipped ' + skippedCount + ' items due to field access errors');
         }
 
         const uniqueValues = Array.from(valueMap.values());
@@ -2572,16 +2601,33 @@
 
         // Apply the change
         let applied = 0;
+        let updateErrorCount = 0;
         try {
           if (group.variantData) {
             for (const v of group.variantData) {
               for (const item of v.items) {
-                item.setField(this.fieldResultsZoteroField, inputValue);
-                await item.saveTx();
-                applied++;
+                try {
+                  // Ensure item data is loaded (check if method exists for Zotero 7+)
+                  if (typeof item.isLoaded === 'function' && !item.isLoaded()) {
+                    await item.loadDataType('primaryData');
+                  }
+
+                  item.setField(this.fieldResultsZoteroField, inputValue);
+                  await item.saveTx();
+                  applied++;
+                } catch (itemErr) {
+                  this.log('Error updating item ' + item.key + ': ' + itemErr.message);
+                  updateErrorCount++;
+                  // Continue with other items
+                }
               }
             }
           }
+
+          if (updateErrorCount > 0) {
+            this.log('Completed with ' + updateErrorCount + ' item update errors');
+          }
+
           this.alert('Field Normalizer', 'Successfully normalized ' + applied + ' item(s).');
 
           // Remove the group from the UI (like author normalization)
@@ -2672,23 +2718,39 @@
 
         // Apply changes
         let applied = 0;
+        let errorCount = 0;
         for (const change of changes) {
           try {
             // Get items and update them
             for (const itemID of change.itemIDs) {
               const item = await Zotero.Items.getAsync(itemID);
               if (item) {
-                const currentValue = item.getField(this.fieldResultsZoteroField);
-                if (change.fromValues.includes(currentValue)) {
-                  item.setField(this.fieldResultsZoteroField, change.toValue);
-                  await item.saveTx();
-                  applied++;
+                try {
+                  // Ensure item data is loaded (check if method exists for Zotero 7+)
+                  if (typeof item.isLoaded === 'function' && !item.isLoaded()) {
+                    await item.loadDataType('primaryData');
+                  }
+
+                  const currentValue = item.getField(this.fieldResultsZoteroField);
+                  if (change.fromValues.includes(currentValue)) {
+                    item.setField(this.fieldResultsZoteroField, change.toValue);
+                    await item.saveTx();
+                    applied++;
+                  }
+                } catch (itemErr) {
+                  this.log('Error updating item ' + itemID + ': ' + itemErr.message);
+                  errorCount++;
+                  // Continue with other items
                 }
               }
             }
           } catch (err) {
             this.log('Error applying normalization: ' + err.message);
           }
+        }
+
+        if (errorCount > 0) {
+          this.log('Completed with ' + errorCount + ' item update errors');
         }
 
         return { success: true, applied: applied };

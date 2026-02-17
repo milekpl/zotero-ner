@@ -18,7 +18,8 @@ const mockItem = {
     { firstName: 'Jane', lastName: 'Doe', creatorType: 'author' }
   ]),
   setCreators: jest.fn(),
-  save: jest.fn().mockResolvedValue(true)
+  save: jest.fn().mockResolvedValue(true),
+  saveTx: jest.fn().mockResolvedValue(true)
 };
 
 global.Zotero = {
@@ -50,6 +51,7 @@ describe('ZoteroDBAnalyzer', () => {
     // Reset mock item state
     mockItem.setCreators.mockClear();
     mockItem.save.mockClear().mockResolvedValue(true);
+    mockItem.saveTx.mockClear().mockResolvedValue(true);
     analyzer.learningEngine.storeMapping = jest.fn().mockResolvedValue();
     analyzer.learningEngine.recordDistinctPair = jest.fn().mockResolvedValue(true);
     analyzer.learningEngine.clearDistinctPair = jest.fn().mockResolvedValue();
@@ -332,8 +334,8 @@ describe('ZoteroDBAnalyzer', () => {
       // Only one item should be updated (Smyth -> Smith)
       expect(results.updatedCreators).toBe(1);
       expect(analyzer.learningEngine.storeMapping).toHaveBeenCalledWith('Smyth', 'Smith', 0.9);
-      // Verify item.save() was called for the normalized item
-      expect(mockItem.save).toHaveBeenCalled();
+      // Verify item.saveTx() was called for the normalized item
+      expect(mockItem.saveTx).toHaveBeenCalled();
       expect(mockItem.setCreators).toHaveBeenCalled();
     });
 
@@ -374,7 +376,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'John', lastName: 'Smyth', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([smythItem]);
 
@@ -395,7 +398,7 @@ describe('ZoteroDBAnalyzer', () => {
       expect(smythItem.setCreators).toHaveBeenCalledWith([
         { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
       ]);
-      expect(smythItem.save).toHaveBeenCalled();
+      expect(smythItem.saveTx).toHaveBeenCalled();
     });
   });
 
@@ -950,7 +953,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Jerry', lastName: 'FODOR', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([fodorItem]);
 
@@ -959,10 +963,10 @@ describe('ZoteroDBAnalyzer', () => {
           type: 'surname',
           primary: 'Fodor',  // Title case normalization
           variants: [
-            { 
+            {
               name: 'FODOR',  // All caps variant
-              frequency: 5, 
-              items: [{ id: 999, key: 'FODOR001' }] 
+              frequency: 5,
+              items: [{ id: 999, key: 'FODOR001' }]
             }
           ],
           similarity: 1.0
@@ -975,7 +979,7 @@ describe('ZoteroDBAnalyzer', () => {
       expect(fodorItem.setCreators).toHaveBeenCalledWith([
         { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' }
       ]);
-      expect(fodorItem.save).toHaveBeenCalled();
+      expect(fodorItem.saveTx).toHaveBeenCalled();
     });
 
     test('should apply lowercase to titlecase normalization', async () => {
@@ -986,7 +990,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Jane', lastName: 'smith', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([lowercaseItem]);
 
@@ -1021,7 +1026,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'John', lastName: 'Smith', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([duplicateItem]);
 
@@ -1030,10 +1036,10 @@ describe('ZoteroDBAnalyzer', () => {
           type: 'surname',
           primary: 'Smith',
           variants: [
-            { 
+            {
               name: 'Smith',  // Exact match - should be skipped
-              frequency: 10, 
-              items: [{ id: 1002, key: 'dup001' }] 
+              frequency: 10,
+              items: [{ id: 1002, key: 'dup001' }]
             }
           ],
           similarity: 1.0
@@ -1055,7 +1061,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Jerry', lastName: 'FODOR', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
 
       const kripkeItem = {
@@ -1065,7 +1072,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Saul', lastName: 'kripke', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
 
       global.Zotero.Items.getAsync.mockResolvedValue([fodorItem, kripkeItem]);
@@ -1093,7 +1101,7 @@ describe('ZoteroDBAnalyzer', () => {
 
       expect(results.applied).toBe(2);
       expect(results.updatedCreators).toBe(2);
-      
+
       expect(fodorItem.setCreators).toHaveBeenCalledWith([
         { firstName: 'Jerry', lastName: 'Fodor', creatorType: 'author' }
       ]);
@@ -1110,7 +1118,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Bob', lastName: 'SMITH', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
 
       const typoItem = {
@@ -1120,7 +1129,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Alice', lastName: 'Smyth', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
 
       global.Zotero.Items.getAsync.mockResolvedValue([capitalItem, typoItem]);
@@ -1142,12 +1152,12 @@ describe('ZoteroDBAnalyzer', () => {
       // Should apply both normalizations - capitalization and typo
       expect(results.applied).toBe(1);
       expect(results.updatedCreators).toBeGreaterThanOrEqual(2);
-      
+
       // Capitalization item should be normalized
       expect(capitalItem.setCreators).toHaveBeenCalledWith([
         { firstName: 'Bob', lastName: 'Smith', creatorType: 'author' }
       ]);
-      
+
       // Typo item should be normalized
       expect(typoItem.setCreators).toHaveBeenCalledWith([
         { firstName: 'Alice', lastName: 'Smith', creatorType: 'author' }
@@ -1162,7 +1172,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'JOHN', lastName: 'Smith', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([givenNameItem]);
 
@@ -1173,11 +1184,11 @@ describe('ZoteroDBAnalyzer', () => {
           primary: 'John Smith',
           recommendedFullName: 'John Smith',
           variants: [
-            { 
+            {
               firstName: 'JOHN',
               lastName: 'Smith',
-              frequency: 2, 
-              items: [{ id: 1006, key: 'given001' }] 
+              frequency: 2,
+              items: [{ id: 1006, key: 'given001' }]
             }
           ],
           similarity: 1.0
@@ -1200,7 +1211,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'JERRY A.', lastName: 'FODOR', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([uppercaseItem]);
 
@@ -1233,7 +1245,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'Jerry A.', lastName: 'FODOR', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([mixedCaseItem]);
 
@@ -1266,7 +1279,8 @@ describe('ZoteroDBAnalyzer', () => {
           { firstName: 'J.A.', lastName: 'FODOR', creatorType: 'author' }
         ]),
         setCreators: jest.fn(),
-        save: jest.fn().mockResolvedValue(true)
+        save: jest.fn().mockResolvedValue(true),
+        saveTx: jest.fn().mockResolvedValue(true)
       };
       global.Zotero.Items.getAsync.mockResolvedValue([initialsItem]);
 
