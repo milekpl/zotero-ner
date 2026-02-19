@@ -2224,6 +2224,643 @@ if (typeof console === 'undefined') {
     }
   });
 
+  // src/zotero/library-context-manager.js
+  var require_library_context_manager = __commonJS({
+    "src/zotero/library-context-manager.js"(exports, module) {
+      var LibraryContextManager2 = class {
+        constructor() {
+          this._zoteroPane = null;
+        }
+        /**
+         * Check if Zotero context is available
+         * @returns {boolean} True if Zotero context exists
+         */
+        isZoteroAvailable() {
+          return typeof Zotero !== "undefined" && Zotero !== null;
+        }
+        /**
+         * Get the ZoteroPane singleton
+         * @returns {Object|null} ZoteroPane object or null if unavailable
+         */
+        getZoteroPane() {
+          if (!this.isZoteroAvailable()) {
+            return null;
+          }
+          if (!this._zoteroPane) {
+            try {
+              this._zoteroPane = ZoteroPane || Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane();
+            } catch (e) {
+              console.warn("LibraryContextManager: Could not get ZoteroPane:", e);
+              this._zoteroPane = null;
+            }
+          }
+          return this._zoteroPane;
+        }
+        /**
+         * Get library context without ZoteroPane - uses Zotero's main window state
+         * This is a fallback when ZoteroPane is not available
+         * @returns {Object|null} Library context or null if unavailable
+         */
+        getLibraryContextFromView() {
+          if (!this.isZoteroAvailable()) {
+            return null;
+          }
+          try {
+            try {
+              const zoteroPane = Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane();
+              if (zoteroPane) {
+                const collection = zoteroPane.getSelectedCollection && zoteroPane.getSelectedCollection();
+                if (collection) {
+                  const library = Zotero.Libraries.get(collection.libraryID);
+                  return {
+                    libraryID: collection.libraryID,
+                    libraryType: library.libraryType,
+                    libraryName: library.name,
+                    collectionKey: collection.key,
+                    collectionName: collection.name
+                  };
+                }
+                const items = zoteroPane.getSelectedItems && zoteroPane.getSelectedItems();
+                if (items && items.length > 0) {
+                  const firstItem = items[0];
+                  const library = Zotero.Libraries.get(firstItem.libraryID);
+                  return {
+                    libraryID: firstItem.libraryID,
+                    libraryType: library.libraryType,
+                    libraryName: library.name
+                  };
+                }
+              }
+            } catch (e) {
+            }
+            try {
+              const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
+              if (mainWindow) {
+                const zoteroPane = mainWindow.ZoteroPane;
+                if (zoteroPane) {
+                  const collection = zoteroPane.getSelectedCollection && zoteroPane.getSelectedCollection();
+                  if (collection) {
+                    const library = Zotero.Libraries.get(collection.libraryID);
+                    return {
+                      libraryID: collection.libraryID,
+                      libraryType: library.libraryType,
+                      libraryName: library.name,
+                      collectionKey: collection.key,
+                      collectionName: collection.name
+                    };
+                  }
+                }
+              }
+            } catch (e) {
+            }
+            try {
+              const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
+              if (mainWindow) {
+                if (mainWindow.zoteroState) {
+                  const state = mainWindow.zoteroState;
+                  if (state.selectedCollection) {
+                    const collection = Zotero.Collections.getByKey && Zotero.Collections.getByKey(state.selectedCollection);
+                    if (collection) {
+                      const library = Zotero.Libraries.get(collection.libraryID);
+                      return {
+                        libraryID: collection.libraryID,
+                        libraryType: library.libraryType,
+                        libraryName: library.name,
+                        collectionKey: collection.key,
+                        collectionName: collection.name
+                      };
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+            }
+            return null;
+          } catch (e) {
+            console.warn("LibraryContextManager: Error getting context from view:", e);
+            return null;
+          }
+        }
+        /**
+         * Get the currently selected library context from Zotero UI
+         *
+         * Detects which library/collection is currently selected in Zotero's UI:
+         * - If a collection is selected, returns that collection's library
+         * - If a library is selected, returns that library
+         * - If items are selected, returns the library containing those items
+         * - Defaults to user library if nothing specific is selected
+         *
+         * This follows the same pattern as zotero-search-replace plugin.
+         *
+         * @returns {Promise<{libraryID: number, libraryType: string, libraryName: string, collectionKey?: string, collectionName?: string}>}
+         * @throws {Error} If Zotero context is unavailable
+         */
+        async getCurrentLibraryContext() {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const zoteroPane = this.getZoteroPane();
+            if (!zoteroPane) {
+              const fallbackContext = this.getLibraryContextFromView();
+              if (fallbackContext) {
+                return fallbackContext;
+              }
+              const userLib2 = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
+              return {
+                libraryID: Zotero.Libraries.userLibraryID,
+                libraryType: "user",
+                libraryName: userLib2.name
+              };
+            }
+            const selectedCollection = zoteroPane.getSelectedCollection();
+            if (selectedCollection) {
+              const library = Zotero.Libraries.get(selectedCollection.libraryID);
+              return {
+                libraryID: selectedCollection.libraryID,
+                libraryType: library.libraryType,
+                libraryName: library.name,
+                collectionKey: selectedCollection.key,
+                collectionName: selectedCollection.name
+              };
+            }
+            const selectedItems = zoteroPane.getSelectedItems();
+            if (selectedItems && selectedItems.length > 0) {
+              const firstItem = selectedItems[0];
+              const library = Zotero.Libraries.get(firstItem.libraryID);
+              return {
+                libraryID: firstItem.libraryID,
+                libraryType: library.libraryType,
+                libraryName: library.name
+              };
+            }
+            const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
+            return {
+              libraryID: Zotero.Libraries.userLibraryID,
+              libraryType: "user",
+              libraryName: userLib.name
+            };
+          } catch (error) {
+            console.error("LibraryContextManager: Error getting current library context:", error);
+            try {
+              const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
+              return {
+                libraryID: Zotero.Libraries.userLibraryID,
+                libraryType: "user",
+                libraryName: userLib.name
+              };
+            } catch (fallbackError) {
+              return {
+                libraryID: Zotero.Libraries.userLibraryID,
+                libraryType: "user",
+                libraryName: "My Library"
+              };
+            }
+          }
+        }
+        /**
+         * Get all accessible libraries
+         * 
+         * Returns all libraries the user has access to:
+         * - User library (always first)
+         * - Group libraries
+         * - Feed libraries
+         * - Publications library
+         * 
+         * @returns {Promise<Array<{libraryID: number, libraryType: string, name: string, editable: boolean}>>}
+         * @throws {Error} If Zotero context is unavailable
+         */
+        async getAllLibraries() {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const libraries = Zotero.Libraries.getAll();
+            const result = [];
+            for (const library of libraries) {
+              result.push({
+                libraryID: library.libraryID,
+                libraryType: library.libraryType,
+                name: library.name,
+                editable: library.editable
+              });
+            }
+            return result;
+          } catch (error) {
+            console.error("LibraryContextManager: Error getting all libraries:", error);
+            throw new Error(`Failed to get libraries: ${error.message}`);
+          }
+        }
+        /**
+         * Get a specific library by ID
+         * 
+         * @param {number} libraryID - The library ID to get
+         * @returns {Promise<{libraryID: number, libraryType: string, name: string, editable: boolean}>}
+         * @throws {Error} If library not found or Zotero context unavailable
+         */
+        async getLibrary(libraryID) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const library = Zotero.Libraries.get(libraryID);
+            if (!library) {
+              throw new Error(`Library not found: ${libraryID}`);
+            }
+            return {
+              libraryID: library.libraryID,
+              libraryType: library.libraryType,
+              name: library.name,
+              editable: library.editable
+            };
+          } catch (error) {
+            console.error("LibraryContextManager: Error getting library:", error);
+            throw new Error(`Failed to get library ${libraryID}: ${error.message}`);
+          }
+        }
+        /**
+         * Get collections in a specific library
+         * 
+         * @param {number} libraryID - The library ID to get collections from
+         * @returns {Promise<Array<{key: string, name: string, parentKey: string|null}>>}
+         * @throws {Error} If Zotero context is unavailable
+         */
+        async getCollectionsInLibrary(libraryID) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const collections = Zotero.Collections.get();
+            const result = [];
+            for (const collection of collections) {
+              if (collection.libraryID === libraryID) {
+                result.push({
+                  key: collection.key,
+                  name: collection.name,
+                  parentKey: collection.parentKey || null
+                });
+              }
+            }
+            return result;
+          } catch (error) {
+            console.error("LibraryContextManager: Error getting collections:", error);
+            throw new Error(`Failed to get collections in library ${libraryID}: ${error.message}`);
+          }
+        }
+        /**
+         * Get the library ID for a specific collection
+         * 
+         * @param {string} collectionKey - The collection key
+         * @returns {Promise<number>} The library ID containing the collection
+         * @throws {Error} If collection not found or Zotero context unavailable
+         */
+        async getLibraryIDForCollection(collectionKey) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const collection = Zotero.Collections.get(collectionKey);
+            if (!collection) {
+              throw new Error(`Collection not found: ${collectionKey}`);
+            }
+            return collection.libraryID;
+          } catch (error) {
+            console.error("LibraryContextManager: Error getting library ID for collection:", error);
+            throw new Error(`Failed to get library ID for collection ${collectionKey}: ${error.message}`);
+          }
+        }
+        /**
+         * Show library selection dialog
+         * 
+         * Presents a dialog allowing the user to select which library to operate on.
+         * In actual Zotero extension, this would show a XUL/HTML dialog.
+         * 
+         * @param {Object} options - Dialog options
+         * @param {boolean} options.includeUserLibrary - Include user library in selection (default: true)
+         * @param {boolean} options.includeGroups - Include group libraries (default: true)
+         * @param {boolean} options.includeFeeds - Include feed libraries (default: false)
+         * @returns {Promise<{libraryID: number, libraryType: string} | null>} Selected library or null if cancelled
+         * @throws {Error} If Zotero context is unavailable
+         */
+        async showLibrarySelector(options = {}) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          const {
+            includeUserLibrary = true,
+            includeGroups = true,
+            includeFeeds = false
+          } = options;
+          try {
+            const allLibraries = await this.getAllLibraries();
+            let filteredLibraries = allLibraries.filter((lib) => {
+              if (lib.libraryType === "user") return includeUserLibrary;
+              if (lib.libraryType === "group") return includeGroups;
+              if (lib.libraryType === "feed") return includeFeeds;
+              if (lib.libraryType === "publications") return includeUserLibrary;
+              return false;
+            });
+            if (filteredLibraries.length === 1) {
+              return {
+                libraryID: filteredLibraries[0].libraryID,
+                libraryType: filteredLibraries[0].libraryType
+              };
+            }
+            console.log("Library selector would show:", filteredLibraries);
+            return {
+              libraryID: Zotero.Libraries.userLibraryID,
+              libraryType: "user"
+            };
+          } catch (error) {
+            console.error("LibraryContextManager: Error in library selector:", error);
+            throw error;
+          }
+        }
+        /**
+         * Validate that a library ID is accessible
+         * 
+         * @param {number} libraryID - The library ID to validate
+         * @returns {Promise<boolean>} True if library is accessible
+         */
+        async validateLibraryID(libraryID) {
+          if (!this.isZoteroAvailable()) {
+            return false;
+          }
+          try {
+            const library = Zotero.Libraries.get(libraryID);
+            return !!library;
+          } catch (e) {
+            return false;
+          }
+        }
+        /**
+         * Get a human-readable description of a library
+         * 
+         * @param {number} libraryID - The library ID
+         * @returns {Promise<string>} Human-readable library description
+         */
+        async getLibraryDescription(libraryID) {
+          try {
+            const library = await this.getLibrary(libraryID);
+            const typeLabels = {
+              "user": "My Library",
+              "group": "Group",
+              "feed": "Feed",
+              "publications": "Publications"
+            };
+            const typeLabel = typeLabels[library.libraryType] || library.libraryType;
+            if (library.libraryType === "user" || library.libraryType === "publications") {
+              return typeLabel;
+            }
+            return `${typeLabel}: ${library.name}`;
+          } catch (e) {
+            return `Library ${libraryID}`;
+          }
+        }
+      };
+      if (typeof module !== "undefined" && module.exports) {
+        module.exports = LibraryContextManager2;
+      }
+    }
+  });
+
+  // src/zotero/collection-manager.js
+  var require_collection_manager = __commonJS({
+    "src/zotero/collection-manager.js"(exports, module) {
+      var CollectionManager2 = class {
+        constructor() {
+          this._libraryContextManager = null;
+        }
+        /**
+         * Lazy getter for LibraryContextManager
+         */
+        get libraryContextManager() {
+          if (!this._libraryContextManager) {
+            const LibraryContextManager2 = require_library_context_manager();
+            this._libraryContextManager = new LibraryContextManager2();
+          }
+          return this._libraryContextManager;
+        }
+        /**
+         * Check if Zotero context is available
+         * @returns {boolean} True if Zotero context exists
+         */
+        isZoteroAvailable() {
+          return typeof Zotero !== "undefined" && Zotero !== null;
+        }
+        /**
+         * Get all available collections (optionally filtered by library)
+         * @param {number|null} libraryID - Optional library ID to filter by
+         * @returns {Array<{key: string, name: string, parentKey: string|null, libraryID: number}>}
+         * @throws {Error} If Zotero context is undefined
+         */
+        getAvailableCollections(libraryID = null) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const collections = Zotero.Collections.get();
+            const result = [];
+            for (const collection of collections) {
+              if (libraryID !== null && collection.libraryID !== libraryID) {
+                continue;
+              }
+              result.push({
+                key: collection.key,
+                name: collection.name,
+                parentKey: collection.parentKey || null,
+                libraryID: collection.libraryID
+              });
+            }
+            return result;
+          } catch (error) {
+            throw new Error(`Failed to get collections: ${error.message}`);
+          }
+        }
+        /**
+         * Get items in a specific collection
+         * @param {string} collectionKey - Collection key
+         * @param {Object} options - Options
+         * @param {boolean} options.includeSubcollections - Include items from subcollections (default: false)
+         * @returns {Array} Array of items in the collection
+         * @throws {Error} If Zotero context is undefined
+         */
+        getItemsInCollection(collectionKey, options = {}) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          const { includeSubcollections = false } = options;
+          try {
+            const collection = Zotero.Collections.get(collectionKey);
+            if (!collection) {
+              throw new Error(`Collection not found: ${collectionKey}`);
+            }
+            if (includeSubcollections) {
+              return collection.getItems(true);
+            } else {
+              return collection.getItems();
+            }
+          } catch (error) {
+            throw new Error(`Failed to get items in collection: ${error.message}`);
+          }
+        }
+        /**
+         * Get all items in a specific library
+         * @param {number} libraryID - The library ID to get items from
+         * @param {Object} options - Options
+         * @param {boolean} options.onlyTopLevel - Only get top-level items (default: false)
+         * @param {boolean} options.includeDeleted - Include deleted items (default: false)
+         * @returns {Array} Array of items in the library
+         * @throws {Error} If Zotero context is undefined
+         */
+        getAllItemsInLibrary(libraryID, options = {}) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          if (libraryID === null || libraryID === void 0) {
+            throw new Error("libraryID is required");
+          }
+          const { onlyTopLevel = false, includeDeleted = false } = options;
+          try {
+            return Zotero.Items.getAll(libraryID, onlyTopLevel, includeDeleted);
+          } catch (error) {
+            throw new Error(`Failed to get all items in library ${libraryID}: ${error.message}`);
+          }
+        }
+        /**
+         * Get items by library and optionally filtered by collection
+         * @param {number} libraryID - The library ID
+         * @param {string|null} collectionKey - Optional collection key to filter by
+         * @param {Object} options - Options
+         * @returns {Promise<Array>} Array of items
+         * @throws {Error} If Zotero context is undefined
+         */
+        async getItemsByLibrary(libraryID, collectionKey = null, options = {}) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          if (libraryID === null || libraryID === void 0) {
+            throw new Error("libraryID is required");
+          }
+          try {
+            if (collectionKey) {
+              return this.getItemsInCollection(collectionKey, options);
+            }
+            return this.getAllItemsInLibrary(libraryID, options);
+          } catch (error) {
+            throw new Error(`Failed to get items from library ${libraryID}: ${error.message}`);
+          }
+        }
+        /**
+         * Get collections for a specific item
+         * @param {number} itemID - Item ID
+         * @returns {Array<{key: string, name: string, libraryID: number}>} Collections containing the item
+         * @throws {Error} If Zotero context is undefined
+         */
+        getCollectionsForItem(itemID) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const item = Zotero.Items.get(itemID);
+            if (!item) {
+              throw new Error(`Item not found: ${itemID}`);
+            }
+            const collectionKeys = item.getCollections();
+            const result = [];
+            for (const key of collectionKeys) {
+              const collection = Zotero.Collections.get(key);
+              if (collection) {
+                result.push({
+                  key: collection.key,
+                  name: collection.name,
+                  libraryID: collection.libraryID
+                });
+              }
+            }
+            return result;
+          } catch (error) {
+            throw new Error(`Failed to get collections for item: ${error.message}`);
+          }
+        }
+        /**
+         * Get all items in the library (legacy method, defaults to user library)
+         * @deprecated Use getAllItemsInLibrary(libraryID) instead
+         * @returns {Array} All library items (user library)
+         * @throws {Error} If Zotero context is undefined
+         */
+        getAllItems() {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            return Zotero.Items.getAll(Zotero.Libraries.userLibraryID);
+          } catch (error) {
+            throw new Error(`Failed to get all items: ${error.message}`);
+          }
+        }
+        /**
+         * Get the current library context from Zotero UI
+         * @returns {Promise<{libraryID: number, libraryType: string, libraryName: string, collectionKey?: string}>}
+         */
+        async getCurrentLibraryContext() {
+          return this.libraryContextManager.getCurrentLibraryContext();
+        }
+        /**
+         * Get all accessible libraries
+         * @returns {Promise<Array<{libraryID: number, libraryType: string, name: string, editable: boolean}>>}
+         */
+        async getAllLibraries() {
+          return this.libraryContextManager.getAllLibraries();
+        }
+        /**
+         * Build a Zotero.Search scoped to a specific library
+         * @param {number} libraryID - The library ID to scope the search to
+         * @returns {Object} Zotero.Search object
+         * @throws {Error} If Zotero context is undefined
+         */
+        createLibraryScopedSearch(libraryID) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          const search = new Zotero.Search();
+          search.addCondition("libraryID", "is", libraryID);
+          return search;
+        }
+        /**
+         * Get items matching a search within a specific library
+         * @param {number} libraryID - The library ID
+         * @param {Object} searchConditions - Conditions to add to the search
+         *   Format: { fieldName: [operator, value] } or { fieldName: {operator, value} }
+         * @returns {Promise<Array>} Array of items matching the search
+         * @throws {Error} If Zotero context is undefined
+         */
+        async searchItemsInLibrary(libraryID, searchConditions = {}) {
+          if (!this.isZoteroAvailable()) {
+            throw new Error("Zotero context is undefined");
+          }
+          try {
+            const search = this.createLibraryScopedSearch(libraryID);
+            for (const [field, condition] of Object.entries(searchConditions)) {
+              if (Array.isArray(condition)) {
+                search.addCondition(field, ...condition);
+              } else if (condition && typeof condition === "object") {
+                search.addCondition(field, condition.operator, condition.value);
+              }
+            }
+            const itemIDs = await search.search();
+            return Zotero.Items.get(itemIDs);
+          } catch (error) {
+            throw new Error(`Failed to search items in library ${libraryID}: ${error.message}`);
+          }
+        }
+      };
+      if (typeof module !== "undefined" && module.exports) {
+        module.exports = CollectionManager2;
+      }
+    }
+  });
+
   // src/zotero/zotero-db-analyzer.js
   var require_zotero_db_analyzer = __commonJS({
     "src/zotero/zotero-db-analyzer.js"(exports, module) {
@@ -2371,13 +3008,34 @@ if (typeof console === 'undefined') {
         constructor() {
           this.candidateFinder = new (require_candidate_finder())();
           this.learningEngine = new (require_learning_engine())();
+          this._collectionManager = null;
+        }
+        /**
+         * Lazy getter for CollectionManager
+         */
+        get collectionManager() {
+          if (!this._collectionManager) {
+            const CollectionManager2 = require_collection_manager();
+            this._collectionManager = new CollectionManager2();
+          }
+          return this._collectionManager;
         }
         /**
          * Perform a database-wide analysis of creator names
          * In a Zotero context, this would execute efficient SQL queries
+         * 
+         * @param {Object} options - Analysis options
+         * @param {number} options.libraryID - Library ID to analyze (defaults to user library)
+         * @param {Function} options.progressCallback - Callback for progress updates
+         * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
          * @returns {Promise<Object>} Analysis results
          */
-        async analyzeFullLibrary(progressCallback = null, shouldCancel = null) {
+        async analyzeFullLibrary(options = {}, progressCallback = null, shouldCancel = null) {
+          if (typeof options === "function") {
+            progressCallback = options;
+            options = {};
+          }
+          const { libraryID = null } = options;
           const DEBUG = true;
           const log = (msg) => {
             if (DEBUG) {
@@ -2393,13 +3051,21 @@ if (typeof console === 'undefined') {
             fileLog("ERROR: Zotero is undefined");
             throw new Error("This method must be run in the Zotero context");
           }
-          console.log("Starting full library analysis...");
+          const targetLibraryID = libraryID || Zotero.Libraries.userLibraryID;
+          let libraryInfo = "";
           try {
-            const libraryID = Zotero.Libraries.userLibraryID;
-            fileLog("Creating search for libraryID: " + libraryID);
-            log("Creating search for libraryID: " + libraryID);
+            const library = Zotero.Libraries.get(targetLibraryID);
+            if (library) {
+              libraryInfo = ` (${library.libraryType === "user" ? "My Library" : library.name})`;
+            }
+          } catch (e) {
+          }
+          console.log(`Starting full library analysis${libraryInfo}...`);
+          try {
+            fileLog("Creating search for libraryID: " + targetLibraryID);
+            log("Creating search for libraryID: " + targetLibraryID);
             const search = new Zotero.Search();
-            search.addCondition("libraryID", "is", libraryID);
+            search.addCondition("libraryID", "is", targetLibraryID);
             const itemIDs = await search.search();
             fileLog("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
             log("Search returned " + (itemIDs ? itemIDs.length : 0) + " item IDs");
@@ -2461,7 +3127,7 @@ if (typeof console === 'undefined') {
               console.log("3. Search conditions are too restrictive");
               console.log("Trying fallback search to verify database access...");
               const fallbackSearch = new Zotero.Search();
-              fallbackSearch.addCondition("libraryID", "is", Zotero.Libraries.userLibraryID);
+              fallbackSearch.addCondition("libraryID", "is", targetLibraryID);
               fallbackSearch.addCondition("limit", "is", 10);
               try {
                 const fallbackItemIDs = await fallbackSearch.search();
@@ -2685,6 +3351,146 @@ if (typeof console === 'undefined') {
           }
           const match = dateValue.match(/(\d{4})/);
           return match ? match[1] : "";
+        }
+        /**
+         * Analyze a specific library by ID
+         * Convenience wrapper around analyzeFullLibrary with explicit libraryID
+         * 
+         * @param {number} libraryID - The library ID to analyze
+         * @param {Object} options - Additional analysis options
+         * @param {Function} options.progressCallback - Callback for progress updates
+         * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+         * @returns {Promise<Object>} Analysis results
+         */
+        async analyzeLibrary(libraryID, options = {}) {
+          if (!libraryID) {
+            throw new Error("libraryID is required for analyzeLibrary");
+          }
+          const { progressCallback = null, shouldCancel = null } = options;
+          return this.analyzeFullLibrary({ libraryID, progressCallback, shouldCancel });
+        }
+        /**
+         * Analyze a specific collection within a library
+         * 
+         * @param {string} collectionKey - The collection key to analyze
+         * @param {Object} options - Analysis options
+         * @param {boolean} options.includeSubcollections - Include items from subcollections (default: false)
+         * @param {Function} options.progressCallback - Callback for progress updates
+         * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+         * @returns {Promise<Object>} Analysis results
+         */
+        async analyzeCollection(collectionKey, options = {}) {
+          if (!collectionKey) {
+            throw new Error("collectionKey is required for analyzeCollection");
+          }
+          const { includeSubcollections = false, progressCallback = null, shouldCancel = null } = options;
+          if (typeof Zotero === "undefined") {
+            throw new Error("This method must be run in the Zotero context");
+          }
+          let libraryID = options.libraryID;
+          if (!libraryID) {
+            try {
+              const collections = Zotero.Collections.get();
+              if (collections) {
+                for (const coll of collections) {
+                  if (coll.key === collectionKey) {
+                    libraryID = coll.libraryID;
+                    break;
+                  }
+                }
+              }
+            } catch (e) {
+            }
+          }
+          if (!libraryID) {
+            throw new Error(`Cannot determine libraryID for collection: ${collectionKey}`);
+          }
+          const collection = Zotero.Collections.getByLibraryAndKey(libraryID, collectionKey);
+          if (!collection) {
+            throw new Error(`Collection not found: ${collectionKey}`);
+          }
+          const search = new Zotero.Search();
+          search.addCondition("collection", "is", collectionKey);
+          search.addCondition("libraryID", "is", libraryID);
+          const itemIDs = await search.search();
+          const items = await Zotero.Items.getAsync(itemIDs);
+          return this.analyzeItems(items, { libraryID, progressCallback, shouldCancel });
+        }
+        /**
+         * Analyze a specific set of items
+         * 
+         * @param {Array} items - Array of Zotero items to analyze
+         * @param {Object} options - Analysis options
+         * @param {number} options.libraryID - The library ID (for context)
+         * @param {Function} options.progressCallback - Callback for progress updates
+         * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+         * @returns {Promise<Object>} Analysis results
+         */
+        async analyzeItems(items, options = {}) {
+          const { libraryID = null, progressCallback = null, shouldCancel = null } = options;
+          const DEBUG = true;
+          const log = (msg) => {
+            if (DEBUG) {
+              const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[1].split(".")[0];
+              const line = timestamp + " ANALYZER: " + msg;
+              console.error(line);
+            }
+          };
+          fileLog("analyzeItems started with " + (items ? items.length : 0) + " items");
+          log("analyzeItems started with " + (items ? items.length : 0) + " items");
+          if (typeof Zotero === "undefined") {
+            log("ERROR: Zotero is undefined");
+            throw new Error("This method must be run in the Zotero context");
+          }
+          console.log(`Starting analysis of ${items.length} items...`);
+          try {
+            const creatorsMap = {};
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              try {
+                const creators2 = item.getCreators ? item.getCreators() : [];
+                if (creators2 && Array.isArray(creators2) && creators2.length > 0) {
+                  const validCreators = creators2.filter(
+                    (creator) => creator && (creator.firstName || creator.lastName)
+                  );
+                  for (const creator of validCreators) {
+                    this.addCreatorOccurrence(creatorsMap, creator, item);
+                  }
+                }
+              } catch (itemError) {
+                console.warn("Error processing item creators:", itemError);
+              }
+              if (progressCallback) {
+                progressCallback({
+                  stage: "processing_items",
+                  processed: i + 1,
+                  total: items.length,
+                  percent: Math.round((i + 1) / items.length * 100)
+                });
+              }
+              if (shouldCancel && shouldCancel()) {
+                throw new Error("Analysis cancelled");
+              }
+            }
+            const creators = Object.values(creatorsMap);
+            Zotero.debug("ZoteroDBAnalyzer: Extracted " + creators.length + " unique creators from items");
+            console.log(`Found ${creators.length} unique creator combinations`);
+            const results = await this.analyzeCreators(creators, progressCallback, shouldCancel);
+            Zotero.debug("ZoteroDBAnalyzer: analyzeCreators completed, suggestions count: " + (results.suggestions ? results.suggestions.length : 0));
+            return results;
+          } catch (error) {
+            console.error("Error in analyzeItems:", error);
+            if (error.message === "Analysis cancelled") {
+              throw error;
+            }
+            return {
+              surnameFrequencies: {},
+              potentialVariants: [],
+              suggestions: [],
+              totalUniqueSurnames: 0,
+              totalVariantGroups: 0
+            };
+          }
         }
         /**
          * Analyze a list of creators for name variants
@@ -4634,6 +5440,17 @@ if (typeof console === 'undefined') {
         constructor() {
           this.itemProcessor = new (require_item_processor())();
           this.zoteroDBAnalyzer = new (require_zotero_db_analyzer())();
+          this._libraryContextManager = null;
+        }
+        /**
+         * Lazy getter for LibraryContextManager
+         */
+        get libraryContextManager() {
+          if (!this._libraryContextManager) {
+            const LibraryContextManager2 = require_library_context_manager();
+            this._libraryContextManager = new LibraryContextManager2();
+          }
+          return this._libraryContextManager;
         }
         /**
          * Initialize the menu integration
@@ -4776,19 +5593,30 @@ if (typeof console === 'undefined') {
         }
         /**
          * Perform a full library analysis for name variants
+         * Respects the currently selected library/collection in Zotero UI
          * @returns {Object} Analysis results
          */
         async performFullLibraryAnalysis() {
           if (typeof Zotero === "undefined") {
             throw new Error("This feature requires Zotero context");
           }
-          console.log("Starting full library analysis for name variants...");
           try {
-            const results = await this.zoteroDBAnalyzer.analyzeFullLibrary();
-            console.log(`Analysis complete: Found ${results.totalVariantGroups} potential variant groups`);
+            const context = await this.libraryContextManager.getCurrentLibraryContext();
+            console.log(`Starting analysis for ${context.libraryType === "user" ? "My Library" : context.libraryName}...`);
+            let results;
+            if (context.collectionKey) {
+              console.log(`Analyzing collection: ${context.collectionName}`);
+              results = await this.zoteroDBAnalyzer.analyzeCollection(context.collectionKey, {
+                includeSubcollections: false
+              });
+            } else {
+              console.log(`Analyzing library: ${context.libraryName}`);
+              results = await this.zoteroDBAnalyzer.analyzeLibrary(context.libraryID);
+            }
+            console.log(`Analysis complete: Found ${results.totalVariantGroups || 0} potential variant groups`);
             return results;
           } catch (error) {
-            console.error("Error in full library analysis:", error);
+            console.error("Error in library analysis:", error);
             throw error;
           }
         }
@@ -4797,12 +5625,15 @@ if (typeof console === 'undefined') {
          */
         async handleFullLibraryAnalysis() {
           try {
+            const context = await this.libraryContextManager.getCurrentLibraryContext();
+            const scopeDescription = context.collectionKey ? `collection "${context.collectionName}" in ${context.libraryType === "user" ? "My Library" : context.libraryName}` : context.libraryType === "user" ? "My Library" : context.libraryName;
+            console.log(`Starting analysis of ${scopeDescription}...`);
             const results = await this.performFullLibraryAnalysis();
             console.log("Full library analysis results:", {
+              scope: scopeDescription,
               totalUniqueSurnames: results.totalUniqueSurnames,
               totalVariantGroups: results.totalVariantGroups,
-              topSuggestions: results.suggestions.slice(0, 10)
-              // First 10 suggestions
+              topSuggestions: results.suggestions ? results.suggestions.slice(0, 10) : []
             });
             return results;
           } catch (error) {
@@ -4986,6 +5817,8 @@ if (typeof console === 'undefined') {
   var import_item_processor = __toESM(require_item_processor());
   var import_menu_integration = __toESM(require_menu_integration());
   var import_zotero_db_analyzer = __toESM(require_zotero_db_analyzer());
+  var import_collection_manager = __toESM(require_collection_manager());
+  var import_library_context_manager = __toESM(require_library_context_manager());
   var import_normalizer_dialog = __toESM(require_normalizer_dialog());
   var import_batch_processor = __toESM(require_batch_processor());
   var import_data_manager = __toESM(require_data_manager());
@@ -5026,6 +5859,8 @@ if (typeof console === 'undefined') {
     ItemProcessor: import_item_processor.default,
     MenuIntegration: import_menu_integration.default,
     ZoteroDBAnalyzer: import_zotero_db_analyzer.default,
+    CollectionManager: import_collection_manager.default,
+    LibraryContextManager: import_library_context_manager.default,
     NormalizerDialog: import_normalizer_dialog.default,
     BatchProcessor: import_batch_processor.default,
     DataManager: import_data_manager.default

@@ -118,13 +118,19 @@ describe('Full workflow integration', () => {
       suggestions: []
     };
 
-    menuIntegration.zoteroDBAnalyzer.analyzeFullLibrary = jest
-      .fn()
-      .mockResolvedValue(sampleResults);
+    // Mock library context manager
+    menuIntegration.libraryContextManager.getCurrentLibraryContext = jest.fn().mockResolvedValue({
+      libraryID: 1,
+      libraryType: 'user',
+      libraryName: 'My Library'
+    });
+
+    // Mock analyzeLibrary instead of analyzeFullLibrary
+    menuIntegration.zoteroDBAnalyzer.analyzeLibrary = jest.fn().mockResolvedValue(sampleResults);
 
     const results = await menuIntegration.handleFullLibraryAnalysis();
 
-    expect(menuIntegration.zoteroDBAnalyzer.analyzeFullLibrary).toHaveBeenCalled();
+    expect(menuIntegration.zoteroDBAnalyzer.analyzeLibrary).toHaveBeenCalled();
     expect(results).toEqual(sampleResults);
   });
 });

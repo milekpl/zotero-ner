@@ -183,7 +183,7 @@ async function processInBatches(items, batchSize = 100) {
 ```
 
 ## Project Focus
-This is a **data normalization** extension, not a named entity recognition (NER) tool. Focus on:
+This is a **data normalization** extension that focuses on:
 - Extracting structured data from flat Zotero fields
 - Normalizing publisher names, locations, and journal names
 - Providing consistent, machine-readable data formats

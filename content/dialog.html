@@ -1755,15 +1755,80 @@
           return;
         }
 
-        // Load all items from user's library
+        // Load items from library context (or detect from Zotero UI if not provided)
         let items = [];
         try {
-          const libraryID = Zotero.Libraries.userLibraryID;
+          // Try to detect library context from Zotero UI if not provided in params
+          let libraryID = (params && params.libraryContext && params.libraryContext.libraryID)
+            ? params.libraryContext.libraryID
+            : null;
+          let libraryType = (params && params.libraryContext && params.libraryContext.libraryType)
+            ? params.libraryContext.libraryType
+            : null;
+          let libraryName = (params && params.libraryContext && params.libraryContext.libraryName)
+            ? params.libraryContext.libraryName
+            : null;
+          let collectionKey = (params && params.libraryContext && params.libraryContext.collectionKey)
+            ? params.libraryContext.collectionKey
+            : null;
+
+          // If no library context from params, try to detect from Zotero
           if (!libraryID) {
-            throw new Error('Could not determine user library ID');
+            try {
+              const zoteroPane = Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane();
+              if (zoteroPane) {
+                // Try to get selected collection
+                const collection = zoteroPane.getSelectedCollection && zoteroPane.getSelectedCollection();
+                if (collection) {
+                  libraryID = collection.libraryID;
+                  collectionKey = collection.key;
+                  const library = Zotero.Libraries.get(libraryID);
+                  libraryType = library.libraryType;
+                  libraryName = library.name;
+                  this.log('Detected library context from UI: ' + libraryName + ', collection: ' + collection.key);
+                } else {
+                  // Try to get from selected items
+                  const selectedItems = zoteroPane.getSelectedItems && zoteroPane.getSelectedItems();
+                  if (selectedItems && selectedItems.length > 0) {
+                    libraryID = selectedItems[0].libraryID;
+                    const library = Zotero.Libraries.get(libraryID);
+                    libraryType = library.libraryType;
+                    libraryName = library.name;
+                    this.log('Detected library context from selected items: ' + libraryName);
+                  }
+                }
+              }
+            } catch (e) {
+              this.log('Could not detect library context from UI: ' + e.message);
+            }
           }
-          items = await Zotero.Items.getAll(libraryID);
-          this.log('Found ' + items.length + ' items in library');
+
+          // Final fallback to user library
+          if (!libraryID) {
+            libraryID = Zotero.Libraries.userLibraryID;
+            libraryType = 'user';
+            libraryName = 'My Library';
+          }
+
+          this.log('Loading items from library: ' + libraryName + ' (ID: ' + libraryID + ', type: ' + libraryType + ')');
+
+          if (!libraryID) {
+            throw new Error('Could not determine library ID');
+          }
+
+          // If a collection is specified, filter by collection
+          if (collectionKey) {
+            // Get items from specific collection
+            const search = new Zotero.Search();
+            search.addCondition('collection', 'is', collectionKey);
+            search.addCondition('libraryID', 'is', libraryID);
+            const itemIDs = await search.search();
+            items = await Zotero.Items.getAsync(itemIDs);
+            this.log('Found ' + items.length + ' items in collection "' + (params.libraryContext ? params.libraryContext.collectionName : collectionKey) + '"');
+          } else {
+            items = await Zotero.Items.getAll(libraryID);
+            this.log('Found ' + items.length + ' items in library');
+          }
         } catch (err) {
           this.log('Error loading items: ' + err.message);
           this.showEmptyState('Failed to load items: ' + err.message);

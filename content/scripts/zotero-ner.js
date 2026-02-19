@@ -19,7 +19,9 @@ if (typeof Zotero === 'undefined') {
       'ZoteroDBAnalyzer',
       'NormalizerDialog',
       'BatchProcessor',
-      'DataManager'
+      'DataManager',
+      'CollectionManager',
+      'LibraryContextManager'
     ];
 
     // Helper function to get the bundle from any scope
@@ -149,6 +151,8 @@ if (typeof Zotero === 'undefined') {
       normalizerDialog: initializedModules.normalizerDialog || null,
       batchProcessor: initializedModules.batchProcessor || null,
       dataManager: initializedModules.dataManager || null,
+      collectionManager: initializedModules.collectionManager || null,
+      libraryContextManager: initializedModules.libraryContextManager || null,
 
       hooks: {
         onStartup: function() {
@@ -567,8 +571,8 @@ if (typeof Zotero === 'undefined') {
                 }, 10000);  // Every 10 seconds
 
                 // Perform analysis asynchronously
-                fileLog('Calling analyzeFullLibrary...');
-                console.log('Name Normalizer: Calling analyzeFullLibrary...');
+                fileLog('Getting library context...');
+                console.log('Name Normalizer: Getting library context...');
                 let analysisResults = null;
                 try {
                   // Signal the dialog to start progress tracking
@@ -579,7 +583,34 @@ if (typeof Zotero === 'undefined') {
                     console.log('Name Normalizer: startProgressTracking called');
                   }
 
-                  analysisResults = await dbAnalyzer.analyzeFullLibrary(progressCallback);
+                  // Get library context to determine scope of analysis
+                  let libraryContext = null;
+                  if (mainWindowZoteroNameNormalizer && mainWindowZoteroNameNormalizer.LibraryContextManager) {
+                    const libContextMgr = new mainWindowZoteroNameNormalizer.LibraryContextManager();
+                    libraryContext = await libContextMgr.getCurrentLibraryContext();
+                    fileLog('Library context: ' + JSON.stringify(libraryContext));
+                    console.log('Name Normalizer: Library context: ' + (libraryContext.libraryType === 'user' ? 'My Library' : libraryContext.libraryName) + (libraryContext.collectionKey ? ' - ' + libraryContext.collectionName : ''));
+                  }
+
+                  // Use collection-aware analysis
+                  if (libraryContext && libraryContext.collectionKey) {
+                    // Collection is selected - analyze only that collection
+                    fileLog('Analyzing collection: ' + libraryContext.collectionName);
+                    console.log('Name Normalizer: Analyzing collection: ' + libraryContext.collectionName);
+                    analysisResults = await dbAnalyzer.analyzeCollection(libraryContext.collectionKey, {
+                      libraryID: libraryContext.libraryID,
+                      includeSubcollections: false,
+                      progressCallback: progressCallback
+                    });
+                  } else {
+                    // Analyze entire library
+                    const libraryName = libraryContext && libraryContext.libraryType === 'user' ? 'My Library' : (libraryContext ? libraryContext.libraryName : 'library');
+                    fileLog('Analyzing library: ' + libraryName);
+                    console.log('Name Normalizer: Analyzing library: ' + libraryName);
+                    analysisResults = await dbAnalyzer.analyzeLibrary(libraryContext ? libraryContext.libraryID : null, {
+                      progressCallback: progressCallback
+                    });
+                  }
                   fileLog('Analysis complete: suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
                   console.log('Name Normalizer: Analysis complete, suggestions=' + (analysisResults ? analysisResults.suggestions.length : 'NULL'));
                   self.log('Analysis complete, updating dialog...');
@@ -640,10 +671,23 @@ if (typeof Zotero === 'undefined') {
        */
       showDialogForField: async function(fieldType) {
         try {
-          console.log('ZOTERO-NER: showDialogForField called for: ' + fieldType);
           this.log('showDialogForField called for: ' + fieldType);
 
-          // Check for selected items (optional - will use whole library if none selected)
+          // Get library context to determine scope
+          let libraryContext = null;
+          try {
+            const mainWindow = Zotero.getMainWindow();
+            const zoteroNameNormalizer = mainWindow ? mainWindow.ZoteroNameNormalizer : null;
+            if (zoteroNameNormalizer && zoteroNameNormalizer.LibraryContextManager) {
+              const libCtxMgr = new zoteroNameNormalizer.LibraryContextManager();
+              libraryContext = await libCtxMgr.getCurrentLibraryContext();
+              this.log('Library context: ' + libraryContext.libraryType + ' - ' + libraryContext.libraryName);
+            }
+          } catch (e) {
+            this.log('Could not get library context: ' + e.message);
+          }
+
+          // Check for selected items
           let itemIDs = [];
           let selectedCount = 0;
           try {
@@ -661,14 +705,14 @@ if (typeof Zotero === 'undefined') {
 
           this.log(selectedCount > 0
             ? 'Selected ' + selectedCount + ' items for ' + fieldType + ' normalization'
-            : 'No items selected - will use whole library');
+            : 'No items selected - will use library context');
 
-          // Open dialog with field type
-          // Dialog will load items based on collection scope selection
+          // Open dialog with field type and library context
           const params = {
-            items: itemIDs,  // Empty array = whole library
+            items: itemIDs,
             fieldType: fieldType,
-            selectedCount: selectedCount
+            selectedCount: selectedCount,
+            libraryContext: libraryContext
           };
 
           const mainWindow = Zotero.getMainWindow();

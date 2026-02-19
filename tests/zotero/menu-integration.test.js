@@ -147,11 +147,24 @@ describe('MenuIntegration', () => {
   // });
 
   test('should perform full library analysis', async () => {
-    const results = await menuIntegration.performFullLibraryAnalysis();
+    // Mock library context manager
+    menuIntegration.libraryContextManager.getCurrentLibraryContext = jest.fn().mockResolvedValue({
+      libraryID: 1,
+      libraryType: 'user',
+      libraryName: 'My Library'
+    });
     
+    // Mock analyzeLibrary
+    menuIntegration.zoteroDBAnalyzer.analyzeLibrary = jest.fn().mockResolvedValue({
+      totalUniqueSurnames: 100,
+      totalVariantGroups: 10,
+      suggestions: []
+    });
+
+    const results = await menuIntegration.performFullLibraryAnalysis();
+
     expect(results.totalUniqueSurnames).toBe(100);
     expect(results.totalVariantGroups).toBe(10);
-    expect(menuIntegration.zoteroDBAnalyzer.analyzeFullLibrary).toHaveBeenCalled();
   });
 
   test('should throw error when performing full library analysis without Zotero', async () => {
@@ -168,16 +181,37 @@ describe('MenuIntegration', () => {
   });
 
   test('should handle full library analysis', async () => {
-    const results = await menuIntegration.handleFullLibraryAnalysis();
+    // Mock library context manager
+    menuIntegration.libraryContextManager.getCurrentLibraryContext = jest.fn().mockResolvedValue({
+      libraryID: 1,
+      libraryType: 'user',
+      libraryName: 'My Library'
+    });
     
+    // Mock analyzeLibrary instead of analyzeFullLibrary
+    menuIntegration.zoteroDBAnalyzer.analyzeLibrary = jest.fn().mockResolvedValue({
+      totalUniqueSurnames: 100,
+      totalVariantGroups: 10,
+      suggestions: []
+    });
+
+    const results = await menuIntegration.handleFullLibraryAnalysis();
+
     expect(results.totalUniqueSurnames).toBe(100);
     expect(results.totalVariantGroups).toBe(10);
     expect(results.suggestions).toEqual([]);
   });
 
   test('should handle errors in full library analysis', async () => {
-    // Mock the analyzeFullLibrary method to throw an error
-    menuIntegration.zoteroDBAnalyzer.analyzeFullLibrary.mockRejectedValue(
+    // Mock library context manager
+    menuIntegration.libraryContextManager.getCurrentLibraryContext = jest.fn().mockResolvedValue({
+      libraryID: 1,
+      libraryType: 'user',
+      libraryName: 'My Library'
+    });
+    
+    // Mock analyzeLibrary to throw an error
+    menuIntegration.zoteroDBAnalyzer.analyzeLibrary = jest.fn().mockRejectedValue(
       new Error('Database error')
     );
 

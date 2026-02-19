@@ -46,6 +46,8 @@ import CandidateFinder from './core/candidate-finder.js';
 import ItemProcessor from './zotero/item-processor.js';
 import MenuIntegration from './zotero/menu-integration.js';
 import ZoteroDBAnalyzer from './zotero/zotero-db-analyzer.js';
+import CollectionManager from './zotero/collection-manager.js';
+import LibraryContextManager from './zotero/library-context-manager.js';
 
 // UI modules
 import NormalizerDialog from './ui/normalizer-dialog.js';
@@ -63,6 +65,8 @@ const ZoteroNameNormalizer = {
   ItemProcessor,
   MenuIntegration,
   ZoteroDBAnalyzer,
+  CollectionManager,
+  LibraryContextManager,
   NormalizerDialog,
   BatchProcessor,
   DataManager,
@@ -77,6 +81,8 @@ export {
   ItemProcessor,
   MenuIntegration,
   ZoteroDBAnalyzer,
+  CollectionManager,
+  LibraryContextManager,
   NormalizerDialog,
   BatchProcessor,
   DataManager,

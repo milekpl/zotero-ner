@@ -156,14 +156,39 @@ class ZoteroDBAnalyzer {
   constructor() {
     this.candidateFinder = new (require('../core/candidate-finder.js'))();
     this.learningEngine = new (require('../core/learning-engine.js'))();
+    this._collectionManager = null;
+  }
+
+  /**
+   * Lazy getter for CollectionManager
+   */
+  get collectionManager() {
+    if (!this._collectionManager) {
+      const CollectionManager = require('./collection-manager.js');
+      this._collectionManager = new CollectionManager();
+    }
+    return this._collectionManager;
   }
 
   /**
    * Perform a database-wide analysis of creator names
    * In a Zotero context, this would execute efficient SQL queries
+   * 
+   * @param {Object} options - Analysis options
+   * @param {number} options.libraryID - Library ID to analyze (defaults to user library)
+   * @param {Function} options.progressCallback - Callback for progress updates
+   * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
    * @returns {Promise<Object>} Analysis results
    */
-  async analyzeFullLibrary(progressCallback = null, shouldCancel = null) {
+  async analyzeFullLibrary(options = {}, progressCallback = null, shouldCancel = null) {
+    // Handle legacy signature: analyzeFullLibrary(progressCallback, shouldCancel)
+    if (typeof options === 'function') {
+      progressCallback = options;
+      options = {};
+    }
+    
+    const { libraryID = null } = options;
+
     const DEBUG = true;
     const log = (msg) => {
       if (DEBUG) {
@@ -181,15 +206,28 @@ class ZoteroDBAnalyzer {
       throw new Error('This method must be run in the Zotero context');
     }
 
-    console.log('Starting full library analysis...');
+    // Resolve libraryID - use provided ID, or default to user library
+    const targetLibraryID = libraryID || Zotero.Libraries.userLibraryID;
+    
+    // Get library info for logging
+    let libraryInfo = '';
+    try {
+      const library = Zotero.Libraries.get(targetLibraryID);
+      if (library) {
+        libraryInfo = ` (${library.libraryType === 'user' ? 'My Library' : library.name})`;
+      }
+    } catch (e) {
+      // Ignore errors getting library info
+    }
+
+    console.log(`Starting full library analysis${libraryInfo}...`);
 
     try {
       // Use Zotero.Search API to get all items with creators
-      const libraryID = Zotero.Libraries.userLibraryID;
-      fileLog('Creating search for libraryID: ' + libraryID);
-      log('Creating search for libraryID: ' + libraryID);
+      fileLog('Creating search for libraryID: ' + targetLibraryID);
+      log('Creating search for libraryID: ' + targetLibraryID);
       const search = new Zotero.Search();
-      search.addCondition('libraryID', 'is', libraryID);
+      search.addCondition('libraryID', 'is', targetLibraryID);
 
       const itemIDs = await search.search();
       fileLog('Search returned ' + (itemIDs ? itemIDs.length : 0) + ' item IDs');
@@ -266,7 +304,7 @@ class ZoteroDBAnalyzer {
         // Fallback: Try to get some items without creator filter to verify search works
         console.log('Trying fallback search to verify database access...');
         const fallbackSearch = new Zotero.Search();
-        fallbackSearch.addCondition('libraryID', 'is', Zotero.Libraries.userLibraryID);
+        fallbackSearch.addCondition('libraryID', 'is', targetLibraryID);
         fallbackSearch.addCondition('limit', 'is', 10); // Just get 10 items
 
         try {
@@ -539,6 +577,187 @@ class ZoteroDBAnalyzer {
 
     const match = dateValue.match(/(\d{4})/);
     return match ? match[1] : '';
+  }
+
+  /**
+   * Analyze a specific library by ID
+   * Convenience wrapper around analyzeFullLibrary with explicit libraryID
+   * 
+   * @param {number} libraryID - The library ID to analyze
+   * @param {Object} options - Additional analysis options
+   * @param {Function} options.progressCallback - Callback for progress updates
+   * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+   * @returns {Promise<Object>} Analysis results
+   */
+  async analyzeLibrary(libraryID, options = {}) {
+    if (!libraryID) {
+      throw new Error('libraryID is required for analyzeLibrary');
+    }
+
+    const { progressCallback = null, shouldCancel = null } = options;
+
+    return this.analyzeFullLibrary({ libraryID, progressCallback, shouldCancel });
+  }
+
+  /**
+   * Analyze a specific collection within a library
+   * 
+   * @param {string} collectionKey - The collection key to analyze
+   * @param {Object} options - Analysis options
+   * @param {boolean} options.includeSubcollections - Include items from subcollections (default: false)
+   * @param {Function} options.progressCallback - Callback for progress updates
+   * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+   * @returns {Promise<Object>} Analysis results
+   */
+  async analyzeCollection(collectionKey, options = {}) {
+    if (!collectionKey) {
+      throw new Error('collectionKey is required for analyzeCollection');
+    }
+
+    const { includeSubcollections = false, progressCallback = null, shouldCancel = null } = options;
+
+    if (typeof Zotero === 'undefined') {
+      throw new Error('This method must be run in the Zotero context');
+    }
+
+    // Get the collection using the proper Zotero API
+    // We need libraryID to look up the collection
+    // Get the libraryID from options or try to find it
+    let libraryID = options.libraryID;
+    if (!libraryID) {
+      // Try to find the collection by iterating all collections (expensive but fallback)
+      try {
+        const collections = Zotero.Collections.get();
+        if (collections) {
+          for (const coll of collections) {
+            if (coll.key === collectionKey) {
+              libraryID = coll.libraryID;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    if (!libraryID) {
+      throw new Error(`Cannot determine libraryID for collection: ${collectionKey}`);
+    }
+
+    const collection = Zotero.Collections.getByLibraryAndKey(libraryID, collectionKey);
+    if (!collection) {
+      throw new Error(`Collection not found: ${collectionKey}`);
+    }
+
+    // Get items from the collection using search
+    const search = new Zotero.Search();
+    search.addCondition('collection', 'is', collectionKey);
+    search.addCondition('libraryID', 'is', libraryID);
+
+    const itemIDs = await search.search();
+
+    // Get the actual items
+    const items = await Zotero.Items.getAsync(itemIDs);
+
+    // Process items directly
+    return this.analyzeItems(items, { libraryID, progressCallback, shouldCancel });
+  }
+
+  /**
+   * Analyze a specific set of items
+   * 
+   * @param {Array} items - Array of Zotero items to analyze
+   * @param {Object} options - Analysis options
+   * @param {number} options.libraryID - The library ID (for context)
+   * @param {Function} options.progressCallback - Callback for progress updates
+   * @param {Function} options.shouldCancel - Function to check if analysis should be cancelled
+   * @returns {Promise<Object>} Analysis results
+   */
+  async analyzeItems(items, options = {}) {
+    const { libraryID = null, progressCallback = null, shouldCancel = null } = options;
+
+    const DEBUG = true;
+    const log = (msg) => {
+      if (DEBUG) {
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const line = timestamp + ' ANALYZER: ' + msg;
+        console.error(line);
+      }
+    };
+
+    fileLog('analyzeItems started with ' + (items ? items.length : 0) + ' items');
+    log('analyzeItems started with ' + (items ? items.length : 0) + ' items');
+
+    if (typeof Zotero === 'undefined') {
+      log('ERROR: Zotero is undefined');
+      throw new Error('This method must be run in the Zotero context');
+    }
+
+    console.log(`Starting analysis of ${items.length} items...`);
+
+    try {
+      const creatorsMap = {};
+
+      // Process items and extract creators
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+
+        try {
+          const creators = item.getCreators ? item.getCreators() : [];
+          if (creators && Array.isArray(creators) && creators.length > 0) {
+            const validCreators = creators.filter(creator =>
+              creator && (creator.firstName || creator.lastName)
+            );
+
+            for (const creator of validCreators) {
+              this.addCreatorOccurrence(creatorsMap, creator, item);
+            }
+          }
+        } catch (itemError) {
+          console.warn('Error processing item creators:', itemError);
+        }
+
+        // Report progress
+        if (progressCallback) {
+          progressCallback({
+            stage: 'processing_items',
+            processed: i + 1,
+            total: items.length,
+            percent: Math.round(((i + 1) / items.length) * 100)
+          });
+        }
+
+        // Check for cancellation
+        if (shouldCancel && shouldCancel()) {
+          throw new Error('Analysis cancelled');
+        }
+      }
+
+      const creators = Object.values(creatorsMap);
+      Zotero.debug('ZoteroDBAnalyzer: Extracted ' + creators.length + ' unique creators from items');
+      console.log(`Found ${creators.length} unique creator combinations`);
+
+      // Analyze creators for surname frequencies and variants
+      const results = await this.analyzeCreators(creators, progressCallback, shouldCancel);
+      Zotero.debug('ZoteroDBAnalyzer: analyzeCreators completed, suggestions count: ' + (results.suggestions ? results.suggestions.length : 0));
+
+      return results;
+
+    } catch (error) {
+      console.error('Error in analyzeItems:', error);
+      if (error.message === 'Analysis cancelled') {
+        throw error;
+      }
+      // Return empty results on error
+      return {
+        surnameFrequencies: {},
+        potentialVariants: [],
+        suggestions: [],
+        totalUniqueSurnames: 0,
+        totalVariantGroups: 0
+      };
+    }
   }
 
   /**

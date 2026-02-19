@@ -5,6 +5,18 @@ class MenuIntegration {
   constructor() {
     this.itemProcessor = new (require('./item-processor.js'))();
     this.zoteroDBAnalyzer = new (require('./zotero-db-analyzer.js'))();
+    this._libraryContextManager = null;
+  }
+
+  /**
+   * Lazy getter for LibraryContextManager
+   */
+  get libraryContextManager() {
+    if (!this._libraryContextManager) {
+      const LibraryContextManager = require('./library-context-manager.js');
+      this._libraryContextManager = new LibraryContextManager();
+    }
+    return this._libraryContextManager;
   }
 
   /**
@@ -189,22 +201,38 @@ class MenuIntegration {
 
   /**
    * Perform a full library analysis for name variants
+   * Respects the currently selected library/collection in Zotero UI
    * @returns {Object} Analysis results
    */
   async performFullLibraryAnalysis() {
     if (typeof Zotero === 'undefined') {
       throw new Error('This feature requires Zotero context');
     }
-    
-    console.log('Starting full library analysis for name variants...');
-    
+
     try {
-      const results = await this.zoteroDBAnalyzer.analyzeFullLibrary();
+      // Get the current library context from Zotero UI
+      const context = await this.libraryContextManager.getCurrentLibraryContext();
       
-      console.log(`Analysis complete: Found ${results.totalVariantGroups} potential variant groups`);
+      console.log(`Starting analysis for ${context.libraryType === 'user' ? 'My Library' : context.libraryName}...`);
+      
+      let results;
+      
+      // If a collection is selected, analyze only that collection
+      if (context.collectionKey) {
+        console.log(`Analyzing collection: ${context.collectionName}`);
+        results = await this.zoteroDBAnalyzer.analyzeCollection(context.collectionKey, {
+          includeSubcollections: false
+        });
+      } else {
+        // Analyze the entire library
+        console.log(`Analyzing library: ${context.libraryName}`);
+        results = await this.zoteroDBAnalyzer.analyzeLibrary(context.libraryID);
+      }
+
+      console.log(`Analysis complete: Found ${results.totalVariantGroups || 0} potential variant groups`);
       return results;
     } catch (error) {
-      console.error('Error in full library analysis:', error);
+      console.error('Error in library analysis:', error);
       throw error;
     }
   }
@@ -214,14 +242,23 @@ class MenuIntegration {
    */
   async handleFullLibraryAnalysis() {
     try {
+      // Get context for user feedback
+      const context = await this.libraryContextManager.getCurrentLibraryContext();
+      const scopeDescription = context.collectionKey 
+        ? `collection "${context.collectionName}" in ${context.libraryType === 'user' ? 'My Library' : context.libraryName}`
+        : (context.libraryType === 'user' ? 'My Library' : context.libraryName);
+      
+      console.log(`Starting analysis of ${scopeDescription}...`);
+      
       const results = await this.performFullLibraryAnalysis();
 
       // In a real implementation, this would show the results in a dedicated UI
       // For now, we'll just return the results
       console.log('Full library analysis results:', {
+        scope: scopeDescription,
         totalUniqueSurnames: results.totalUniqueSurnames,
         totalVariantGroups: results.totalVariantGroups,
-        topSuggestions: results.suggestions.slice(0, 10) // First 10 suggestions
+        topSuggestions: results.suggestions ? results.suggestions.slice(0, 10) : []
       });
 
       return results;
