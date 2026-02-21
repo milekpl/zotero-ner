@@ -780,7 +780,7 @@
         this.currentProgressState = null;
 
         // Set up event delegation for clickable item links
-        document.addEventListener('click', (event) => {
+        document.addEventListener('click', async (event) => {
           const link = event.target.closest('.item-link');
           if (link) {
             event.preventDefault();
@@ -1513,6 +1513,15 @@
           this.log('Unwrapped dialog params');
         }
 
+        // Check for field normalization params first
+        if (!params && window.ZoteroFieldNormalizationParams) {
+          params = this.unwrapDialogParams(window.ZoteroFieldNormalizationParams);
+        }
+
+        if (!params && window.opener && window.opener.ZoteroFieldNormalizationParams) {
+          params = this.unwrapDialogParams(window.opener.ZoteroFieldNormalizationParams);
+        }
+
         if (!params && window.ZoteroNERDialogParams) {
           params = this.unwrapDialogParams(window.ZoteroNERDialogParams);
         }
@@ -1772,17 +1781,21 @@
             ? params.libraryContext.collectionKey
             : null;
 
-          // If no library context from params, try to detect from Zotero
-          if (!libraryID) {
+          // If no library context OR collection missing, detect from Zotero UI
+          if (!libraryID || !collectionKey) {
             try {
-              const zoteroPane = Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane();
+              // Use opener's Zotero since we're in dialog context
+              const openerZotero = window.opener && window.opener.Zotero;
+              const zoteroPane = openerZotero && openerZotero.getActiveZoteroPane && openerZotero.getActiveZoteroPane();
+              this.log('FieldNorm: zoteroPane available: ' + !!zoteroPane);
               if (zoteroPane) {
                 // Try to get selected collection
                 const collection = zoteroPane.getSelectedCollection && zoteroPane.getSelectedCollection();
+                this.log('FieldNorm: selected collection: ' + (collection ? collection.key : 'null') + ', libraryID: ' + (collection ? collection.libraryID : 'null'));
                 if (collection) {
                   libraryID = collection.libraryID;
                   collectionKey = collection.key;
-                  const library = Zotero.Libraries.get(libraryID);
+                  const library = openerZotero.Libraries.get(libraryID);
                   libraryType = library.libraryType;
                   libraryName = library.name;
                   this.log('Detected library context from UI: ' + libraryName + ', collection: ' + collection.key);
@@ -1791,17 +1804,23 @@
                   const selectedItems = zoteroPane.getSelectedItems && zoteroPane.getSelectedItems();
                   if (selectedItems && selectedItems.length > 0) {
                     libraryID = selectedItems[0].libraryID;
-                    const library = Zotero.Libraries.get(libraryID);
+                    const library = openerZotero.Libraries.get(libraryID);
                     libraryType = library.libraryType;
                     libraryName = library.name;
                     this.log('Detected library context from selected items: ' + libraryName);
+                  } else {
+                    this.log('FieldNorm: No collection and no selected items detected');
                   }
                 }
+              } else {
+                this.log('FieldNorm: No zoteroPane available in dialog');
               }
             } catch (e) {
               this.log('Could not detect library context from UI: ' + e.message);
             }
           }
+
+          this.log('FieldNorm: Final - libraryID: ' + libraryID + ', collectionKey: ' + collectionKey + ', libraryName: ' + libraryName);
 
           // Final fallback to user library
           if (!libraryID) {
@@ -1818,9 +1837,10 @@
 
           // If a collection is specified, filter by collection
           if (collectionKey) {
-            // Get items from specific collection
+            // Get items from specific collection (including subcollections)
             const search = new Zotero.Search();
             search.addCondition('collection', 'is', collectionKey);
+            search.addCondition('recursive', 'true');
             search.addCondition('libraryID', 'is', libraryID);
             const itemIDs = await search.search();
             items = await Zotero.Items.getAsync(itemIDs);
@@ -1849,7 +1869,6 @@
           // Process items for field normalization
           // Pass both zoteroField (for getting values) and fieldType (for similarity logic)
           const results = await this.processFieldItems(items, zoteroField, fieldType, null);
-          this.log('processFieldItems completed, calling displayFieldResults');
 
           // Display results
           await this.displayFieldResults(results, fieldType, zoteroField, null);
@@ -1959,13 +1978,17 @@
         // Sort by total item count (most common first)
         displayItems.sort((a, b) => b.itemCount - a.itemCount);
 
-        // Filter out groups with only one variant (nothing to normalize)
+        // DON'T filter out single-variant groups - show ALL values so users can see and normalize them
+        // Even unique values might need normalization (e.g., typos)
+        // The old filtering caused "No values found" when all values were unique
+        /*
         const itemsWithChanges = displayItems.filter(item => item.variants.length > 1);
         const filteredCount = displayItems.length - itemsWithChanges.length;
         if (filteredCount > 0) {
           this.log('Filtered out ' + filteredCount + ' groups with single variant');
         }
         displayItems = itemsWithChanges;
+        */
 
         const results = {
           fieldType: fieldType,
@@ -2311,13 +2334,15 @@
         this.log('Field display: items=' + (results.items ? results.items.length : 'null'));
 
         if (!results.items || results.items.length === 0) {
-          this.log('No ' + fieldType + ' values found');
+          this.log('No ' + fieldType + ' values need normalization');
           ZoteroNER_HTMLUtils.setHidden('field-summary', true);
           ZoteroNER_HTMLUtils.setHidden('field-values-column', true);
           const emptyMsg = document.getElementById('field-empty-message');
           if (emptyMsg) {
+            // More informative message like author normalization
+            const fieldLabel = fieldType.charAt(0).toUpperCase() + fieldType.slice(1);
             emptyMsg.style.display = 'block';
-            emptyMsg.innerHTML = '<p>No ' + fieldType + ' values found.</p>';
+            emptyMsg.textContent = 'All ' + fieldLabel + ' values appear to be consistent.';
           }
           return;
         }

@@ -2246,15 +2246,21 @@ if (typeof console === 'undefined') {
           if (!this.isZoteroAvailable()) {
             return null;
           }
-          if (!this._zoteroPane) {
-            try {
-              this._zoteroPane = ZoteroPane || Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane();
-            } catch (e) {
-              console.warn("LibraryContextManager: Could not get ZoteroPane:", e);
-              this._zoteroPane = null;
+          try {
+            const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
+            if (mainWindow && mainWindow.ZoteroPane) {
+              return mainWindow.ZoteroPane;
             }
+            if (Zotero.getActiveZoteroPane) {
+              return Zotero.getActiveZoteroPane();
+            }
+            if (typeof ZoteroPane !== "undefined") {
+              return ZoteroPane;
+            }
+          } catch (e) {
+            console.warn("LibraryContextManager: Could not get ZoteroPane:", e);
           }
-          return this._zoteroPane;
+          return null;
         }
         /**
          * Get library context without ZoteroPane - uses Zotero's main window state
@@ -2291,7 +2297,7 @@ if (typeof console === 'undefined') {
                   };
                 }
               }
-            } catch (e) {
+            } catch {
             }
             try {
               const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
@@ -2311,7 +2317,7 @@ if (typeof console === 'undefined') {
                   }
                 }
               }
-            } catch (e) {
+            } catch {
             }
             try {
               const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
@@ -2333,7 +2339,7 @@ if (typeof console === 'undefined') {
                   }
                 }
               }
-            } catch (e) {
+            } catch {
             }
             return null;
           } catch (e) {
@@ -2409,7 +2415,7 @@ if (typeof console === 'undefined') {
                 libraryType: "user",
                 libraryName: userLib.name
               };
-            } catch (fallbackError) {
+            } catch {
               return {
                 libraryID: Zotero.Libraries.userLibraryID,
                 libraryType: "user",
@@ -2589,7 +2595,7 @@ if (typeof console === 'undefined') {
           try {
             const library = Zotero.Libraries.get(libraryID);
             return !!library;
-          } catch (e) {
+          } catch {
             return false;
           }
         }
@@ -2613,7 +2619,7 @@ if (typeof console === 'undefined') {
               return typeLabel;
             }
             return `${typeLabel}: ${library.name}`;
-          } catch (e) {
+          } catch {
             return `Library ${libraryID}`;
           }
         }
@@ -3384,6 +3390,9 @@ if (typeof console === 'undefined') {
             throw new Error("collectionKey is required for analyzeCollection");
           }
           const { includeSubcollections = false, progressCallback = null, shouldCancel = null } = options;
+          if (includeSubcollections) {
+            console.warn("ZoteroDBAnalyzer: includeSubcollections is deprecated - subcollections are now included automatically");
+          }
           if (typeof Zotero === "undefined") {
             throw new Error("This method must be run in the Zotero context");
           }
@@ -5543,10 +5552,13 @@ if (typeof console === 'undefined') {
               Zotero.alert(null, "Zotero Name Normalizer", "Could not get main window");
               return { success: false, error: "Could not get main window" };
             }
+            const libraryContext = await this.libraryContextManager.getCurrentLibraryContext();
+            console.log(`Field normalization context: ${libraryContext.libraryName}, collection: ${libraryContext.collectionKey || "none"}`);
             const params = {
               items: items.map((item) => item.id),
               // Pass item IDs
-              fieldType
+              fieldType,
+              libraryContext
             };
             mainWindow.openDialog(
               "chrome://zoteronamenormalizer/content/dialog.html",

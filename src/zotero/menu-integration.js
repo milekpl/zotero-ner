@@ -139,10 +139,15 @@ class MenuIntegration {
         return { success: false, error: 'Could not get main window' };
       }
 
-      // Pass items and fieldType as dialog parameters
+      // Get the current library context from Zotero UI
+      const libraryContext = await this.libraryContextManager.getCurrentLibraryContext();
+      console.log(`Field normalization context: ${libraryContext.libraryName}, collection: ${libraryContext.collectionKey || 'none'}`);
+
+      // Pass items, fieldType, and libraryContext as dialog parameters
       const params = {
         items: items.map(item => item.id),  // Pass item IDs
-        fieldType: fieldType
+        fieldType: fieldType,
+        libraryContext: libraryContext
       };
 
       // Open the dialog - it will handle field normalization

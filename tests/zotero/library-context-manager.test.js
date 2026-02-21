@@ -93,22 +93,23 @@ describe('LibraryContextManager', () => {
       expect(mgr.getZoteroPane()).toBe(mockPane);
     });
 
-    test('should cache ZoteroPane reference', () => {
+    test('should return current ZoteroPane reference (no caching)', () => {
       const mockPane = { selected: true };
       global.Zotero = { test: true };
       global.ZoteroPane = mockPane;
-      
+
       const LCM = require('../../src/zotero/library-context-manager.js');
       const mgr = new LCM();
 
       // First call
-      mgr.getZoteroPane();
-      
+      const firstResult = mgr.getZoteroPane();
+      expect(firstResult).toBe(mockPane);
+
       // Change ZoteroPane
       global.ZoteroPane = { different: true };
-      
-      // Should still return cached reference
-      expect(mgr.getZoteroPane()).toBe(mockPane);
+
+      // Should return new reference (no caching)
+      expect(mgr.getZoteroPane()).toBe(global.ZoteroPane);
     });
   });
 

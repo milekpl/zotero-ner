@@ -615,6 +615,9 @@ class ZoteroDBAnalyzer {
     }
 
     const { includeSubcollections = false, progressCallback = null, shouldCancel = null } = options;
+    if (includeSubcollections) {
+      console.warn('ZoteroDBAnalyzer: includeSubcollections is deprecated - subcollections are now included automatically');
+    }
 
     if (typeof Zotero === 'undefined') {
       throw new Error('This method must be run in the Zotero context');

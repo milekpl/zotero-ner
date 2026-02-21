@@ -724,12 +724,16 @@ if (typeof Zotero === 'undefined') {
           // Set params on main window before opening dialog (as backup to window.arguments)
           mainWindow.ZoteroFieldNormalizationParams = params;
 
+          this.log('Opening field normalization dialog with params: fieldType=' + params.fieldType + ', items=' + params.items.length + ', libraryContext=' + (params.libraryContext ? 'yes' : 'no'));
+
           mainWindow.openDialog(
             'chrome://zoteronamenormalizer/content/dialog.html',
             'zotero-field-normalizer-dialog',
             'chrome,centerscreen,resizable=yes,width=750,height=550',
             params
           );
+
+          this.log('openDialog called, waiting for dialog...');
 
         } catch (error) {
           this.log('Error in showDialogForField: ' + error.message);
@@ -833,11 +837,28 @@ if (typeof Zotero === 'undefined') {
         if (!itemKey) return;
         try {
           this.log('selectItem called with key: ' + itemKey);
-          
+
+          // Try to get the library context from the main window
+          let libraryID = Zotero.Libraries.userLibraryID;
+          let libraryType = 'user';
+          try {
+            const mainWindow = Zotero.getMainWindow ? Zotero.getMainWindow() : null;
+            if (mainWindow && mainWindow.ZoteroNameNormalizer && mainWindow.ZoteroNameNormalizer.LibraryContextManager) {
+              const libCtxMgr = new mainWindow.ZoteroNameNormalizer.LibraryContextManager();
+              const context = await libCtxMgr.getCurrentLibraryContext();
+              if (context && context.libraryID) {
+                libraryID = context.libraryID;
+                libraryType = context.libraryType;
+                this.log('Using library context: ' + libraryType + ' (ID: ' + libraryID + ')');
+              }
+            }
+          } catch (e) {
+            this.log('Could not get library context: ' + e.message);
+          }
+
           // Method 1: Use ZoteroPane (internal API, most reliable)
           if (typeof ZoteroPane !== 'undefined' && ZoteroPane.selectItem) {
             if (typeof Zotero !== 'undefined' && Zotero.Items && Zotero.Items.getByLibraryAndKeyAsync) {
-              const libraryID = Zotero.Libraries.userLibraryID;
               const item = await Zotero.Items.getByLibraryAndKeyAsync(libraryID, itemKey);
               if (item && item.id) {
                 this.log('Using ZoteroPane.selectItem with id: ' + item.id);
@@ -856,9 +877,16 @@ if (typeof Zotero === 'undefined') {
             await Zotero.NameNormalizer.selectItem(itemKey);
             return;
           }
-          // Method 3: Use zotero:// URI as a last resort
+          // Method 3: Use zotero:// URI as a last resort - need to use correct path for group
           if (typeof Zotero !== 'undefined' && Zotero.launchURL) {
-            const url = 'zotero://select/library/items/' + itemKey;
+            let url;
+            if (libraryType === 'group') {
+              // For group libraries, need to use groups/<groupID>/items/<key>
+              const groupID = Zotero.Groups.getGroupIDFromLibraryID(libraryID);
+              url = 'zotero://select/groups/' + groupID + '/items/' + itemKey;
+            } else {
+              url = 'zotero://select/library/items/' + itemKey;
+            }
             this.log('Using launchURL: ' + url);
             Zotero.launchURL(url);
             return;

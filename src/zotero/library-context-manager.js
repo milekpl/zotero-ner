@@ -29,17 +29,23 @@ class LibraryContextManager {
       return null;
     }
 
-    if (!this._zoteroPane) {
-      try {
-        // ZoteroPane is available after Zotero initializes
-        this._zoteroPane = ZoteroPane || (Zotero.getActiveZoteroPane && Zotero.getActiveZoteroPane());
-      } catch (e) {
-        console.warn('LibraryContextManager: Could not get ZoteroPane:', e);
-        this._zoteroPane = null;
+    // Always try to get fresh - don't cache null values
+    try {
+      // Try multiple methods to get ZoteroPane
+      const mainWindow = Zotero.getMainWindow && Zotero.getMainWindow();
+      if (mainWindow && mainWindow.ZoteroPane) {
+        return mainWindow.ZoteroPane;
       }
+      if (Zotero.getActiveZoteroPane) {
+        return Zotero.getActiveZoteroPane();
+      }
+      if (typeof ZoteroPane !== 'undefined') {
+        return ZoteroPane;
+      }
+    } catch (e) {
+      console.warn('LibraryContextManager: Could not get ZoteroPane:', e);
     }
-
-    return this._zoteroPane;
+    return null;
   }
 
   /**
@@ -83,7 +89,7 @@ class LibraryContextManager {
             };
           }
         }
-      } catch (e) {
+      } catch {
         // Continue to next approach
       }
 
@@ -106,7 +112,7 @@ class LibraryContextManager {
             }
           }
         }
-      } catch (e) {
+      } catch {
         // Continue to next approach
       }
 
@@ -132,7 +138,7 @@ class LibraryContextManager {
             }
           }
         }
-      } catch (e) {
+      } catch {
         // Continue
       }
 
@@ -219,22 +225,25 @@ class LibraryContextManager {
       };
     } catch (error) {
       console.error('LibraryContextManager: Error getting current library context:', error);
-      // Fallback to user library on error
+      // Fallback to user library on error - try to get from Zotero.Libraries
       try {
-        const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
-        return {
-          libraryID: Zotero.Libraries.userLibraryID,
-          libraryType: 'user',
-          libraryName: userLib.name
-        };
-      } catch (fallbackError) {
-        // If we can't even get user library, return minimal fallback
-        return {
-          libraryID: Zotero.Libraries.userLibraryID,
-          libraryType: 'user',
-          libraryName: 'My Library'
-        };
+        if (Zotero.Libraries && typeof Zotero.Libraries.userLibraryID !== 'undefined') {
+          const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
+          return {
+            libraryID: Zotero.Libraries.userLibraryID,
+            libraryType: 'user',
+            libraryName: userLib ? userLib.name : 'My Library'
+          };
+        }
+      } catch {
+        // Ignore and fall through to minimal fallback
       }
+      // If we can't get user library, return minimal fallback
+      return {
+        libraryID: null,
+        libraryType: 'user',
+        libraryName: 'My Library'
+      };
     }
   }
 
@@ -320,6 +329,8 @@ class LibraryContextManager {
 
     try {
       // Get all collections and filter by libraryID
+      // Note: Zotero doesn't have a getByLibrary() API, so we iterate and filter
+      // This is acceptable since most users have < 100 collections
       const collections = Zotero.Collections.get();
       const result = [];
 
@@ -439,7 +450,7 @@ class LibraryContextManager {
     try {
       const library = Zotero.Libraries.get(libraryID);
       return !!library;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -468,7 +479,7 @@ class LibraryContextManager {
       }
       
       return `${typeLabel}: ${library.name}`;
-    } catch (e) {
+    } catch {
       return `Library ${libraryID}`;
     }
   }

@@ -49,6 +49,10 @@ global.Zotero = {
   }),
   DB: {
     query: jest.fn()
+  },
+  Libraries: {
+    userLibraryID: 1,
+    get: jest.fn().mockReturnValue({ name: 'My Library' })
   }
 };
 
@@ -245,7 +249,11 @@ describe('handleFieldNormalizeAction', () => {
       logError: jest.fn(),
       alert: jest.fn(),
       getMainWindow: jest.fn().mockReturnValue(mockMainWindow),
-      getActiveZoteroPane: jest.fn().mockReturnValue(mockZoteroPane)
+      getActiveZoteroPane: jest.fn().mockReturnValue(mockZoteroPane),
+      Libraries: {
+        userLibraryID: 1,
+        get: jest.fn().mockReturnValue({ name: 'My Library' })
+      }
     };
 
     menuIntegration = new MenuIntegration();
