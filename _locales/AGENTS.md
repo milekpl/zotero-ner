@@ -10,6 +10,7 @@ Localization directory for multi-language support. Contains locale-specific mess
 | File | Description |
 |------|-------------|
 | `en_US/messages.json` | English (US) locale messages |
+| `pl/messages.json` | Polish locale messages |
 
 ## Subdirectories
 | Directory | Purpose |

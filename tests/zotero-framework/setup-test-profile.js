@@ -122,7 +122,7 @@ function setupProfile() {
             targetApplications: [{
                 id: 'zotero',
                 minVersion: '6.999',
-                maxVersion: '8.*',
+                maxVersion: '9.*',
                 exists: true
             }],
             targetPlatforms: [],

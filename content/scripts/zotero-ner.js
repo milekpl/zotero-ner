@@ -140,6 +140,39 @@ if (typeof Zotero === 'undefined') {
       locationMenuItemId: 'zotero-name-normalizer-location',
       journalMenuItemId: 'zotero-name-normalizer-journal',
 
+      _i18nMessages: null,
+
+      _loadI18nMessages: function() {
+        if (this._i18nMessages !== null) return;
+        let rawLocale = 'en-US';
+        try {
+          if (typeof Zotero !== 'undefined' && Zotero.locale) rawLocale = Zotero.locale;
+        } catch(e) {}
+        const normalized = rawLocale.replace(/-/g, '_');
+        const short = normalized.split('_')[0];
+        const seen = {};
+        const candidates = [normalized, short, 'en_US'].filter(c => seen[c] ? false : (seen[c] = true));
+
+        for (const locale of candidates) {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'chrome://zoteronamenormalizerlocales/content/' + locale + '/messages.json', false);
+            xhr.send(null);
+            if (xhr.status === 200 || xhr.status === 0) {
+              this._i18nMessages = JSON.parse(xhr.responseText);
+              return;
+            }
+          } catch(e) { /* try next candidate */ }
+        }
+        this._i18nMessages = {};
+      },
+
+      getMessage: function(key, defaultText) {
+        this._loadI18nMessages();
+        const entry = this._i18nMessages[key];
+        return (entry && entry.message) ? entry.message : (defaultText || '');
+      },
+
       // Direct module references (already instantiated)
       nameParser: initializedModules.nameParser || null,
       variantGenerator: initializedModules.variantGenerator || null,
@@ -337,8 +370,8 @@ if (typeof Zotero === 'undefined') {
                 return;
               }
               menuItem.id = this.menuItemId;
-              menuItem.setAttribute('label', 'Normalize Author Names');
-              menuItem.setAttribute('tooltiptext', 'Normalize author names');
+              menuItem.setAttribute('label', this.getMessage('menuitem-normalize-authors', 'Normalize Author Names'));
+              menuItem.setAttribute('tooltiptext', this.getMessage('menuitem-normalize-authors-tooltip', 'Normalize author names'));
               menuItem.addEventListener('command', commandHandler);
               if (toolsPopup && typeof toolsPopup.appendChild === 'function') {
                 toolsPopup.appendChild(menuItem);
@@ -422,7 +455,7 @@ if (typeof Zotero === 'undefined') {
             // Create "Normalize Field Data" submenu
             fieldSubmenu = doc.createXULElement ? doc.createXULElement('menu') : doc.createElement('menu');
             fieldSubmenu.id = this.fieldMenuItemId;
-            fieldSubmenu.setAttribute('label', 'Normalize Field Data');
+            fieldSubmenu.setAttribute('label', this.getMessage('field-menu-label', 'Normalize Field Data'));
             toolsPopup.appendChild(fieldSubmenu);
 
             const popup = doc.createXULElement ? doc.createXULElement('menupopup') : doc.createElement('menupopup');
@@ -431,7 +464,7 @@ if (typeof Zotero === 'undefined') {
             // Publisher menu item
             const publisherItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
             publisherItem.id = this.publisherMenuItemId;
-            publisherItem.setAttribute('label', 'Publisher');
+            publisherItem.setAttribute('label', this.getMessage('field-menu-publisher', 'Publisher'));
             publisherItem.addEventListener('command', () => {
               this.showDialogForField('publisher');
             });
@@ -440,7 +473,7 @@ if (typeof Zotero === 'undefined') {
             // Location menu item
             const locationItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
             locationItem.id = this.locationMenuItemId;
-            locationItem.setAttribute('label', 'Location');
+            locationItem.setAttribute('label', this.getMessage('field-menu-location', 'Location'));
             locationItem.addEventListener('command', () => {
               this.showDialogForField('location');
             });
@@ -449,7 +482,7 @@ if (typeof Zotero === 'undefined') {
             // Journal menu item
             const journalItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
             journalItem.id = this.journalMenuItemId;
-            journalItem.setAttribute('label', 'Journal');
+            journalItem.setAttribute('label', this.getMessage('field-menu-journal', 'Journal'));
             journalItem.addEventListener('command', () => {
               this.showDialogForField('journal');
             });
@@ -574,6 +607,7 @@ if (typeof Zotero === 'undefined') {
                 fileLog('Getting library context...');
                 console.log('Name Normalizer: Getting library context...');
                 let analysisResults = null;
+                let libraryContext = null;
                 try {
                   // Signal the dialog to start progress tracking
                   // This sets up the timeout interval and shows the loading UI
@@ -584,7 +618,6 @@ if (typeof Zotero === 'undefined') {
                   }
 
                   // Get library context to determine scope of analysis
-                  let libraryContext = null;
                   if (mainWindowZoteroNameNormalizer && mainWindowZoteroNameNormalizer.LibraryContextManager) {
                     const libContextMgr = new mainWindowZoteroNameNormalizer.LibraryContextManager();
                     libraryContext = await libContextMgr.getCurrentLibraryContext();
@@ -629,6 +662,9 @@ if (typeof Zotero === 'undefined') {
                   dialogWindow.ZoteroNERController.updateAnalysisResults(analysisResults);
                   fileLog('updateAnalysisResults called');
                   console.log('Name Normalizer: updateAnalysisResults called');
+                  if (libraryContext) {
+                    dialogWindow.ZoteroNERController.updateLibraryContext(libraryContext);
+                  }
                 } else {
                   fileLog('ERROR: dialogWindow or ZoteroNERController not available');
                   self.log('Warning: Dialog window or controller not available for results update');
@@ -717,7 +753,7 @@ if (typeof Zotero === 'undefined') {
 
           const mainWindow = Zotero.getMainWindow();
           if (!mainWindow) {
-            Zotero.alert(null, 'Zotero Name Normalizer', 'Could not get main window');
+            Zotero.alert(null, this.getMessage('name', 'Zotero Name Normalizer'), this.getMessage('alert-could-not-get-main-window', 'Could not get main window'));
             return;
           }
 

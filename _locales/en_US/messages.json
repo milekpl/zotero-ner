@@ -22,5 +22,557 @@
   "toolbar-button-tooltip": {
     "message": "Normalize author names",
     "description": "Tooltip for toolbar button"
+  },
+  "field-menu-label": {
+    "message": "Normalize Field Data",
+    "description": "Label for the field normalization submenu"
+  },
+  "field-menu-publisher": {
+    "message": "Publisher",
+    "description": "Menu item label for publisher field normalization"
+  },
+  "field-menu-location": {
+    "message": "Location",
+    "description": "Menu item label for location field normalization"
+  },
+  "field-menu-journal": {
+    "message": "Journal",
+    "description": "Menu item label for journal field normalization"
+  },
+  "alert-could-not-get-main-window": {
+    "message": "Could not get main window",
+    "description": "Alert message when the Zotero main window is unavailable"
+  },
+  "dialog-title": {
+    "message": "Author Name Normalizer",
+    "description": "Dialog title"
+  },
+  "summary-heading": {
+    "message": "Library Analysis Summary",
+    "description": "Summary section heading"
+  },
+  "summary-unique-surnames-label": {
+    "message": "Unique surnames:",
+    "description": "Label for unique surnames count"
+  },
+  "summary-variant-groups-label": {
+    "message": "Variant groups:",
+    "description": "Label for variant groups count"
+  },
+  "summary-pending-normalizations-label": {
+    "message": "Pending normalizations:",
+    "description": "Label for pending normalizations count"
+  },
+  "progress-processing": {
+    "message": "Processing...",
+    "description": "Progress label while processing"
+  },
+  "variant-heading": {
+    "message": "Creator Variant Groups",
+    "description": "Heading for creator variant groups section"
+  },
+  "filter-variant-groups-placeholder": {
+    "message": "Filter variant groups…",
+    "description": "Placeholder for variant group filter"
+  },
+  "filter-variant-groups-aria": {
+    "message": "Filter variant groups",
+    "description": "ARIA label for variant group filter"
+  },
+  "filter-showing-all-groups": {
+    "message": "Showing all groups",
+    "description": "Default filter summary for variant groups"
+  },
+  "filter-no-variant-groups": {
+    "message": "No variant groups available",
+    "description": "Variant group filter summary when no groups are present"
+  },
+  "filter-showing-all-variant-groups": {
+    "message": "Showing all $1 variant groups",
+    "description": "Variant group filter summary when all groups are shown"
+  },
+  "filter-showing-visible-of-total-groups": {
+    "message": "Showing $1 of $2 groups",
+    "description": "Variant group filter summary when a subset is shown"
+  },
+  "variant-detail-title": {
+    "message": "Variant details",
+    "description": "Title for the variant details panel"
+  },
+  "variant-detail-empty": {
+    "message": "Select a variant pill to review sample items and occurrences.",
+    "description": "Empty state text in the variant details panel"
+  },
+  "empty-message-text": {
+    "message": "No variant groups found. All creator names appear to be consistent.",
+    "description": "Empty state text when there are no variant groups"
+  },
+  "button-export-json": {
+    "message": "Export JSON",
+    "description": "Label for export button"
+  },
+  "button-apply-all-selected": {
+    "message": "Apply All Selected",
+    "description": "Label for apply all selected button"
+  },
+  "button-apply-selected": {
+    "message": "Apply Selected",
+    "description": "Label for apply selected button"
+  },
+  "button-cancel": {
+    "message": "Cancel",
+    "description": "Label for cancel button"
+  },
+  "button-ok": {
+    "message": "OK",
+    "description": "Label for OK button"
+  },
+  "field-normalization-title": {
+    "message": "Field Normalization",
+    "description": "Title for field normalization section"
+  },
+  "field-threshold-label": {
+    "message": "Similarity threshold:",
+    "description": "Label for field threshold slider"
+  },
+  "field-threshold-note": {
+    "message": "(0 = exact match only · higher catches more spelling variants)",
+    "description": "Note explaining the field similarity threshold"
+  },
+  "field-summary-unique-values-label": {
+    "message": "Unique values:",
+    "description": "Label for field normalization unique values count"
+  },
+  "field-summary-pending-changes-label": {
+    "message": "Pending changes:",
+    "description": "Label for field normalization pending changes count"
+  },
+  "field-progress-processing": {
+    "message": "Processing...",
+    "description": "Progress label for field normalization"
+  },
+  "field-filter-values-placeholder": {
+    "message": "Filter values…",
+    "description": "Placeholder for field value filter"
+  },
+  "field-filter-values-aria": {
+    "message": "Filter field values",
+    "description": "ARIA label for field value filter"
+  },
+  "field-filter-showing-all-values": {
+    "message": "Showing all values",
+    "description": "Field filter summary when all values are shown"
+  },
+  "field-filter-showing-visible-of-total-values": {
+    "message": "Showing $1 of $2 values",
+    "description": "Field filter summary when a subset of values is shown"
+  },
+  "field-detail-title": {
+    "message": "Field details",
+    "description": "Title for field detail panel"
+  },
+  "field-empty-message-text": {
+    "message": "No field values found.",
+    "description": "Empty state text when no field values are present"
+  },
+  "button-apply-all-changes": {
+    "message": "Apply All Changes",
+    "description": "Label for apply all field changes button"
+  },
+  "button-apply": {
+    "message": "Apply",
+    "description": "Label for generic apply button"
+  },
+  "field-variants-label": {
+    "message": "Variants:",
+    "description": "Label for variants section in field group"
+  },
+  "field-normalize-all-variants-label": {
+    "message": "Normalize all variants to:",
+    "description": "Label for normalized value input"
+  },
+  "field-items-with-value-title": {
+    "message": "Items with \"$1\"",
+    "description": "Detail title for field items matching a value"
+  },
+  "field-will-be-normalized-to": {
+    "message": "Will be normalized to: <strong>$1</strong>",
+    "description": "Text showing the target normalized value"
+  },
+  "field-no-change-scheduled": {
+    "message": "No change scheduled",
+    "description": "Detail text when no normalization change is scheduled"
+  },
+  "field-showing-first-items": {
+    "message": "Showing first 10 items...",
+    "description": "Text shown when field item detail list is truncated"
+  },
+  "field-no-values-found": {
+    "message": "No values found.",
+    "description": "Message when no field values are available"
+  },
+  "field-no-analysis-results": {
+    "message": "No analysis results were provided to the dialog.",
+    "description": "Empty state when the dialog receives no analysis data"
+  },
+  "field-normalization-zotero-required": {
+    "message": "Zotero is not available. Field normalization requires Zotero.",
+    "description": "Message when field normalization cannot run without Zotero"
+  },
+  "field-no-values-found-to-normalize": {
+    "message": "No $1 values found to normalize.",
+    "description": "Message when no field values are available to normalize"
+  },
+  "field-items-scanned-skipped": {
+    "message": "$1 items scanned, $2 skipped (field not available for that item type).",
+    "description": "Hint showing scanned and skipped item counts"
+  },
+  "field-all-values-consistent": {
+    "message": "All $1 values appear to be consistent.",
+    "description": "Message when field values require no normalization"
+  },
+  "field-location-data-hint": {
+    "message": "Location data is typically found on books, theses, and reports — not journal articles.",
+    "description": "Hint for location field normalization"
+  },
+  "field-publisher-data-hint": {
+    "message": "Publisher data may not be present for all item types.",
+    "description": "Hint for publisher field normalization"
+  },
+  "field-normalizer-title": {
+    "message": "Field Normalizer",
+    "description": "Title used in field normalization alert dialogs"
+  },
+  "field-successfully-normalized-items": {
+    "message": "Successfully normalized $1 item(s).",
+    "description": "Success message after field normalization"
+  },
+  "field-no-changes-to-apply": {
+    "message": "No changes to apply.",
+    "description": "Message when there are no field changes to apply"
+  },
+  "field-error-with-message": {
+    "message": "Error: $1",
+    "description": "Generic error message with dynamic content"
+  },
+  "field-no-normalizations-selected": {
+    "message": "No normalizations selected.",
+    "description": "Message when no field changes are selected"
+  },
+  "confirming-changes-title": {
+    "message": "Confirming Changes",
+    "description": "Title for the confirm changes dialog"
+  },
+  "confirming-changes-message": {
+    "message": "You are about to apply $1 normalization(s) to your library.\n\nThis will modify field values in $1 item(s).\n\nAre you sure you want to continue?",
+    "description": "Confirm dialog message before applying field normalizations"
+  },
+  "export-title": {
+    "message": "Export",
+    "description": "Title used in export alert dialogs"
+  },
+  "export-no-data-to-export": {
+    "message": "No data to export.",
+    "description": "Message when there is nothing to export"
+  },
+  "export-error-title": {
+    "message": "Export Error",
+    "description": "Title for export error alerts"
+  },
+  "export-zotero-not-available": {
+    "message": "Zotero instance not available",
+    "description": "Error when Zotero is unavailable during export"
+  },
+  "export-could-not-determine-data-directory": {
+    "message": "Could not determine Zotero data directory",
+    "description": "Error when the export directory cannot be determined"
+  },
+  "export-successful-message": {
+    "message": "Export successful!\n\nFile saved to:\n$1",
+    "description": "Message shown after successful export"
+  },
+  "export-failed-message": {
+    "message": "Export failed: $1",
+    "description": "Message shown when export fails"
+  },
+  "empty-no-analysis-results": {
+    "message": "No analysis results were provided to the dialog.",
+    "description": "Message when the dialog has no analysis results"
+  },
+  "empty-field-normalization-zotero-required": {
+    "message": "Zotero is not available. Field normalization requires Zotero.",
+    "description": "Message shown when field normalization can't run without Zotero"
+  },
+  "empty-regrouping-failed": {
+    "message": "Re-grouping failed: $1",
+    "description": "Message shown when field regrouping fails"
+  },
+  "empty-failed-to-load-items": {
+    "message": "Failed to load items: $1",
+    "description": "Message shown when items fail to load"
+  },
+  "empty-no-items-found-in-library": {
+    "message": "No items found in library.",
+    "description": "Message shown when no items are found in library"
+  },
+  "empty-no-variant-groups-detected": {
+    "message": "No variant groups were detected for the scanned surnames.",
+    "description": "Message shown when no variant groups are found"
+  },
+  "empty-analysis-completed-no-results": {
+    "message": "Analysis completed but no results were returned.",
+    "description": "Message shown when analysis completes with no results"
+  },
+  "progress-applying-normalizations": {
+    "message": "Applying normalizations...",
+    "description": "Progress label when applying normalizations"
+  },
+  "progress-analysis-complete-variant-groups": {
+    "message": "Analysis complete: $1 variant groups found",
+    "description": "Progress label when analysis is complete"
+  },
+  "progress-analyzing-library": {
+    "message": "Analyzing library...",
+    "description": "Progress label while analyzing library"
+  },
+  "progress-ready": {
+    "message": "Ready",
+    "description": "Progress label when ready"
+  },
+  "error-title": {
+    "message": "Error",
+    "description": "Generic error dialog title"
+  },
+  "error-failed-to-initialize": {
+    "message": "Failed to initialize: $1",
+    "description": "Initialization failure dialog message"
+  },
+  "alert-no-normalization-choices-selected": {
+    "message": "No normalization choices are selected to apply. Adjust your selections or close the dialog.",
+    "description": "Message shown when no normalizations are selected"
+  },
+  "author-name-normalizer-title": {
+    "message": "Author Name Normalizer",
+    "description": "Title used for author normalization alerts"
+  },
+  "alert-no-normalization-changes-applied": {
+    "message": "No normalization changes were applied. Your “keep existing” choices were saved for future runs.",
+    "description": "Message after applying keep existing choices"
+  },
+  "alert-normalization-selections-applied": {
+    "message": "Normalization selections applied!\n\n$1",
+    "description": "Message after successful normalization selections"
+  },
+  "error-failed-to-apply-normalization-selections": {
+    "message": "Failed to apply normalization selections: $1",
+    "description": "Message shown when normalization selection application fails"
+  },
+  "alert-no-normalization-selection-to-apply": {
+    "message": "No normalization choices are selected to apply. Select at least one normalization to apply.",
+    "description": "Message shown when the user tries to apply with nothing selected"
+  },
+  "error-failed-to-apply-normalization": {
+    "message": "Failed to apply normalization: $1",
+    "description": "Message shown when a single normalization application fails"
+  },
+  "card-title-surname-variants-prefix": {
+    "message": "Surname variants",
+    "description": "Prefix for variant group card title (surname type)"
+  },
+  "card-title-variant-group": {
+    "message": "Variant Group $1",
+    "description": "Variant group card title when no surname is available"
+  },
+  "card-title-given-name-variants-prefix": {
+    "message": "Given name variants",
+    "description": "Prefix for variant group card title (given-name type)"
+  },
+  "card-title-given-name-group": {
+    "message": "Given name variants Group $1",
+    "description": "Given-name variant group title when no surname available"
+  },
+  "card-recommended-normalization-prefix": {
+    "message": "Recommended normalization:",
+    "description": "Prefix label before the recommended normalization value"
+  },
+  "card-recommended-full-name-prefix": {
+    "message": "Recommended full name:",
+    "description": "Prefix label before the recommended full name value"
+  },
+  "card-variant-summary-surname": {
+    "message": "$1 surname spellings · $2 occurrences",
+    "description": "Summary line for a surname variant group card"
+  },
+  "card-variant-summary-given-name": {
+    "message": "$1 given-name variants · $2 occurrences",
+    "description": "Summary line for a given-name variant group card"
+  },
+  "card-normalize-to-name": {
+    "message": "Normalize to $1 ($2)",
+    "description": "Radio button label for normalizing to a specific variant"
+  },
+  "card-occurrences-count": {
+    "message": "$1 occurrences",
+    "description": "Occurrence count string used in variant radio labels"
+  },
+  "card-variant-fallback": {
+    "message": "variant",
+    "description": "Fallback word when occurrence count is unavailable"
+  },
+  "card-occurrences-for-prefix": {
+    "message": "Occurrences for",
+    "description": "Prefix for the variant detail panel heading"
+  },
+  "card-use-recommended-normalization-prefix": {
+    "message": "Use recommended normalization:",
+    "description": "Radio label prefix when a recommended value exists (surname)"
+  },
+  "card-use-recommended-normalization-bare": {
+    "message": "Use recommended normalization",
+    "description": "Radio label when no recommended value is available (surname)"
+  },
+  "card-use-recommended-full-name-prefix": {
+    "message": "Use recommended full name:",
+    "description": "Radio label prefix when a recommended value exists (given-name)"
+  },
+  "card-use-recommended-full-name-bare": {
+    "message": "Use recommended full name",
+    "description": "Radio label when no recommended value is available (given-name)"
+  },
+  "card-keep-existing-forms": {
+    "message": "Keep existing forms as-is",
+    "description": "Radio button label for keeping all existing name forms"
+  },
+  "card-custom-normalization-label": {
+    "message": "Use a custom normalization:",
+    "description": "Label for the custom normalization input row"
+  },
+  "button-applying": {
+    "message": "Applying...",
+    "description": "Button text while normalization is being applied"
+  },
+  "button-applied": {
+    "message": "Applied",
+    "description": "Button text after normalization has been applied"
+  },
+  "button-not-variants": {
+    "message": "Not Variants",
+    "description": "Button to mark entries as distinct authors"
+  },
+  "button-not-variants-title": {
+    "message": "Mark these as distinct authors - this will not be proposed again",
+    "description": "Tooltip for the Not Variants button"
+  },
+  "detail-occurrences-count": {
+    "message": "Occurrences: $1",
+    "description": "Occurrences line in the variant detail panel"
+  },
+  "detail-surname-label": {
+    "message": "Surname: $1",
+    "description": "Surname context line in the given-name variant detail panel"
+  },
+  "detail-no-items-found": {
+    "message": "No items found for this variant.",
+    "description": "Empty state text in the variant detail items list"
+  },
+  "progress-applied-operation": {
+    "message": "Applied $1 ($2/$3)",
+    "description": "Progress message after applying an individual normalization operation"
+  },
+  "progress-applied-update": {
+    "message": "Applied normalization update.",
+    "description": "Generic progress message after applying an update"
+  },
+  "progress-database-updates-complete": {
+    "message": "Database updates complete ($1 creators touched)",
+    "description": "Progress message after all database writes are finished"
+  },
+  "progress-recording-decisions": {
+    "message": "Recording learning decisions...",
+    "description": "Progress message while recording keep/apply choices"
+  },
+  "progress-all-done-updated-creators": {
+    "message": "All done! Updated $1 creators.",
+    "description": "Completion message showing how many creators were updated"
+  },
+  "progress-saved-keep-existing": {
+    "message": "Saved \"keep existing\" choices. No changes applied.",
+    "description": "Completion message when only keep-existing choices were made"
+  },
+  "progress-normalization-finished": {
+    "message": "Normalization finished.",
+    "description": "Generic normalization completion message"
+  },
+  "progress-error-applying": {
+    "message": "An error occurred while applying normalizations.",
+    "description": "Error message during normalization application"
+  },
+  "summary-suggestions-reviewed": {
+    "message": "Suggestions reviewed: $1",
+    "description": "Result summary: number of suggestions reviewed"
+  },
+  "summary-applied-count": {
+    "message": "Applied: $1",
+    "description": "Result summary: number of normalizations applied"
+  },
+  "summary-skipped-count": {
+    "message": "Skipped: $1",
+    "description": "Result summary: number of normalizations skipped"
+  },
+  "summary-creators-updated": {
+    "message": "Creators updated: $1",
+    "description": "Result summary: number of creators updated in the database"
+  },
+  "summary-saved-keep-existing-decisions": {
+    "message": "Saved \"keep existing\" decisions: $1",
+    "description": "Result summary: number of keep-existing decisions saved"
+  },
+  "summary-errors-count": {
+    "message": "Errors: $1",
+    "description": "Result summary: number of errors encountered"
+  },
+  "scope-label": {
+    "message": "Scope: $1",
+    "description": "Scope label shown above the library/collection being normalized"
+  },
+  "scope-my-library": {
+    "message": "My Library",
+    "description": "Fallback name for the user's personal Zotero library"
+  },
+  "dialog-title-field-normalization": {
+    "message": "$1 Normalization",
+    "description": "Window title for field normalization dialogs, e.g. 'Publisher Normalization'"
+  },
+  "field-type-publisher": {
+    "message": "Publisher",
+    "description": "Field type label for publisher normalization"
+  },
+  "field-type-location": {
+    "message": "Location",
+    "description": "Field type label for location normalization"
+  },
+  "field-type-journal": {
+    "message": "Journal",
+    "description": "Field type label for journal normalization"
+  },
+  "field-type-default": {
+    "message": "Field",
+    "description": "Generic field type label fallback"
+  },
+  "field-count": {
+    "message": "$1 items",
+    "description": "Item count shown under a field value group"
+  },
+  "field-count-in-variants": {
+    "message": "$1 items in $2 variants",
+    "description": "Item count with variant count shown under a field value group"
+  },
+  "field-normalization-failed": {
+    "message": "Field normalization failed: $1",
+    "description": "Error message shown when field normalization encounters an exception"
+  },
+  "field-normalization-retry-hint": {
+    "message": "This may occur if item data is not fully loaded. Try opening a few items in Zotero to load their data, then try again.",
+    "description": "Additional hint appended to field normalization error for data-loading issues"
   }
 }

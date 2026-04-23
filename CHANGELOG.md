@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4] - 2026-04-23
+
+### Added
+
+- Full localization support for the Zotero Name Normalizer UI.
+  - Added runtime translation helper for dialog UI strings and tooltips.
+  - Added Polish locale support in `_locales/pl/messages.json`.
+  - Localized menu labels for author normalization and field normalization submenu items.
+  - Localized field normalization dialog text, filters, buttons, progress labels, and alerts.
+  - Added fallback placeholder substitution so `$1` tokens render correctly when browser i18n is unavailable.
+- Updated documentation and locale metadata to describe `_locales/` support.
+
+### Changed
+
+- Refactored `content/dialog.html` to use the new `ZoteroNER_i18n` helper and translation keys.
+- Refactored `content/scripts/zotero-ner.js` to load menu labels from the extension locale messages.
+- Added missing Polish translations for all newly localizable dialog and menu strings.
+
 ## [1.3.2] - 2026-02-17
 
 ### Fixed

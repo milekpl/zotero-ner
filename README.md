@@ -21,6 +21,13 @@ Fully functional and tested on Zotero 7/8. Analysis is non-destructive — you
 must explicitly apply normalizations for changes to be written to your
 library. Always keep a recent library backup before running bulk operations.
 
+Localization
+------------
+
+This extension supports WebExtension-style localization through `_locales/`.
+A Polish locale is included in `_locales/pl/messages.json`, and the extension
+name, description, menu labels, and dialog titles are translatable.
+
 Why use this
 ------------
 

@@ -2727,6 +2727,21 @@ class ZoteroDBAnalyzer {
               newCreator.firstName = creatorFirstName;
               updated = true;
             }
+          } else if (type === 'given-name') {
+            // Given-name normalization: only update firstName, leave lastName untouched.
+            // normalizedValue is a full name ("Richard E. Baldwin") — strip the
+            // lastName suffix to get just the firstName ("Richard E.").
+            const creatorFirstName = (creator.firstName || '').trim();
+            const creatorLastName = (creator.lastName || '').trim();
+            const variantFirstName = (variant.firstName || '').trim();
+            const variantLastName = (variant.lastName || creatorLastName).trim();
+
+            if (this.stringsEqualIgnoreCase(creatorFirstName, variantFirstName) &&
+                this.stringsEqualIgnoreCase(creatorLastName, variantLastName)) {
+              newCreator.firstName = this.extractFirstNameFromFullName(normalizedValue, creatorLastName);
+              // lastName intentionally left unchanged
+              updated = true;
+            }
           } else {
             // Full name normalization
             const creatorFirstName = (creator.firstName || '').trim();
@@ -2736,7 +2751,6 @@ class ZoteroDBAnalyzer {
 
             if (this.stringsEqualIgnoreCase(creatorFirstName, variantFirstName) &&
                 this.stringsEqualIgnoreCase(creatorLastName, variantLastName)) {
-              // Parse the normalized value
               const normalizedParts = normalizedValue.split(' ');
               newCreator.firstName = normalizedParts[0] || '';
               newCreator.lastName = normalizedParts.slice(1).join(' ') || creatorLastName;
@@ -2926,6 +2940,16 @@ class ZoteroDBAnalyzer {
       return false;
     }
     return a.trim().toLowerCase() === b.trim().toLowerCase();
+  }
+
+  // Given a full name like "Richard E. Baldwin" and a lastName "Baldwin",
+  // returns just the firstName portion "Richard E.".
+  extractFirstNameFromFullName(fullName, lastName) {
+    if (!fullName) return '';
+    if (!lastName) return fullName;
+    const escaped = lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const firstName = fullName.replace(new RegExp('\\s+' + escaped + '\\s*$', 'i'), '').trim();
+    return firstName || fullName;
   }
 
   extractVariantGivenName(variant) {

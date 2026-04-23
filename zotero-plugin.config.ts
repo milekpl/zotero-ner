@@ -48,7 +48,7 @@ export default defineConfig({
           __env__: `"${process.env.NODE_ENV || 'development'}"`,
         },
         bundle: true,
-        target: "firefox115",
+        target: "firefox140",
         outfile: "addon/content/scripts/zotero-ner-bundled.js",
         banner: {
           js: `// Console polyfill for Zotero 8

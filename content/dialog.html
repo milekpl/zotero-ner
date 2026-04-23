@@ -23,6 +23,31 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .scope-label {
+      font-size: 0.85em;
+      color: #555;
+      margin-top: 4px;
+    }
+    .field-distance-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 0.9em;
+      color: #444;
+    }
+    .field-distance-control input[type=range] {
+      width: 120px;
+    }
+    .field-distance-value {
+      min-width: 3em;
+      font-weight: bold;
+    }
+    .field-scan-note {
+      font-size: 0.8em;
+      color: #666;
+      margin-top: 4px;
+    }
     .variant-group {
       margin: 6px 0;
       padding: 8px;
@@ -541,15 +566,16 @@
   </style>
 </head>
 <body>
-  <h1 style="display:none;">Author Name Normalizer</h1>
+  <h1 id="dialog-title" style="display:none;">Author Name Normalizer</h1>
 
   <!-- Summary header for full-library analysis -->
   <div id="summary-group" class="summary" style="display: none;">
-    <h3>Library Analysis Summary</h3>
+    <h3 id="summary-heading">Library Analysis Summary</h3>
+    <div id="scope-label" class="scope-label"></div>
     <div class="summary-grid">
-      <div><strong>Unique surnames:</strong> <span id="summary-total-creators">Loading...</span></div>
-      <div><strong>Variant groups:</strong> <span id="summary-variant-groups">Loading...</span></div>
-      <div><strong>Pending normalizations:</strong> <span id="summary-pending-normalizations">Loading...</span></div>
+      <div><strong id="summary-unique-surnames-label">Unique surnames:</strong> <span id="summary-total-creators">Loading...</span></div>
+      <div><strong id="summary-variant-groups-label">Variant groups:</strong> <span id="summary-variant-groups">Loading...</span></div>
+      <div><strong id="summary-pending-normalizations-label">Pending normalizations:</strong> <span id="summary-pending-normalizations">Loading...</span></div>
     </div>
   </div>
 
@@ -563,7 +589,7 @@
 
   <!-- Variant groups + detail layout -->
   <div id="variant-section">
-    <h3>Creator Variant Groups</h3>
+    <h3 id="variant-heading">Creator Variant Groups</h3>
     <div id="variant-filter-bar">
       <input type="search" id="variant-filter-input" placeholder="Filter variant groups…" aria-label="Filter variant groups">
       <span id="variant-filter-summary">Showing all groups</span>
@@ -585,7 +611,7 @@
 
   <!-- Empty state -->
   <div id="empty-message" class="empty-message" style="display: none;">
-    No variant groups found. All creator names appear to be consistent.
+    <span id="empty-message-text">No variant groups found. All creator names appear to be consistent.</span>
   </div>
 
   <!-- Action buttons -->
@@ -650,6 +676,71 @@
             fill.classList.remove('indeterminate');
           }
         }
+      }
+    };
+
+    const ZoteroNER_i18n = {
+      _messages: null,
+
+      _detectLocale: function() {
+        try {
+          // Prefer Zotero's own UI locale (what the user actually sees)
+          const z = (typeof Zotero !== 'undefined') ? Zotero
+            : (window.opener && window.opener.Zotero) ? window.opener.Zotero : null;
+          if (z && z.locale) return z.locale;
+        } catch(e) {}
+        return navigator.language || 'en-US';
+      },
+
+      _load: function() {
+        if (this._messages !== null) return;
+        const rawLocale = this._detectLocale();
+        // e.g. "pl-PL" -> "pl_PL", "en-US" -> "en_US", "pl" -> "pl"
+        const normalized = rawLocale.replace(/-/g, '_');
+        const short = normalized.split('_')[0];
+        const seen = {};
+        const candidates = [normalized, short, 'en_US'].filter(c => seen[c] ? false : (seen[c] = true));
+
+        for (const locale of candidates) {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'chrome://zoteronamenormalizerlocales/content/' + locale + '/messages.json', false);
+            xhr.send(null);
+            if (xhr.status === 200 || xhr.status === 0) {
+              this._messages = JSON.parse(xhr.responseText);
+              return;
+            }
+          } catch(e) { /* try next candidate */ }
+        }
+        this._messages = {};
+      },
+
+      getMessage: function(key, fallback, substitutions) {
+        this._load();
+        const entry = this._messages[key];
+        const text = (entry && entry.message) ? entry.message : (fallback || '');
+        return this.formatFallback(text, substitutions);
+      },
+
+      formatFallback: function(text, substitutions) {
+        if (!text || !substitutions || !Array.isArray(substitutions) || substitutions.length === 0) {
+          return text || '';
+        }
+        return substitutions.reduce((current, value, index) => {
+          return current.split('$' + (index + 1)).join(value);
+        }, text);
+      },
+
+      setText: function(id, key, fallback, substitutions) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = this.getMessage(key, fallback, substitutions);
+      },
+
+      setAttribute: function(id, attribute, key, fallback, substitutions) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute(attribute, this.getMessage(key, fallback, substitutions));
       }
     };
 
@@ -772,6 +863,32 @@
           .replace(/'/g, '&#39;');
       },
 
+      // Levenshtein distance, normalized to [0,1] (0 = identical, 1 = completely different)
+      normalizedLevenshtein: function(a, b) {
+        if (a === b) return 0;
+        const la = a.length, lb = b.length;
+        if (la === 0 || lb === 0) return 1;
+        const row = Array.from({ length: lb + 1 }, (_, i) => i);
+        for (let i = 1; i <= la; i++) {
+          let prev = i;
+          for (let j = 1; j <= lb; j++) {
+            const val = a[i - 1] === b[j - 1] ? row[j - 1] : Math.min(row[j - 1], row[j], prev) + 1;
+            row[j - 1] = prev;
+            prev = val;
+          }
+          row[lb] = prev;
+        }
+        return row[lb] / Math.max(la, lb);
+      },
+
+      // Threshold stored in localStorage so it persists across sessions
+      getFieldThreshold: function() {
+        try { return parseFloat(localStorage.getItem('zotero-ner-field-threshold') || '0') || 0; } catch (e) { return 0; }
+      },
+      setFieldThreshold: function(val) {
+        try { localStorage.setItem('zotero-ner-field-threshold', String(val)); } catch (e) {}
+      },
+
       init: function() {
         console.log('Dialog initialization started');
         this.userSelections = new Map();
@@ -843,13 +960,14 @@
           }
         });
 
+        this.localizeUI();
         this.setupFilterInput();
         this.setupKeyboardShortcuts();
         this.setupExportShortcut();
         this.setupFieldEventListeners();
         Promise.resolve(this.initialize()).catch((error) => {
           console.error(error);
-          this.alert('Error', 'Failed to initialize: ' + error.message);
+          this.alert(this.t('error-title', 'Error'), this.t('error-failed-to-initialize', 'Failed to initialize: $1', [error.message]));
           window.close();
         });
       },
@@ -997,6 +1115,49 @@
         }
       },
 
+      t: function(key, fallback, substitutions) {
+        return ZoteroNER_i18n.getMessage(key, fallback, substitutions);
+      },
+
+      localizeUI: function() {
+        // Standard dialog labels
+        ZoteroNER_i18n.setText('dialog-title', 'dialog-title', 'Author Name Normalizer');
+        ZoteroNER_i18n.setText('summary-heading', 'summary-heading', 'Library Analysis Summary');
+        ZoteroNER_i18n.setText('summary-unique-surnames-label', 'summary-unique-surnames-label', 'Unique surnames:');
+        ZoteroNER_i18n.setText('summary-variant-groups-label', 'summary-variant-groups-label', 'Variant groups:');
+        ZoteroNER_i18n.setText('summary-pending-normalizations-label', 'summary-pending-normalizations-label', 'Pending normalizations:');
+        ZoteroNER_i18n.setText('progress-label', 'progress-processing', 'Processing...');
+        ZoteroNER_i18n.setText('variant-heading', 'variant-heading', 'Creator Variant Groups');
+        ZoteroNER_i18n.setAttribute('variant-filter-input', 'placeholder', 'filter-variant-groups-placeholder', 'Filter variant groups…');
+        ZoteroNER_i18n.setAttribute('variant-filter-input', 'aria-label', 'filter-variant-groups-aria', 'Filter variant groups');
+        ZoteroNER_i18n.setText('variant-filter-summary', 'filter-showing-all-groups', 'Showing all groups');
+        ZoteroNER_i18n.setText('variant-detail-title', 'variant-detail-title', 'Variant details');
+        ZoteroNER_i18n.setText('variant-detail-empty', 'variant-detail-empty', 'Select a variant pill to review sample items and occurrences.');
+        ZoteroNER_i18n.setText('empty-message-text', 'empty-message-text', 'No variant groups found. All creator names appear to be consistent.');
+        ZoteroNER_i18n.setText('export-button', 'button-export-json', 'Export JSON');
+        ZoteroNER_i18n.setText('apply-all-button', 'button-apply-all-selected', 'Apply All Selected');
+        ZoteroNER_i18n.setText('apply-button', 'button-apply-selected', 'Apply Selected');
+        ZoteroNER_i18n.setText('cancel-button', 'button-cancel', 'Cancel');
+
+        // Set the window title bar for author normalization mode
+        document.title = this.t('dialog-title', 'Author Name Normalizer');
+
+        ZoteroNER_i18n.setText('field-normalization-title', 'field-normalization-title', 'Field Normalization');
+        ZoteroNER_i18n.setText('field-threshold-label', 'field-threshold-label', 'Similarity threshold:');
+        ZoteroNER_i18n.setText('field-threshold-note', 'field-threshold-note', '(0 = exact match only · higher catches more spelling variants)');
+        ZoteroNER_i18n.setText('field-summary-unique-values-label', 'field-summary-unique-values-label', 'Unique values:');
+        ZoteroNER_i18n.setText('field-summary-pending-changes-label', 'field-summary-pending-changes-label', 'Pending changes:');
+        ZoteroNER_i18n.setText('field-progress-label', 'field-progress-processing', 'Processing...');
+        ZoteroNER_i18n.setAttribute('field-filter-input', 'placeholder', 'field-filter-values-placeholder', 'Filter values…');
+        ZoteroNER_i18n.setAttribute('field-filter-input', 'aria-label', 'field-filter-values-aria', 'Filter field values');
+        ZoteroNER_i18n.setText('field-filter-summary', 'field-filter-showing-all-values', 'Showing all values');
+        ZoteroNER_i18n.setText('field-detail-title', 'field-detail-title', 'Field details');
+        ZoteroNER_i18n.setText('field-empty-message-text', 'field-empty-message-text', 'No field values found.');
+        ZoteroNER_i18n.setText('apply-all-field-button', 'button-apply-all-changes', 'Apply All Changes');
+        ZoteroNER_i18n.setText('apply-field-button', 'button-apply-selected', 'Apply Selected');
+        ZoteroNER_i18n.setText('cancel-field-button', 'button-cancel', 'Cancel');
+      },
+
       confirm: async function(title, message) {
         // Create custom modal for cross-browser compatible confirm with custom title
         return new Promise((resolve) => {
@@ -1085,8 +1246,8 @@
             return btn;
           };
 
-          buttons.appendChild(createButton('Cancel', false));
-          buttons.appendChild(createButton('OK', true));
+          buttons.appendChild(createButton(this.t('button-cancel', 'Cancel'), false));
+          buttons.appendChild(createButton(this.t('button-ok', 'OK'), true));
 
           dialog.appendChild(header);
           dialog.appendChild(body);
@@ -1252,12 +1413,12 @@
           applyFieldBtn.addEventListener('click', async () => {
             const result = await this.applySelectedFieldNormalizations();
             if (result.success && result.applied > 0) {
-              this.alert('Field Normalizer', 'Successfully normalized ' + result.applied + ' item(s).');
+              this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-successfully-normalized-items', 'Successfully normalized $1 item(s).', [String(result.applied)]));
               window.close();
             } else if (result.success) {
-              this.alert('Field Normalizer', 'No changes to apply.');
+              this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-no-changes-to-apply', 'No changes to apply.'));
             } else {
-              this.alert('Field Normalizer', 'Error: ' + result.error);
+              this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-error-with-message', 'Error: $1', [result.error]));
             }
           });
         }
@@ -1272,24 +1433,22 @@
             });
 
             if (pendingCount === 0) {
-              this.alert('Field Normalizer', 'No normalizations selected.');
+              this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-no-normalizations-selected', 'No normalizations selected.'));
               return;
             }
 
             const confirmed = await this.confirm(
-              'Confirming Changes',
-              'You are about to apply ' + pendingCount + ' normalization(s) to your library.\n\n' +
-              'This will modify field values in ' + pendingCount + ' item(s).\n\n' +
-              'Are you sure you want to continue?'
+              this.t('confirming-changes-title', 'Confirming Changes'),
+              this.t('confirming-changes-message', 'You are about to apply $1 normalization(s) to your library.\n\nThis will modify field values in $1 item(s).\n\nAre you sure you want to continue?', [String(pendingCount)])
             );
 
             if (confirmed) {
               const result = await this.applySelectedFieldNormalizations();
               if (result.success && result.applied > 0) {
-                this.alert('Field Normalizer', 'Successfully normalized ' + result.applied + ' item(s).');
+                this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-successfully-normalized-items', 'Successfully normalized $1 item(s).', [String(result.applied)]));
                 window.close();
               } else {
-                this.alert('Field Normalizer', 'Error: ' + result.error);
+                this.alert(this.t('field-normalizer-title', 'Field Normalizer'), this.t('field-error-with-message', 'Error: $1', [result.error]));
               }
             }
           });
@@ -1315,7 +1474,7 @@
 
       exportToJSON: async function() {
         if (!this.analysisResults || !this.analysisResults.suggestions) {
-          this.alert('Export', 'No data to export.');
+          this.alert(this.t('export-title', 'Export'), this.t('export-no-data-to-export', 'No data to export.'));
           return;
         }
 
@@ -1389,7 +1548,7 @@
                         (typeof Zotero !== 'undefined' ? Zotero : null);
           
           if (!zotero) {
-            this.alert('Export Error', 'Zotero instance not available');
+            this.alert(this.t('export-error-title', 'Export Error'), this.t('export-zotero-not-available', 'Zotero instance not available'));
             return;
           }
 
@@ -1410,7 +1569,7 @@
           }
 
           if (!exportDir) {
-            this.alert('Export Error', 'Could not determine Zotero data directory');
+            this.alert(this.t('export-error-title', 'Export Error'), this.t('export-could-not-determine-data-directory', 'Could not determine Zotero data directory'));
             return;
           }
 
@@ -1427,12 +1586,12 @@
           this.log('Exported to ' + exportPath);
           
           // Show success with file location
-          window.alert('Export successful!\n\nFile saved to:\n' + exportPath);
+          window.alert(this.t('export-successful-message', 'Export successful!\n\nFile saved to:\n$1', [exportPath]));
           
         } catch (e) {
           console.error('NER Export FAILED:', e.message, e);
           this.log('Export error: ' + e.message);
-          window.alert('Export failed: ' + e.message);
+          window.alert(this.t('export-failed-message', 'Export failed: $1', [e.message]));
         }
       },
 
@@ -1479,16 +1638,16 @@
         }
 
         if (!totalCount) {
-          summaryEl.textContent = 'No variant groups available';
+          summaryEl.textContent = this.t('filter-no-variant-groups', 'No variant groups available');
           return;
         }
 
         if (!this.filterText) {
-          summaryEl.textContent = `Showing all ${totalCount} variant groups`;
+          summaryEl.textContent = this.t('filter-showing-all-variant-groups', 'Showing all $1 variant groups', [String(totalCount)]);
           return;
         }
 
-        summaryEl.textContent = `Showing ${visibleCount} of ${totalCount} groups`;
+        summaryEl.textContent = this.t('filter-showing-visible-of-total-groups', 'Showing $1 of $2 groups', [String(visibleCount), String(totalCount)]);
       },
       
       initialize: async function() {
@@ -1618,7 +1777,7 @@
 
         if (!analysisResults) {
           this.log('No analysis results found');
-          this.showEmptyState('No analysis results were provided to the dialog.');
+          this.showEmptyState(this.t('empty-no-analysis-results', 'No analysis results were provided to the dialog.'));
           this.updateProgress();
           return;
         }
@@ -1713,8 +1872,9 @@
         this.log('Initializing field normalization for: ' + params.fieldType);
 
         // Set window title based on field type
-        const fieldTypeLabel = params.fieldType ? params.fieldType.charAt(0).toUpperCase() + params.fieldType.slice(1) : 'Field';
-        document.title = fieldTypeLabel + ' Normalization';
+        const fieldTypeKey = 'field-type-' + (params.fieldType || 'default');
+        const fieldTypeLabel = this.t(fieldTypeKey, params.fieldType ? params.fieldType.charAt(0).toUpperCase() + params.fieldType.slice(1) : 'Field');
+        document.title = this.t('dialog-title-field-normalization', '$1 Normalization', [fieldTypeLabel]);
 
         // Show field normalization section, hide author normalization sections
         const fieldSection = document.getElementById('field-normalization-section');
@@ -1760,7 +1920,7 @@
         const Zotero = this.getZotero();
         if (!Zotero) {
           this.log('Zotero not available');
-          this.showEmptyState('Zotero is not available. Field normalization requires Zotero.');
+          this.showEmptyState(this.t('empty-field-normalization-zotero-required', 'Zotero is not available. Field normalization requires Zotero.'));
           return;
         }
 
@@ -1826,7 +1986,42 @@
           if (!libraryID) {
             libraryID = Zotero.Libraries.userLibraryID;
             libraryType = 'user';
-            libraryName = 'My Library';
+            libraryName = this.t('scope-my-library', 'My Library');
+          }
+
+          // Display scope label so user sees which library is being normalized
+          const fieldScopeEl = document.getElementById('field-scope-label');
+          if (fieldScopeEl) {
+            const scopeName = (params && params.libraryContext && params.libraryContext.collectionName)
+              ? params.libraryContext.collectionName + ' — ' + libraryName
+              : libraryName;
+            fieldScopeEl.textContent = this.t('scope-label', 'Scope: $1', [scopeName || this.t('scope-my-library', 'My Library')]);
+          }
+
+          // Show and initialize the threshold slider from stored preference
+          const thresholdCtrl = document.getElementById('field-distance-control');
+          const thresholdSlider = document.getElementById('field-threshold-slider');
+          const thresholdDisplay = document.getElementById('field-threshold-display');
+          if (thresholdCtrl && thresholdSlider && thresholdDisplay) {
+            const stored = Math.round(this.getFieldThreshold() * 100);
+            thresholdSlider.value = String(stored);
+            thresholdDisplay.textContent = String(stored);
+            thresholdCtrl.style.display = '';
+            thresholdSlider.addEventListener('input', () => {
+              const pct = parseInt(thresholdSlider.value, 10);
+              thresholdDisplay.textContent = String(pct);
+              this.setFieldThreshold(pct / 100);
+            });
+            thresholdSlider.addEventListener('change', async () => {
+              this.log('Threshold changed to ' + thresholdSlider.value + '% — re-running grouping');
+              this.showLoadingState('Re-grouping values...');
+              try {
+                const reResults = await this.processFieldItems(items, zoteroField, fieldType, null);
+                await this.displayFieldResults(reResults, fieldType, zoteroField, null);
+              } catch (e) {
+                this.showEmptyState(this.t('empty-regrouping-failed', 'Re-grouping failed: $1', [e.message]));
+              }
+            });
           }
 
           this.log('Loading items from library: ' + libraryName + ' (ID: ' + libraryID + ', type: ' + libraryType + ')');
@@ -1851,12 +2046,12 @@
           }
         } catch (err) {
           this.log('Error loading items: ' + err.message);
-          this.showEmptyState('Failed to load items: ' + err.message);
+          this.showEmptyState(this.t('empty-failed-to-load-items', 'Failed to load items: $1', [err.message]));
           return;
         }
 
         if (items.length === 0) {
-          this.showEmptyState('No items found in library.');
+          this.showEmptyState(this.t('empty-no-items-found-in-library', 'No items found in library.'));
           return;
         }
 
@@ -1878,12 +2073,11 @@
           this.log('Error in field normalization: ' + err.message);
           this.log('Stack: ' + (err.stack || 'N/A'));
           
-          let userMessage = 'Field normalization failed: ' + err.message;
+          let userMessage = this.t('field-normalization-failed', 'Field normalization failed: $1', [err.message]);
           
           // Add helpful context for common errors
           if (err.message.includes('not loaded') || err.message.includes('field') || err.message.includes('place')) {
-            userMessage += '\n\nThis may occur if item data is not fully loaded. ' +
-                           'Try opening a few items in Zotero to load their data, then try again.';
+            userMessage += '\n\n' + this.t('field-normalization-retry-hint', 'This may occur if item data is not fully loaded. Try opening a few items in Zotero to load their data, then try again.');
           }
           
           this.showEmptyState(userMessage);
@@ -1953,8 +2147,9 @@
 
         const uniqueValues = Array.from(valueMap.values());
 
-        // Group similar values using fuzzy matching, passing fieldType
-        const groups = this.groupFieldValues(uniqueValues, fieldType);
+        // Group similar values using fuzzy matching, passing fieldType and threshold
+        const threshold = this.getFieldThreshold();
+        const groups = this.groupFieldValues(uniqueValues, fieldType, threshold);
 
         // Convert groups to display format
         let displayItems = [];
@@ -1978,21 +2173,18 @@
         // Sort by total item count (most common first)
         displayItems.sort((a, b) => b.itemCount - a.itemCount);
 
-        // DON'T filter out single-variant groups - show ALL values so users can see and normalize them
-        // Even unique values might need normalization (e.g., typos)
-        // The old filtering caused "No values found" when all values were unique
-        /*
+        // Only show groups with more than one variant - single-variant groups have nothing to normalize
         const itemsWithChanges = displayItems.filter(item => item.variants.length > 1);
         const filteredCount = displayItems.length - itemsWithChanges.length;
         if (filteredCount > 0) {
           this.log('Filtered out ' + filteredCount + ' groups with single variant');
         }
         displayItems = itemsWithChanges;
-        */
 
         const results = {
           fieldType: fieldType,
           total: items.length,
+          skippedCount: skippedCount,
           uniqueCount: displayItems.length,
           items: displayItems,
           groups: groups
@@ -2009,9 +2201,10 @@
        * @param {string} fieldType - The type of field (publisher, location, journal)
        * @returns {Array} - Array of grouped values
        */
-      groupFieldValues: function(values, fieldType) {
+      groupFieldValues: function(values, fieldType, threshold) {
         const groups = [];
         const assigned = new Set();
+        const t = typeof threshold === 'number' ? threshold : 0;
 
         // Sort by item count (most common first)
         const sorted = [...values].sort((a, b) => b.itemCount - a.itemCount);
@@ -2030,7 +2223,7 @@
           for (const other of sorted) {
             if (assigned.has(other.rawValue)) continue;
 
-            if (this.areFieldValuesSimilar(value.rawValue, other.rawValue, fieldType)) {
+            if (this.areFieldValuesSimilar(value.rawValue, other.rawValue, fieldType, t)) {
               group.variants.push(other);
               assigned.add(other.rawValue);
             }
@@ -2183,7 +2376,8 @@
        * @param {string} val2 - Second location value
        * @returns {boolean} - True if similar
        */
-      areLocationsSimilar: function(val1, val2) {
+      areLocationsSimilar: function(val1, val2, threshold) {
+        const t = typeof threshold === 'number' ? threshold : 0;
         // Normalize: lowercase, remove punctuation except & and :
         const norm1 = val1.toLowerCase().replace(/[,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
         const norm2 = val2.toLowerCase().replace(/[,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2225,6 +2419,9 @@
           }
         }
 
+        // Fuzzy Levenshtein fallback when threshold > 0
+        if (t > 0 && this.normalizedLevenshtein(norm1, norm2) <= t) return true;
+
         return false;
       },
 
@@ -2235,14 +2432,14 @@
        * @param {string} fieldType - The type of field (publisher, location, journal)
        * @returns {boolean} - True if similar
        */
-      areFieldValuesSimilar: function(val1, val2, fieldType) {
-        // For journals and locations, use strict matching
-        // They are proper nouns that should not be grouped unless truly equivalent
+      areFieldValuesSimilar: function(val1, val2, fieldType, threshold) {
+        const t = typeof threshold === 'number' ? threshold : 0;
+        // For journals and locations, use strict matching (+ optional fuzzy via threshold)
         if (fieldType === 'journal') {
           return this.areJournalsSimilar(val1, val2);
         }
         if (fieldType === 'location') {
-          return this.areLocationsSimilar(val1, val2);
+          return this.areLocationsSimilar(val1, val2, t);
         }
 
         const norm1 = val1.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2291,6 +2488,9 @@
           if (similarity > 0.6) return true;
         }
 
+        // Fuzzy Levenshtein fallback when threshold > 0
+        if (t > 0 && this.normalizedLevenshtein(norm1, norm2) <= t) return true;
+
         return false;
       },
 
@@ -2321,8 +2521,9 @@
         // Update title
         const titleEl = document.getElementById('field-normalization-title');
         if (titleEl) {
-          const typeLabel = fieldType.charAt(0).toUpperCase() + fieldType.slice(1);
-          titleEl.textContent = typeLabel + ' Normalization';
+          const fieldTypeKey = 'field-type-' + fieldType;
+          const typeLabel = this.t(fieldTypeKey, fieldType.charAt(0).toUpperCase() + fieldType.slice(1));
+          titleEl.textContent = this.t('dialog-title-field-normalization', '$1 Normalization', [typeLabel]);
         }
 
         // Hide progress
@@ -2339,10 +2540,27 @@
           ZoteroNER_HTMLUtils.setHidden('field-values-column', true);
           const emptyMsg = document.getElementById('field-empty-message');
           if (emptyMsg) {
-            // More informative message like author normalization
-            const fieldLabel = fieldType.charAt(0).toUpperCase() + fieldType.slice(1);
+            const fieldLabel = this.t('field-type-' + fieldType, fieldType.charAt(0).toUpperCase() + fieldType.slice(1));
             emptyMsg.style.display = 'block';
-            emptyMsg.textContent = 'All ' + fieldLabel + ' values appear to be consistent.';
+            emptyMsg.textContent = '';
+            if (results.skippedCount && results.skippedCount > 0) {
+              const scanned = results.total || 0;
+              const skipped = results.skippedCount;
+              const typeHint = fieldType === 'location'
+                ? this.t('field-location-data-hint', 'Location data is typically found on books, theses, and reports — not journal articles.')
+                : fieldType === 'publisher'
+                  ? this.t('field-publisher-data-hint', 'Publisher data may not be present for all item types.')
+                  : '';
+              emptyMsg.appendChild(document.createTextNode(this.t('field-no-values-found-to-normalize', 'No $1 values found to normalize.', [fieldLabel.toLowerCase()])));
+              emptyMsg.appendChild(document.createElement('br'));
+              const hint = document.createElement('small');
+              hint.style.color = '#666';
+              hint.textContent = this.t('field-items-scanned-skipped', '$1 items scanned, $2 skipped (field not available for that item type).', [String(scanned), String(skipped)])
+                + (typeHint ? ' ' + typeHint : '');
+              emptyMsg.appendChild(hint);
+            } else {
+              emptyMsg.textContent = this.t('field-all-values-consistent', 'All $1 values appear to be consistent.', [fieldLabel]);
+            }
           }
           return;
         }
@@ -2392,7 +2610,7 @@
           const emptyMsg = document.getElementById('field-empty-message');
           if (emptyMsg) {
             emptyMsg.style.display = 'block';
-            emptyMsg.innerHTML = '<p>No values found.</p>';
+            emptyMsg.innerHTML = '<p>' + this.t('field-no-values-found', 'No values found.') + '</p>';
           }
           return false;
         }
@@ -2428,8 +2646,11 @@
 
           const countEl = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-count' });
           const variantCount = item.variants ? item.variants.length : 1;
-          countEl.textContent = item.itemCount + ' item' + (item.itemCount > 1 ? 's' : '') +
-            (variantCount > 1 ? ' in ' + variantCount + ' variants' : '');
+          if (variantCount > 1) {
+            countEl.textContent = this.t('field-count-in-variants', '$1 items in $2 variants', [item.itemCount, variantCount]);
+          } else {
+            countEl.textContent = this.t('field-count', '$1 items', [item.itemCount]);
+          }
           headerEl.appendChild(countEl);
 
           groupEl.appendChild(headerEl);
@@ -2443,7 +2664,7 @@
             const variantsLabel = ZoteroNER_HTMLUtils.createElement('div', {
               style: 'color: #666; margin-bottom: 4px;'
             });
-            variantsLabel.textContent = 'Variants:';
+            variantsLabel.textContent = this.t('field-variants-label', 'Variants:');
             variantsSection.appendChild(variantsLabel);
 
             const variantsList = ZoteroNER_HTMLUtils.createElement('div', {
@@ -2469,7 +2690,7 @@
           // Normalized input section
           const normSection = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-normalized-section' });
           const normLabel = ZoteroNER_HTMLUtils.createElement('div', { class: 'field-normalized-label' });
-          normLabel.textContent = 'Normalize all variants to:';
+          normLabel.textContent = this.t('field-normalize-all-variants-label', 'Normalize all variants to:');
           normSection.appendChild(normLabel);
 
           const inputRow = ZoteroNER_HTMLUtils.createElement('div', {
@@ -2492,18 +2713,18 @@
           const applyBtn = document.createElement('button');
           applyBtn.type = 'button';
           applyBtn.style.cssText = 'padding: 6px 12px; cursor: pointer;';
-          applyBtn.textContent = 'Apply';
+          applyBtn.textContent = ZoteroNER_i18n.getMessage('button-apply', 'Apply');
           applyBtn.onclick = function() {
             // Disable button to prevent double-click
             applyBtn.disabled = true;
-            applyBtn.textContent = 'Applying...';
+            applyBtn.textContent = ZoteroNER_i18n.getMessage('button-applying', 'Applying...');
             // Re-enable after a short delay to allow the function to complete
             setTimeout(() => {
               window.applyFieldNormalization(index).then(() => {
-                applyBtn.textContent = 'Applied';
+                applyBtn.textContent = ZoteroNER_i18n.getMessage('button-applied', 'Applied');
               }).catch(() => {
                 applyBtn.disabled = false;
-                applyBtn.textContent = 'Apply';
+                applyBtn.textContent = ZoteroNER_i18n.getMessage('button-apply', 'Apply');
               });
             }, 50);
           };
@@ -2587,20 +2808,20 @@
         const detailItems = document.getElementById('field-detail-items');
 
         if (detailTitle) {
-          detailTitle.textContent = 'Items with "' + item.rawValue + '"';
+          detailTitle.textContent = this.t('field-items-with-value-title', 'Items with "$1"', [item.rawValue]);
         }
 
         if (detailContext) {
           const selection = this.fieldSelections.get(index);
           if (selection && selection.apply) {
-            detailContext.innerHTML = '<p style="color: #2e7d32;">Will be normalized to: <strong>' + this.escapeHtml(selection.normalized) + '</strong></p>';
+            detailContext.innerHTML = '<p style="color: #2e7d32;">' + this.t('field-will-be-normalized-to', 'Will be normalized to: <strong>$1</strong>', [this.escapeHtml(selection.normalized)]) + '</p>';
           } else {
-            detailContext.innerHTML = '<p style="color: #666;">No change scheduled</p>';
+            detailContext.innerHTML = '<p style="color: #666;">' + this.t('field-no-change-scheduled', 'No change scheduled') + '</p>';
           }
         }
 
         if (detailItems) {
-          detailItems.innerHTML = '<p><em>Showing first 10 items...</em></p>';
+          detailItems.innerHTML = '<p><em>' + this.t('field-showing-first-items', 'Showing first 10 items...') + '</em></p>';
         }
       },
 
@@ -2611,9 +2832,9 @@
         const summaryEl = document.getElementById('field-filter-summary');
         if (summaryEl) {
           if (visible === total) {
-            summaryEl.textContent = 'Showing all ' + total + ' values';
+            summaryEl.textContent = this.t('field-filter-showing-all-values', 'Showing all $1 values', [String(total)]);
           } else {
-            summaryEl.textContent = 'Showing ' + visible + ' of ' + total + ' values';
+            summaryEl.textContent = this.t('field-filter-showing-visible-of-total-values', 'Showing $1 of $2 values', [String(visible), String(total)]);
           }
         }
       },
@@ -3030,7 +3251,7 @@
         } catch (error) {
           this.log('applyCard: EXCEPTION caught: ' + error.message);
           console.error('Error applying normalization in applyCard:', error);
-          this.alert('Error', 'Failed to apply normalization: ' + error.message);
+          this.alert(this.t('error-title', 'Error'), this.t('error-failed-to-apply-normalization', 'Failed to apply normalization: $1', [error.message]));
           return false;
         }
 
@@ -3163,23 +3384,23 @@
           class: 'apply-btn',
           'data-suggestion-index': String(index)
         });
-        applyBtn.textContent = 'Apply';
+        applyBtn.textContent = this.t('button-apply', 'Apply');
 
         // Not Variants button (Distinct Authors)
         const notVariantsBtn = ZoteroNER_HTMLUtils.createElement('button', {
           type: 'button',
           class: 'not-variants-btn',
           'data-suggestion-index': String(index),
-          title: 'Mark these as distinct authors - this will not be proposed again'
+          title: this.t('button-not-variants-title', 'Mark these as distinct authors - this will not be proposed again')
         });
-        notVariantsBtn.textContent = 'Not Variants';
+        notVariantsBtn.textContent = this.t('button-not-variants', 'Not Variants');
 
         // Add click handlers
         applyBtn.addEventListener('click', async (event) => {
           this.log('Apply button clicked for index=' + index);
           // Prevent multiple clicks during processing
           applyBtn.disabled = true;
-          applyBtn.textContent = 'Applying...';
+          applyBtn.textContent = this.t('button-applying', 'Applying...');
 
           try {
             // Ensure the selection is marked as apply=true before applying
@@ -3191,7 +3412,7 @@
           } finally {
             // Re-enable button after processing
             applyBtn.disabled = false;
-            applyBtn.textContent = 'Apply';
+            applyBtn.textContent = this.t('button-apply', 'Apply');
           }
         });
 
@@ -3342,26 +3563,26 @@
           const surname = this.titleCase(suggestion.surname || suggestion.primary || '');
           const safeSurname = this.escapeHTML(surname);
           return surname
-            ? `Given name variants <span class="surname-variant">${safeSurname}</span>`
-            : `Given name variants Group ${groupNumber}`;
+            ? `${this.t('card-title-given-name-variants-prefix', 'Given name variants')} <span class="surname-variant">${safeSurname}</span>`
+            : this.t('card-title-given-name-group', 'Given name variants Group $1', [String(groupNumber)]);
         }
 
         const surname = this.titleCase(suggestion.primary || '');
         const safeSurname = this.escapeHTML(surname);
         return surname
-          ? `Surname variants <span class="surname-variant">${safeSurname}</span>`
-          : `Variant Group ${groupNumber}`;
+          ? `${this.t('card-title-surname-variants-prefix', 'Surname variants')} <span class="surname-variant">${safeSurname}</span>`
+          : this.t('card-title-variant-group', 'Variant Group $1', [String(groupNumber)]);
       },
 
       buildRecommendedHTML: function(suggestion, recommendedValue) {
         const rawValue = recommendedValue || '';
         const safeValue = this.escapeHTML(rawValue);
         if (suggestion.type === 'given-name') {
-          return 'Recommended full name: <strong>' + safeValue + '</strong>';
+          return this.t('card-recommended-full-name-prefix', 'Recommended full name:') + ' <strong>' + safeValue + '</strong>';
         }
         // For surname recommendations, display a title-cased, escaped version
         const display = this.formatSurnameKey(rawValue);
-        return 'Recommended normalization: <strong>' + display + '</strong>';
+        return this.t('card-recommended-normalization-prefix', 'Recommended normalization:') + ' <strong>' + display + '</strong>';
       },
 
       getVariantSummaryText: function(suggestion) {
@@ -3369,11 +3590,11 @@
 
         if (suggestion.type === 'given-name') {
           const total = suggestion.totalFrequency || 0;
-          return `${variantCount} given-name variants · ${total} occurrences`;
+          return this.t('card-variant-summary-given-name', '$1 given-name variants · $2 occurrences', [String(variantCount), String(total)]);
         }
 
         const totalOccurrences = (suggestion.variants || []).reduce((sum, variant) => sum + (variant.frequency || 0), 0);
-        return `${variantCount} surname spellings · ${totalOccurrences} occurrences`;
+        return this.t('card-variant-summary-surname', '$1 surname spellings · $2 occurrences', [String(variantCount), String(totalOccurrences)]);
       },
 
       getVariantDisplayLabel: function(suggestion, variant) {
@@ -3400,17 +3621,19 @@
           return '';
         }
 
-        const occurrences = typeof variant.frequency === 'number' ? `${variant.frequency} occurrences` : 'variant';
+        const occurrencesStr = typeof variant.frequency === 'number'
+          ? this.t('card-occurrences-count', '$1 occurrences', [String(variant.frequency)])
+          : this.t('card-variant-fallback', 'variant');
 
         if (suggestion.type === 'given-name') {
-          return `Normalize to ${this.titleCase(variant.firstName || variant.name || '')} (${occurrences})`;
+          return this.t('card-normalize-to-name', 'Normalize to $1 ($2)', [this.titleCase(variant.firstName || variant.name || ''), occurrencesStr]);
         }
 
         // Preserve original casing for surname variants
         const variantSurname = typeof variant.name === 'string'
           ? variant.name
           : this.formatNameString(variant.name);
-        return `Normalize to ${variantSurname} (${occurrences})`;
+        return this.t('card-normalize-to-name', 'Normalize to $1 ($2)', [variantSurname, occurrencesStr]);
       },
 
       buildVariantListElement: function(index, suggestion) {
@@ -3474,10 +3697,11 @@
       getVariantDetailTitle: function(suggestion, variant) {
         const label = this.getVariantDisplayLabel(suggestion, variant).replace(/\s+\([^)]*\)$/, '');
         const safeLabel = this.escapeHTML(label);
+        const prefix = this.t('card-occurrences-for-prefix', 'Occurrences for');
         if (suggestion.type === 'given-name') {
-          return `Occurrences for ${safeLabel}`;
+          return `${prefix} ${safeLabel}`;
         }
-        return `Occurrences for <span class="surname-variant">${safeLabel}</span>`;
+        return `${prefix} <span class="surname-variant">${safeLabel}</span>`;
       },
 
       showVariantDetails: function(suggestionIndex, variantIndex, suggestion, options = {}) {
@@ -3527,9 +3751,9 @@
         if (contextEl) {
           const pieces = [];
           const freq = typeof variant.frequency === 'number' ? variant.frequency : 0;
-          pieces.push(`Occurrences: ${freq}`);
+          pieces.push(this.t('detail-occurrences-count', 'Occurrences: $1', [String(freq)]));
           if (suggestion.type === 'given-name') {
-            pieces.push(`Surname: ${this.titleCase(suggestion.surname || suggestion.primary || '')}`);
+            pieces.push(this.t('detail-surname-label', 'Surname: $1', [this.titleCase(suggestion.surname || suggestion.primary || '')]));
           }
           contextEl.textContent = pieces.join(' · ');
         }
@@ -3542,7 +3766,7 @@
           if (items.length === 0) {
             const emptyLi = document.createElement('li');
             emptyLi.className = 'variant-meta';
-            emptyLi.textContent = 'No items found for this variant.';
+            emptyLi.textContent = this.t('detail-no-items-found', 'No items found for this variant.');
             listEl.appendChild(emptyLi);
           } else {
             items.forEach(item => {
@@ -3650,8 +3874,12 @@
         const selection = this.ensureUserSelection(index, suggestion);
         const recommendedValue = this.getDefaultNormalizationValue(suggestion);
         const recommendedLabelText = suggestion.type === 'given-name'
-          ? (recommendedValue ? `Use recommended full name: ${recommendedValue}` : 'Use recommended full name')
-          : (recommendedValue ? `Use recommended normalization: ${recommendedValue}` : 'Use recommended normalization');
+          ? (recommendedValue
+              ? `${this.t('card-use-recommended-full-name-prefix', 'Use recommended full name:')} ${recommendedValue}`
+              : this.t('card-use-recommended-full-name-bare', 'Use recommended full name'))
+          : (recommendedValue
+              ? `${this.t('card-use-recommended-normalization-prefix', 'Use recommended normalization:')} ${recommendedValue}`
+              : this.t('card-use-recommended-normalization-bare', 'Use recommended normalization'));
 
         const primaryRow = this.createSelectionRadioRow(index, suggestion, {
           mode: 'primary',
@@ -3663,7 +3891,7 @@
 
         const keepRow = this.createSelectionRadioRow(index, suggestion, {
           mode: 'keep',
-          label: 'Keep existing forms as-is',
+          label: this.t('card-keep-existing-forms', 'Keep existing forms as-is'),
           checked: selection.mode === 'keep',
           selectionUpdate: () => ({ mode: 'keep', apply: false })
         });
@@ -3742,7 +3970,7 @@
         radio.checked = selection.mode === 'custom';
 
         const label = ZoteroNER_HTMLUtils.createElement('label', { for: radioId });
-        label.textContent = 'Use a custom normalization:';
+        label.textContent = this.t('card-custom-normalization-label', 'Use a custom normalization:');
 
         const input = document.createElement('input');
         input.type = 'text';
@@ -3824,7 +4052,7 @@
         const totalSuggestions = suggestions.length;
 
         if (totalSuggestions === 0) {
-          this.showEmptyState('No variant groups were detected for the scanned surnames.');
+          this.showEmptyState(this.t('empty-no-variant-groups-detected', 'No variant groups were detected for the scanned surnames.'));
           return false;
         }
 
@@ -4111,24 +4339,24 @@
           }
 
           ZoteroNER_HTMLUtils.updateProgressBar(percent);
-          ZoteroNER_HTMLUtils.updateProgressLabel(state.message || 'Applying normalizations...');
+          ZoteroNER_HTMLUtils.updateProgressLabel(state.message || this.t('progress-applying-normalizations', 'Applying normalizations...'));
           return;
         }
 
         if (this.analysisResults && this.analysisResults.suggestions) {
           if (this.isProcessing) {
             ZoteroNER_HTMLUtils.updateProgressBar(50);
-            ZoteroNER_HTMLUtils.updateProgressLabel('Applying normalizations...');
+            ZoteroNER_HTMLUtils.updateProgressLabel(this.t('progress-applying-normalizations', 'Applying normalizations...'));
           } else {
             ZoteroNER_HTMLUtils.updateProgressBar(100);
-            ZoteroNER_HTMLUtils.updateProgressLabel('Analysis complete: ' + this.analysisResults.suggestions.length + ' variant groups found');
+            ZoteroNER_HTMLUtils.updateProgressLabel(this.t('progress-analysis-complete-variant-groups', 'Analysis complete: $1 variant groups found', [String(this.analysisResults.suggestions.length)]));
           }
         } else if (this.isProcessing) {
           ZoteroNER_HTMLUtils.updateProgressBar(50);
-          ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
+          ZoteroNER_HTMLUtils.updateProgressLabel(this.t('progress-analyzing-library', 'Analyzing library...'));
         } else {
           ZoteroNER_HTMLUtils.updateProgressBar(0);
-          ZoteroNER_HTMLUtils.updateProgressLabel('Ready');
+          ZoteroNER_HTMLUtils.updateProgressLabel(this.t('progress-ready', 'Ready'));
         }
       },
 
@@ -4181,7 +4409,7 @@
         });
 
         if (preparedSuggestions.length === 0 && declinedSuggestions.length === 0) {
-          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.');
+          this.alert(this.t('author-name-normalizer-title', 'Author Name Normalizer'), this.t('alert-no-normalization-choices-selected', 'No normalization choices are selected to apply. Adjust your selections or close the dialog.'));
           return;
         }
 
@@ -4223,7 +4451,7 @@
           }
 
           if (results.applied === 0 && results.updatedCreators === 0 && results.declinedRecorded > 0) {
-            this.alert('Author Name Normalizer', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.');
+            this.alert(this.t('author-name-normalizer-title', 'Author Name Normalizer'), this.t('alert-no-normalization-changes-applied', 'No normalization changes were applied. Your “keep existing” choices were saved for future runs.'));
           } else {
             const summary = [
               'Suggestions reviewed: ' + results.totalSuggestions,
@@ -4240,13 +4468,13 @@
               summary.push('Errors: ' + results.errors);
             }
 
-            this.alert('Author Name Normalizer', 'Normalization selections applied!\n\n' + summary.join('\n'));
+            this.alert(this.t('author-name-normalizer-title', 'Author Name Normalizer'), this.t('alert-normalization-selections-applied', 'Normalization selections applied!\n\n$1', [summary.join('\n')]));
           }
 
         } catch (error) {
           applyError = error;
           console.error(error);
-          this.alert('Error', 'Failed to apply normalization selections: ' + error.message);
+          this.alert(this.t('error-title', 'Error'), this.t('error-failed-to-apply-normalization-selections', 'Failed to apply normalization selections: $1', [error.message]));
         } finally {
           this.setDialogBusy(false);
           this.currentProgressState = null;
@@ -4267,7 +4495,7 @@
         }
 
         if (selectedCount === 0) {
-          this.alert('Author Name Normalizer', 'No normalization choices are selected to apply. Select at least one normalization to apply.');
+          this.alert(this.t('author-name-normalizer-title', 'Author Name Normalizer'), this.t('alert-no-normalization-selection-to-apply', 'No normalization choices are selected to apply. Select at least one normalization to apply.'));
           return;
         }
 
@@ -4360,7 +4588,7 @@
         ZoteroNER_HTMLUtils.setHidden('summary-group', true);
         ZoteroNER_HTMLUtils.setHidden('variant-section', true);
         ZoteroNER_HTMLUtils.setHidden('progress-container', false);
-        ZoteroNER_HTMLUtils.updateProgressLabel('Analyzing library...');
+        ZoteroNER_HTMLUtils.updateProgressLabel(this.t('progress-analyzing-library', 'Analyzing library...'));
         // Use indeterminate animation so user sees progress even if analysis is fast
         ZoteroNER_HTMLUtils.setProgressIndeterminate(true);
         this.setApplyEnabled(false);
@@ -4457,7 +4685,7 @@
         }
 
         if (!analysisResults) {
-          this.showEmptyState('Analysis completed but no results were returned.');
+          this.showEmptyState(this.t('empty-analysis-completed-no-results', 'Analysis completed but no results were returned.'));
           ZoteroNER_HTMLUtils.setHidden('progress-container', true);
           return;
         }
@@ -4484,6 +4712,16 @@
         this.populateVariantGroupList();
         this.refreshApplyButtonState();
         this.updateProgress();
+      },
+
+      // Called from zotero-ner.js after analysis completes, shows which library is in scope
+      updateLibraryContext: function(libraryContext) {
+        if (!libraryContext) return;
+        const name = libraryContext.collectionName
+          ? libraryContext.collectionName + ' — ' + (libraryContext.libraryName || this.t('scope-my-library', 'My Library'))
+          : (libraryContext.libraryName || this.t('scope-my-library', 'My Library'));
+        const el = document.getElementById('scope-label');
+        if (el) el.textContent = this.t('scope-label', 'Scope: $1', [name]);
       }
     };
 
@@ -4552,12 +4790,21 @@
   <!-- Field Normalization Section - Reuses variant layout -->
   <div id="field-normalization-section">
     <h2 id="field-normalization-title">Field Normalization</h2>
+    <div id="field-scope-label" class="scope-label"></div>
+
+    <!-- Similarity threshold control -->
+    <div id="field-distance-control" class="field-distance-control" style="display:none;">
+      <label for="field-threshold-slider" id="field-threshold-label">Similarity threshold:</label>
+      <input type="range" id="field-threshold-slider" min="0" max="50" step="5" value="0">
+      <span class="field-distance-value"><span id="field-threshold-display">0</span>%</span>
+      <span id="field-threshold-note" style="font-size:0.8em;color:#888;">(0 = exact match only · higher catches more spelling variants)</span>
+    </div>
 
     <!-- Summary -->
     <div id="field-summary" class="summary" style="display: none;">
       <div class="summary-grid">
-        <div><strong>Unique values:</strong> <span id="field-total-values">0</span></div>
-        <div><strong>Pending changes:</strong> <span id="field-pending-changes">0</span></div>
+        <div><strong id="field-summary-unique-values-label">Unique values:</strong> <span id="field-total-values">0</span></div>
+        <div><strong id="field-summary-pending-changes-label">Pending changes:</strong> <span id="field-pending-changes">0</span></div>
       </div>
     </div>
 
@@ -4591,7 +4838,7 @@
 
     <!-- Empty state -->
     <div id="field-empty-message" class="empty-message" style="display: none;">
-      No field values found.
+      <span id="field-empty-message-text">No field values found.</span>
     </div>
 
     <!-- Action buttons -->

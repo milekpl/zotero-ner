@@ -2409,19 +2409,21 @@ if (typeof console === 'undefined') {
           } catch (error) {
             console.error("LibraryContextManager: Error getting current library context:", error);
             try {
-              const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
-              return {
-                libraryID: Zotero.Libraries.userLibraryID,
-                libraryType: "user",
-                libraryName: userLib.name
-              };
+              if (Zotero.Libraries && typeof Zotero.Libraries.userLibraryID !== "undefined") {
+                const userLib = Zotero.Libraries.get(Zotero.Libraries.userLibraryID);
+                return {
+                  libraryID: Zotero.Libraries.userLibraryID,
+                  libraryType: "user",
+                  libraryName: userLib ? userLib.name : "My Library"
+                };
+              }
             } catch {
-              return {
-                libraryID: Zotero.Libraries.userLibraryID,
-                libraryType: "user",
-                libraryName: "My Library"
-              };
             }
+            return {
+              libraryID: null,
+              libraryType: "user",
+              libraryName: "My Library"
+            };
           }
         }
         /**
@@ -5049,6 +5051,15 @@ if (typeof console === 'undefined') {
                     newCreator.firstName = creatorFirstName;
                     updated = true;
                   }
+                } else if (type === "given-name") {
+                  const creatorFirstName = (creator.firstName || "").trim();
+                  const creatorLastName = (creator.lastName || "").trim();
+                  const variantFirstName = (variant.firstName || "").trim();
+                  const variantLastName = (variant.lastName || creatorLastName).trim();
+                  if (this.stringsEqualIgnoreCase(creatorFirstName, variantFirstName) && this.stringsEqualIgnoreCase(creatorLastName, variantLastName)) {
+                    newCreator.firstName = this.extractFirstNameFromFullName(normalizedValue, creatorLastName);
+                    updated = true;
+                  }
                 } else {
                   const creatorFirstName = (creator.firstName || "").trim();
                   const creatorLastName = (creator.lastName || "").trim();
@@ -5208,6 +5219,15 @@ if (typeof console === 'undefined') {
             return false;
           }
           return a.trim().toLowerCase() === b.trim().toLowerCase();
+        }
+        // Given a full name like "Richard E. Baldwin" and a lastName "Baldwin",
+        // returns just the firstName portion "Richard E.".
+        extractFirstNameFromFullName(fullName, lastName) {
+          if (!fullName) return "";
+          if (!lastName) return fullName;
+          const escaped = lastName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const firstName = fullName.replace(new RegExp("\\s+" + escaped + "\\s*$", "i"), "").trim();
+          return firstName || fullName;
         }
         extractVariantGivenName(variant) {
           if (!variant) {
