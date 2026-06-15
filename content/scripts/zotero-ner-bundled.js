@@ -2390,6 +2390,19 @@ if (typeof console === 'undefined') {
                 collectionName: selectedCollection.name
               };
             }
+            if (typeof zoteroPane.getSelectedLibraryID === "function") {
+              const selectedLibraryID = zoteroPane.getSelectedLibraryID();
+              if (selectedLibraryID !== null && selectedLibraryID !== void 0) {
+                const library = Zotero.Libraries.get(selectedLibraryID);
+                if (library) {
+                  return {
+                    libraryID: selectedLibraryID,
+                    libraryType: library.libraryType,
+                    libraryName: library.name
+                  };
+                }
+              }
+            }
             const selectedItems = zoteroPane.getSelectedItems();
             if (selectedItems && selectedItems.length > 0) {
               const firstItem = selectedItems[0];
@@ -3519,7 +3532,7 @@ if (typeof console === 'undefined') {
             if (parsed.lastName || rawLastName) {
               const firstName = (creator.firstName || "").trim();
               const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
-              const normalizedLast = (parsed.lastName || rawLastName).toLowerCase().trim();
+              const normalizedLast = normalizeName(parsed.lastName || rawLastName).trim();
               const authorKey = `${normalizedFirst}|${normalizedLast}`;
               if (!authorOccurrences[authorKey]) {
                 authorOccurrences[authorKey] = {
@@ -5524,12 +5537,12 @@ if (typeof console === 'undefined') {
             toolsMenu.appendChild(separator);
             const menuItem = doc.createElement("menuitem");
             menuItem.setAttribute("id", "zotero-ner-normalize-field");
-            menuItem.setAttribute("label", "Normalize Field…");
+            menuItem.setAttribute("label", "Normalize Field\u2026");
             menuItem.addEventListener("command", async () => {
               await this.handleFieldNormalizeAction("__picker__");
             });
             toolsMenu.appendChild(menuItem);
-            console.log("Registered field normalization menu item: Normalize Field…");
+            console.log("Registered field normalization menu item: Normalize Field\u2026");
           } catch (error) {
             console.error("Error registering field menu items:", error);
           }
