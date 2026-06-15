@@ -785,8 +785,10 @@ class ZoteroDBAnalyzer {
       if (parsed.lastName || rawLastName) {
         const firstName = (creator.firstName || '').trim();
         const normalizedFirst = this.normalizeFirstNameForGrouping(firstName);
-        // Use parsed.lastName for grouping (to detect diacritic variants within same author)
-        const normalizedLast = (parsed.lastName || rawLastName).toLowerCase().trim();
+        // Use parsed.lastName for grouping, normalized to strip diacritics so that
+        // diacritic-only variants (e.g. "Martinez" vs "Martínez") land in the same
+        // author bucket and can be detected as variants of the same surname.
+        const normalizedLast = normalizeName(parsed.lastName || rawLastName).trim();
 
         // Key for tracking this specific author
         const authorKey = `${normalizedFirst}|${normalizedLast}`;
