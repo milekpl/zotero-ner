@@ -531,9 +531,14 @@ if (typeof Zotero === 'undefined') {
           this.currentDialogWindow = dialogWindow;
           this.log('Dialog opened, window reference stored');
 
-          // Use setTimeout to let dialog initialize before starting analysis
+          // Use the active window timer when available so tests can control it.
           const self = this;
-          setTimeout(async function() {
+          const scheduleTimeout =
+            (typeof window !== 'undefined' && window &&
+              typeof window.setTimeout === 'function')
+              ? window.setTimeout.bind(window)
+              : setTimeout;
+          scheduleTimeout(async function() {
             fileLog('setTimeout callback running');
             console.log('Name Normalizer: setTimeout callback running');
             try {
