@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 <head>
   <title>Author Name Normalizer</title>
+  <!-- Native XUL widget styling so menulist dropdowns render/scroll/select correctly -->
+  <link rel="stylesheet" href="chrome://global/skin/global.css" />
   <style>
     html, body {
       font-family: -moz-dialog, Arial, sans-serif;
@@ -881,12 +883,41 @@
         return row[lb] / Math.max(la, lb);
       },
 
-      // Threshold stored in localStorage so it persists across sessions
+      // Threshold kept in memory as the source of truth (localStorage is unreliable
+      // in the chrome:// dialog context and can throw), with localStorage as
+      // best-effort cross-session persistence.
       getFieldThreshold: function() {
-        try { return parseFloat(localStorage.getItem('zotero-ner-field-threshold') || '0') || 0; } catch (e) { return 0; }
+        if (typeof this._fieldThreshold === 'number') return this._fieldThreshold;
+        try {
+          const stored = parseFloat(localStorage.getItem('zotero-ner-field-threshold') || '0') || 0;
+          this._fieldThreshold = stored;
+          return stored;
+        } catch (e) {
+          this._fieldThreshold = 0;
+          return 0;
+        }
       },
       setFieldThreshold: function(val) {
-        try { localStorage.setItem('zotero-ner-field-threshold', String(val)); } catch (e) {}
+        this._fieldThreshold = (typeof val === 'number' && !isNaN(val)) ? val : 0;
+        try { localStorage.setItem('zotero-ner-field-threshold', String(this._fieldThreshold)); } catch (e) {}
+      },
+
+      // Last-used normalization field, kept in memory (same reasoning as the
+      // threshold above) with best-effort localStorage persistence.
+      getLastNormalizedField: function() {
+        if (typeof this._lastNormalizedField === 'string') return this._lastNormalizedField;
+        try {
+          const stored = localStorage.getItem('zotero-ner-last-field') || '';
+          this._lastNormalizedField = stored;
+          return stored;
+        } catch (e) {
+          this._lastNormalizedField = '';
+          return '';
+        }
+      },
+      setLastNormalizedField: function(field) {
+        this._lastNormalizedField = (typeof field === 'string') ? field : '';
+        try { localStorage.setItem('zotero-ner-last-field', this._lastNormalizedField); } catch (e) {}
       },
 
       init: function() {
@@ -1871,9 +1902,10 @@
       initializeFieldNormalization: async function(params) {
         this.log('Initializing field normalization for: ' + params.fieldType);
 
-        // Set window title based on field type
-        const fieldTypeKey = 'field-type-' + (params.fieldType || 'default');
-        const fieldTypeLabel = this.t(fieldTypeKey, params.fieldType ? params.fieldType.charAt(0).toUpperCase() + params.fieldType.slice(1) : 'Field');
+        // Set window title based on field type ('__picker__' = no preset field yet)
+        const hasPreset = params.fieldType && params.fieldType !== '__picker__';
+        const fieldTypeKey = 'field-type-' + (hasPreset ? params.fieldType : 'default');
+        const fieldTypeLabel = this.t(fieldTypeKey, hasPreset ? params.fieldType.charAt(0).toUpperCase() + params.fieldType.slice(1) : 'Field');
         document.title = this.t('dialog-title-field-normalization', '$1 Normalization', [fieldTypeLabel]);
 
         // Show field normalization section, hide author normalization sections
@@ -1906,13 +1938,19 @@
           'journal': 'publicationTitle'
         };
 
-        // Set field type based on params
-        const fieldType = params.fieldType || 'publisher';
-        const zoteroField = fieldTypeMap[fieldType] || fieldType;
+        // Picker mode: the menu passes the '__picker__' sentinel instead of a real
+        // field, meaning "let the user choose the field in the dialog". The actual
+        // field is resolved after items load (buildNormalizableFieldList).
+        const pickerMode = (params.fieldType === '__picker__');
 
-        // Update UI label
+        // Current field — mutable so the field-picker and threshold re-run handlers
+        // always operate on the latest selection (read via closure).
+        let fieldType = pickerMode ? '' : (params.fieldType || 'publisher');
+        let zoteroField = pickerMode ? '' : (fieldTypeMap[fieldType] || fieldType);
+
+        // Update UI label (in picker mode the dropdown itself indicates the field)
         const labelEl = document.getElementById('field-type-label');
-        if (labelEl) {
+        if (labelEl && !pickerMode) {
           labelEl.textContent = fieldType;
         }
 
@@ -2056,6 +2094,43 @@
         }
 
         this.log('Loaded ' + items.length + ' items for field normalization');
+
+        // Field picker mode: build the field dropdown from the selected items and
+        // let the user choose which field to normalize.
+        if (pickerMode) {
+          const fieldList = this.buildNormalizableFieldList(items, Zotero);
+          if (!fieldList || fieldList.length === 0) {
+            this.showEmptyState(this.t('empty-no-normalizable-fields', 'No normalizable fields found for these items.'));
+            return;
+          }
+          // Default to the last-used field if still available, else the top-ranked one.
+          const lastField = this.getLastNormalizedField();
+          const defaultField = fieldList.some(f => f.name === lastField) ? lastField : fieldList[0].name;
+          zoteroField = defaultField;
+          fieldType = this.resolveFieldType(zoteroField);
+          this.setLastNormalizedField(zoteroField);
+
+          const fieldSelectHost = document.getElementById('field-select-host');
+          const fieldSelectControl = document.getElementById('field-select-control');
+          if (fieldSelectHost && fieldSelectControl) {
+            const onFieldChosen = async (newField) => {
+              if (!newField || newField === zoteroField) return;
+              zoteroField = newField;
+              fieldType = this.resolveFieldType(zoteroField);
+              this.setLastNormalizedField(zoteroField);
+              this.log('Field changed to ' + zoteroField + ' (type ' + fieldType + ') — re-running grouping');
+              this.showLoadingState(this.t('field-grouping-loading', 'Grouping $1…', [zoteroField]));
+              try {
+                const reResults = await this.processFieldItems(items, zoteroField, fieldType, null);
+                await this.displayFieldResults(reResults, fieldType, zoteroField, null);
+              } catch (e) {
+                this.showEmptyState(this.t('empty-regrouping-failed', 'Re-grouping failed: $1', [e.message]));
+              }
+            };
+            this.buildFieldDropdown(fieldSelectHost, fieldList, defaultField, onFieldChosen);
+            fieldSelectControl.style.display = '';
+          }
+        }
 
         // Show loading state
         this.showLoadingState('Processing ' + items.length + ' items...');
@@ -2255,9 +2330,140 @@
       },
 
       /**
-       * Split a field value by separators for multi-value fields
+       * Resolve a Zotero field name to the fieldType key used by the similarity
+       * heuristics. The three known fields map to their special branches; every
+       * other field passes through as its own name and falls through to the
+       * generic branch in areFieldValuesSimilar.
+       * @param {string} zoteroField - The Zotero field name (e.g. 'place', 'series')
+       * @returns {string} - The fieldType key
+       */
+      resolveFieldType: function(zoteroField) {
+        const map = {
+          publisher: 'publisher',
+          place: 'location',
+          publicationTitle: 'journal'
+        };
+        return map[zoteroField] || zoteroField;
+      },
+
+      // Fields that never make sense to fuzzy-group (identifiers, dates, numerics,
+      // URLs, and bulky/unique text). Compared case-insensitively against field names.
+      NORMALIZABLE_FIELD_DENYLIST: [
+        'doi', 'isbn', 'issn', 'pmid', 'pmcid', 'callnumber', 'url', 'date',
+        'accessdate', 'dateadded', 'datemodified', 'pages', 'numpages', 'volume',
+        'issue', 'seriesnumber', 'title', 'shorttitle', 'abstractnote', 'extra'
+      ],
+
+      /**
+       * Build the list of fields worth offering for normalization, given the
+       * selected items. Enumerates fields valid for the items' item types (union),
+       * drops denylisted fields, counts how many selected items have a value, and
+       * sorts by that count (desc) then label.
+       * @param {Array} items - Selected Zotero items
+       * @param {Object} zotero - Zotero reference (with ItemFields)
+       * @returns {Array<{name:string,label:string,populated:number}>}
+       */
+      buildNormalizableFieldList: function(items, zotero) {
+        const ItemFields = zotero && zotero.ItemFields;
+        if (!ItemFields || !items || items.length === 0) return [];
+
+        const deny = new Set(this.NORMALIZABLE_FIELD_DENYLIST);
+        const typeIDs = new Set();
+        for (const it of items) typeIDs.add(it.itemTypeID);
+
+        // Collect candidate fields across the selected item types.
+        const fieldInfo = new Map(); // name -> {name, label, populated}
+        for (const typeID of typeIDs) {
+          let fieldIDs = [];
+          try { fieldIDs = ItemFields.getItemTypeFields(typeID) || []; } catch (e) { fieldIDs = []; }
+          for (const fid of fieldIDs) {
+            let name;
+            try { name = ItemFields.getName(fid); } catch (e) { name = null; }
+            if (!name || deny.has(String(name).toLowerCase())) continue;
+            if (!fieldInfo.has(name)) {
+              let label = name;
+              try { label = ItemFields.getLocalizedString(name) || name; } catch (e) { label = name; }
+              fieldInfo.set(name, { name: name, label: label, populated: 0 });
+            }
+          }
+        }
+
+        // Count how many selected items actually have a value for each field.
+        for (const it of items) {
+          for (const info of fieldInfo.values()) {
+            let v = '';
+            try { v = it.getField(info.name); } catch (e) { v = ''; }
+            if (v && String(v).trim() !== '') info.populated++;
+          }
+        }
+
+        const list = Array.from(fieldInfo.values()).filter(f => f.populated >= 1);
+        list.sort((a, b) => (b.populated - a.populated) || a.label.localeCompare(b.label));
+        return list;
+      },
+
+      /**
+       * Render the field dropdown into a host element. Prefers a native XUL
+       * <menulist> (which renders, scrolls and selects correctly in Zotero's
+       * chrome dialog); falls back to an HTML <select> where XUL is unavailable.
+       * @param {Element} host - Container element to render into
+       * @param {Array<{name:string,label:string,populated:number}>} fieldList
+       * @param {string} defaultField - The field name to pre-select
+       * @param {Function} onChange - Called with the chosen field name
+       * @returns {Element} The created dropdown element
+       */
+      buildFieldDropdown: function(host, fieldList, defaultField, onChange) {
+        host.textContent = '';
+        const optionLabel = (f) => f.label + ' (' + f.populated + ')';
+
+        // Native XUL menulist (preferred)
+        try {
+          if (document.createXULElement) {
+            const menulist = document.createXULElement('menulist');
+            menulist.setAttribute('id', 'field-select');
+            menulist.setAttribute('flex', '1');
+            menulist.setAttribute('minwidth', '200');
+            const menupopup = document.createXULElement('menupopup');
+            for (const f of fieldList) {
+              const mi = document.createXULElement('menuitem');
+              mi.setAttribute('label', optionLabel(f));
+              mi.setAttribute('value', f.name);
+              menupopup.appendChild(mi);
+            }
+            menulist.appendChild(menupopup);
+            try { menulist.value = defaultField; } catch (e) {}
+            menulist.addEventListener('command', () => {
+              onChange(menulist.value);
+            });
+            host.appendChild(menulist);
+            return menulist;
+          }
+        } catch (e) {
+          this.log('Could not create XUL menulist, falling back to HTML select: ' + e.message);
+        }
+
+        // HTML <select> fallback
+        const select = document.createElement('select');
+        select.id = 'field-select';
+        for (const f of fieldList) {
+          const opt = document.createElement('option');
+          opt.value = f.name;
+          opt.textContent = optionLabel(f);
+          if (f.name === defaultField) opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.addEventListener('change', () => onChange(select.value));
+        host.appendChild(select);
+        return select;
+      },
+
+      /**
+       * Split a field value by separators for multi-value fields.
+       * Only publisher and location are treated as multi-value (split on ; and /).
+       * Every other field (journal, series, language, rights, format, …) is atomic,
+       * because separators there are part of the value (e.g. "CC BY-NC-ND / public domain").
        * @param {string} value - The field value to split
-       * @param {string} fieldType - The type of field (publisher, location, journal)
+       * @param {string} fieldType - The type of field (publisher, location, journal, …)
        * @returns {string[]} - Array of split values
        */
       splitFieldValue: function(value, fieldType) {
@@ -2265,12 +2471,12 @@
           return [value || ''];
         }
 
-        // Journals are typically single values - no splitting
-        if (fieldType === 'journal') {
+        // Only publishers and locations are multi-valued; everything else is atomic.
+        if (fieldType !== 'publisher' && fieldType !== 'location') {
           return [value];
         }
 
-        // For publishers and locations, split on ; and /
+        // Split on ; and /
         // Note: We don't split on comma because it's part of city/state format (e.g., "Cambridge, MA")
         const parts = value.split(/;\s*|\/\s*/);
 
@@ -2279,13 +2485,17 @@
       },
 
       /**
-       * Check if two journal names are similar using strict rules
-       * Only allows: exact match, "The" prefix difference, & vs "and"
+       * Check if two journal names are similar.
+       * Always allows: exact match, "The" prefix difference, & vs "and".
+       * When threshold > 0, also allows close spelling variants via fuzzy matching
+       * (e.g. "Behavioural and Brain Sciences" vs "Behavioral and Brain Sciences").
        * @param {string} val1 - First journal name
        * @param {string} val2 - Second journal name
+       * @param {number} threshold - Max normalized edit distance for fuzzy matching (0 = strict only)
        * @returns {boolean} - True if similar
        */
-      areJournalsSimilar: function(val1, val2) {
+      areJournalsSimilar: function(val1, val2, threshold) {
+        const t = typeof threshold === 'number' ? threshold : 0;
         // Normalize: lowercase, remove punctuation
         const norm1 = val1.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
         const norm2 = val2.toLowerCase().replace(/[&,\.\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2305,6 +2515,10 @@
 
         // Also check with "The" removed
         if (removeThe(withAnd1) === removeThe(withAnd2)) return true;
+
+        // Fuzzy Levenshtein fallback when threshold > 0 (compare "The"-stripped forms
+        // so a leading "The" doesn't inflate the distance)
+        if (t > 0 && this.normalizedLevenshtein(removeThe(withAnd1), removeThe(withAnd2)) <= t) return true;
 
         return false;
       },
@@ -2436,7 +2650,7 @@
         const t = typeof threshold === 'number' ? threshold : 0;
         // For journals and locations, use strict matching (+ optional fuzzy via threshold)
         if (fieldType === 'journal') {
-          return this.areJournalsSimilar(val1, val2);
+          return this.areJournalsSimilar(val1, val2, t);
         }
         if (fieldType === 'location') {
           return this.areLocationsSimilar(val1, val2, t);
@@ -4791,6 +5005,15 @@
   <div id="field-normalization-section">
     <h2 id="field-normalization-title">Field Normalization</h2>
     <div id="field-scope-label" class="scope-label"></div>
+
+    <!-- Field selector (shown only when launched via "Normalize Field…").
+         The dropdown is injected as a native XUL menulist (with HTML <select>
+         fallback) by buildFieldDropdown() — a bare HTML <select> renders poorly
+         in Zotero's chrome dialog (tiny, unscrollable, unselectable). -->
+    <div id="field-select-control" class="field-distance-control" style="display:none;">
+      <label for="field-select" id="field-select-label">Field:</label>
+      <span id="field-select-host"></span>
+    </div>
 
     <!-- Similarity threshold control -->
     <div id="field-distance-control" class="field-distance-control" style="display:none;">

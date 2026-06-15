@@ -452,43 +452,18 @@ if (typeof Zotero === 'undefined') {
             const separator = doc.createXULElement ? doc.createXULElement('menuseparator') : doc.createElement('menuseparator');
             toolsPopup.appendChild(separator);
 
-            // Create "Normalize Field Data" submenu
-            fieldSubmenu = doc.createXULElement ? doc.createXULElement('menu') : doc.createElement('menu');
-            fieldSubmenu.id = this.fieldMenuItemId;
-            fieldSubmenu.setAttribute('label', this.getMessage('field-menu-label', 'Normalize Field Data'));
-            toolsPopup.appendChild(fieldSubmenu);
-
-            const popup = doc.createXULElement ? doc.createXULElement('menupopup') : doc.createElement('menupopup');
-            fieldSubmenu.appendChild(popup);
-
-            // Publisher menu item
-            const publisherItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
-            publisherItem.id = this.publisherMenuItemId;
-            publisherItem.setAttribute('label', this.getMessage('field-menu-publisher', 'Publisher'));
-            publisherItem.addEventListener('command', () => {
-              this.showDialogForField('publisher');
+            // Single "Normalize Field…" entry. The dialog shows a field picker;
+            // the special publisher/location/journal heuristics are still applied
+            // automatically based on whichever field the user chooses.
+            const fieldItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
+            fieldItem.id = this.fieldMenuItemId;
+            fieldItem.setAttribute('label', this.getMessage('field-menu-label', 'Normalize Field…'));
+            fieldItem.addEventListener('command', () => {
+              this.showDialogForField('__picker__');
             });
-            popup.appendChild(publisherItem);
+            toolsPopup.appendChild(fieldItem);
 
-            // Location menu item
-            const locationItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
-            locationItem.id = this.locationMenuItemId;
-            locationItem.setAttribute('label', this.getMessage('field-menu-location', 'Location'));
-            locationItem.addEventListener('command', () => {
-              this.showDialogForField('location');
-            });
-            popup.appendChild(locationItem);
-
-            // Journal menu item
-            const journalItem = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
-            journalItem.id = this.journalMenuItemId;
-            journalItem.setAttribute('label', this.getMessage('field-menu-journal', 'Journal'));
-            journalItem.addEventListener('command', () => {
-              this.showDialogForField('journal');
-            });
-            popup.appendChild(journalItem);
-
-            this.log('Added field normalization menu items');
+            this.log('Added field normalization menu item');
           } catch (err) {
             this.log('Error adding field menu items: ' + err.message);
           }

@@ -5522,25 +5522,14 @@ if (typeof console === 'undefined') {
             }
             const separator = doc.createElement("menuseparator");
             toolsMenu.appendChild(separator);
-            const fieldSubmenu = doc.createElement("menu");
-            fieldSubmenu.setAttribute("label", "Normalize Field Data");
-            fieldSubmenu.setAttribute("id", "zotero-ner-field-normalization-menu");
-            const fieldTypes = [
-              { id: "publisher", label: "Publisher" },
-              { id: "location", label: "Location" },
-              { id: "journal", label: "Journal" }
-            ];
-            for (const fieldType of fieldTypes) {
-              const menuItem = doc.createElement("menuitem");
-              menuItem.setAttribute("id", `zotero-ner-normalize-${fieldType.id}`);
-              menuItem.setAttribute("label", `Normalize ${fieldType.label}`);
-              menuItem.addEventListener("command", async () => {
-                await this.handleFieldNormalizeAction(fieldType.id);
-              });
-              fieldSubmenu.appendChild(menuItem);
-            }
-            toolsMenu.appendChild(fieldSubmenu);
-            console.log("Registered field normalization menu items: Publisher, Location, Journal");
+            const menuItem = doc.createElement("menuitem");
+            menuItem.setAttribute("id", "zotero-ner-normalize-field");
+            menuItem.setAttribute("label", "Normalize Field…");
+            menuItem.addEventListener("command", async () => {
+              await this.handleFieldNormalizeAction("__picker__");
+            });
+            toolsMenu.appendChild(menuItem);
+            console.log("Registered field normalization menu item: Normalize Field…");
           } catch (error) {
             console.error("Error registering field menu items:", error);
           }

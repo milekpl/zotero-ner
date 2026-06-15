@@ -24,8 +24,8 @@
     "description": "Tooltip for toolbar button"
   },
   "field-menu-label": {
-    "message": "Normalize Field Data",
-    "description": "Label for the field normalization submenu"
+    "message": "Normalize Field…",
+    "description": "Label for the single field normalization menu entry (opens a field picker)"
   },
   "field-menu-publisher": {
     "message": "Publisher",

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-06-15
+
+### Added
+
+- **Field-agnostic field normalization.** A single **Tools ▸ Normalize Field…**
+  entry now opens the field-normalization dialog with a field picker. You can
+  normalize **any** text field — Series, Language, Rights, Format, Edition, the
+  "Original" publisher/place fields, and more — not just publisher, location,
+  and journal.
+  - The dropdown lists the text fields actually present on the items in scope,
+    sorted by how many items use each one, and remembers the last field you used.
+  - The right matching heuristics are applied automatically from the chosen
+    field: Publisher/Location/Journal keep their dedicated logic (including US
+    state folding for places); every other field uses a generic heuristic.
+  - The field picker is rendered as a native XUL `menulist` (with an HTML
+    `<select>` fallback) so it displays, scrolls, and selects correctly in
+    Zotero's dialog.
+
+### Fixed
+
+- **Diacritic-insensitive surname grouping.** "Martinez" and "Martínez" (and
+  similar accent-only differences) are now detected as the same author and
+  offered for normalization, instead of being treated as different surnames.
+- **Group library scope.** Highlighting a group library's label in the left
+  pane now normalizes that group library, rather than silently defaulting to
+  the personal library.
+- **Field similarity-threshold slider now works.** Two separate bugs made it a
+  no-op: the threshold was stored only in `localStorage` (which can throw in
+  Zotero's chrome dialog, so it always read back as 0), and the journal matching
+  path ignored the threshold entirely. The value is now kept in memory and
+  honoured by every field type, so raising the slider catches spelling variants
+  (e.g. "Behavioural" vs "Behavioral").
+
+### Changed
+
+- The three fixed field menu items (Publisher/Location/Journal) are replaced by
+  a single **Normalize Field…** entry. The special heuristics for those fields
+  are still applied automatically based on the field you pick.
+- Identifier, date, and numeric fields are excluded from the field picker
+  because fuzzy-grouping them makes no sense — DOI, ISBN, ISSN, PMID, PMCID,
+  call number, URL, dates, page/volume/issue numbers, titles, and abstracts.
+- Multi-value splitting (on `;` and `/`) now applies only to publisher and
+  location; all other fields are treated as a single value, so values such as
+  rights statements are left intact.
+
 ## [1.4] - 2026-04-23
 
 ### Added

@@ -49,45 +49,55 @@ Key features
 Field Normalization
 -------------------
 
-Zotero Name Normalizer also supports normalizing publication metadata fields:
-publishers, publication locations, and journal names. This ensures consistency
-across your library for fields that often have variant spellings.
+Zotero Name Normalizer can also normalize publication metadata fields so that
+variant spellings of the same value are unified across your library.
 
-### Publishers
+A single **Tools ▸ Normalize Field…** entry opens the field-normalization
+dialog. Pick the field to normalize from the dropdown at the top — it lists the
+text fields present on the items in scope (sorted by how many items use them),
+so you can normalize **any** field, including Series, Language, Rights, Format,
+Edition, and the "Original" publisher/place fields, not just the three built-in
+ones.
 
-Publisher normalization handles:
-- Case differences: "Oxford University Press" vs "Oxford university press"
-- Suffix variations: "Oxford University Press" vs "Oxford University Press USA"
-- Ampersand vs "and": "Taylor & Francis" vs "Taylor and Francis"
-- Multi-publisher values: "Oxford University Press; Clarendon Press" is split
-  and processed separately
+The right matching heuristics are applied automatically based on the field you
+choose:
 
-### Locations
+- **Publisher** — case differences ("Oxford University Press" vs "Oxford
+  university press"), suffix variations ("… Press" vs "… Press USA"), ampersand
+  vs "and" ("Taylor & Francis" vs "Taylor and Francis"), and multi-publisher
+  values ("Oxford University Press; Clarendon Press") split and processed
+  separately.
+- **Location/Place** — case and punctuation ("Cambridge, MA" vs "Cambridge
+  MA"), US state abbreviations ("Cambridge, MA" ↔ "Cambridge, Mass." ↔
+  "Cambridge, Massachusetts"), and country suffixes ("New York, NY" vs "New
+  York, NY, USA"). Does NOT merge different cities (e.g. "New York" stays
+  separate from "Oxford, New York").
+- **Journal** — strict matching to avoid merging different journals: case,
+  "The" prefix ("The Journal of Philosophy" ↔ "Journal of Philosophy"), and
+  ampersand vs "and". Does NOT merge "Journal of Neuroscience" with "Journal of
+  Cognitive Neuroscience".
+- **Any other field** — a generic heuristic: case/punctuation normalization, token overlap, and a fuzzy threshold. These fields are treated as a single value (not split on `;`/`/`), so values like rights statements are left intact.
 
-Location normalization handles:
-- Case and punctuation: "Cambridge, MA" vs "Cambridge MA"
-- US state abbreviations: "Cambridge, MA" ↔ "Cambridge, Mass." ↔ "Cambridge, Massachusetts"
-- Country suffixes: "New York, NY" vs "New York, NY, USA"
-- Ampersand vs "and": "London & New York" vs "London and New York"
+### Similarity threshold
 
-Does NOT group different cities together (e.g., "New York" stays separate from "Oxford, New York" or "London, New York").
+A **Similarity threshold** slider controls how aggressively close spellings are
+grouped: 0 catches only exact matches (after case/punctuation normalization),
+while higher values also catch spelling variants (e.g. "Behavioural" vs
+"Behavioral"). Changing the slider re-groups the values immediately.
 
-### Journals
+### Excluded fields
 
-Journal normalization uses strict matching to avoid grouping different journals:
-- Case differences: "Journal of Neuroscience" vs "journal of neuroscience"
-- "The" prefix: "The Journal of Philosophy" ↔ "Journal of Philosophy"
-- Ampersand vs "and": "Journal of Science & Technology" ↔ "Journal of Science and Technology"
-
-Does NOT group different journals together (e.g., "Journal of Neuroscience" stays separate from "Journal of Cognitive Neuroscience").
+Identifier, date, and numeric fields are intentionally left out of the dropdown because fuzzy-grouping them makes no sense — including DOI, ISBN, ISSN, PMID, PMCID, call number, URL, dates, page/volume/issue numbers, and bulky text such as titles and abstracts.
 
 ### How It Works
 
-1. Open the Name Normalizer menu and select "Normalize Publishers",
-   "Normalize Locations", or "Normalize Journals"
-2. Review the suggested groups - each shows variants and item counts
-3. Edit the normalized value if needed, or apply the suggested normalization
-4. Confirm to apply changes to your library
+1. Select items, a collection, or a library, then choose
+   **Tools ▸ Normalize Field…**
+2. Pick the field to normalize from the dropdown (adjust the similarity
+   threshold if needed)
+3. Review the suggested groups — each shows the variants and item counts
+4. Edit the normalized value if needed, or apply the suggested normalization
+5. Confirm to apply changes to your library
 
 Usage
 -----
@@ -104,8 +114,7 @@ Usage
 
 ### Library Scope
 
-The Name Normalizer automatically operates on the **currently selected library or collection**
-in Zotero's UI, following the same pattern as other Zotero plugins like zotero-search-replace:
+The Name Normalizer automatically operates on the **currently selected library or collection** in Zotero's UI, following the same pattern as other Zotero plugins like zotero-search-replace:
 
 - **Collection selected**: Normalizes only items within that collection
 - **Library selected** (My Library or a group library): Normalizes all items in that library
@@ -119,45 +128,11 @@ This means you can:
 
 ### Field Normalization
 
-Zotero Name Normalizer also supports normalizing publication metadata fields:
-publishers, publication locations, and journal names. This ensures consistency
-across your library for fields that often have variant spellings.
-
-### Publishers
-
-Publisher normalization handles:
-- Case differences: "Oxford University Press" vs "Oxford university press"
-- Suffix variations: "Oxford University Press" vs "Oxford University Press USA"
-- Ampersand vs "and": "Taylor & Francis" vs "Taylor and Francis"
-- Multi-publisher values: "Oxford University Press; Clarendon Press" is split
-  and processed separately
-
-### Locations
-
-Location normalization handles:
-- Case and punctuation: "Cambridge, MA" vs "Cambridge MA"
-- US state abbreviations: "Cambridge, MA" ↔ "Cambridge, Mass." ↔ "Cambridge, Massachusetts"
-- Country suffixes: "New York, NY" vs "New York, NY, USA"
-- Ampersand vs "and": "London & New York" vs "London and New York"
-
-Does NOT group different cities together (e.g., "New York" stays separate from "Oxford, New York" or "London, New York").
-
-### Journals
-
-Journal normalization uses strict matching to avoid grouping different journals:
-- Case differences: "Journal of Neuroscience" vs "journal of neuroscience"
-- "The" prefix: "The Journal of Philosophy" ↔ "Journal of Philosophy"
-- Ampersand vs "and": "Journal of Science & Technology" ↔ "Journal of Science and Technology"
-
-Does NOT group different journals together (e.g., "Journal of Neuroscience" stays separate from "Journal of Cognitive Neuroscience").
-
-### How It Works
-
-1. Open the Name Normalizer menu and select "Normalize Publishers",
-   "Normalize Locations", or "Normalize Journals"
-2. Review the suggested groups - each shows variants and item counts
-3. Edit the normalized value if needed, or apply the suggested normalization
-4. Confirm to apply changes to your library
+Metadata fields (publisher, place, journal, and any other text field such as
+Series, Language, Rights, or Format) are normalized via **Tools ▸ Normalize
+Field…** and the field dropdown — see the [Field Normalization](#field-normalization)
+section above for details. The selected library/collection determines the scope,
+just like author analysis.
 
 Notes & troubleshooting
 -----------------------

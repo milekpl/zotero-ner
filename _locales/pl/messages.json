@@ -24,8 +24,8 @@
     "description": "Tekst podpowiedzi przycisku paska narzędzi"
   },
   "field-menu-label": {
-    "message": "Normalizuj pola",
-    "description": "Etykieta podmenu normalizacji pól"
+    "message": "Normalizuj pole…",
+    "description": "Etykieta pojedynczej pozycji menu normalizacji pól (otwiera wybór pola)"
   },
   "field-menu-publisher": {
     "message": "Wydawca",

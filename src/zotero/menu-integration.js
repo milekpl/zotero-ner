@@ -71,35 +71,22 @@ class MenuIntegration {
         return;
       }
 
-      // Add separator before the new submenu
+      // Add separator before the new entry
       const separator = doc.createElement('menuseparator');
       toolsMenu.appendChild(separator);
 
-      // Create the "Normalize Field Data" submenu
-      const fieldSubmenu = doc.createElement('menu');
-      fieldSubmenu.setAttribute('label', 'Normalize Field Data');
-      fieldSubmenu.setAttribute('id', 'zotero-ner-field-normalization-menu');
+      // Single entry: opens the dialog with a field picker. The field-specific
+      // heuristics (publisher/location/journal) are still applied automatically,
+      // selected from whichever field the user picks in the dialog.
+      const menuItem = doc.createElement('menuitem');
+      menuItem.setAttribute('id', 'zotero-ner-normalize-field');
+      menuItem.setAttribute('label', 'Normalize Field…');
+      menuItem.addEventListener('command', async () => {
+        await this.handleFieldNormalizeAction('__picker__');
+      });
+      toolsMenu.appendChild(menuItem);
 
-      // Create menu items for each field type
-      const fieldTypes = [
-        { id: 'publisher', label: 'Publisher' },
-        { id: 'location', label: 'Location' },
-        { id: 'journal', label: 'Journal' }
-      ];
-
-      for (const fieldType of fieldTypes) {
-        const menuItem = doc.createElement('menuitem');
-        menuItem.setAttribute('id', `zotero-ner-normalize-${fieldType.id}`);
-        menuItem.setAttribute('label', `Normalize ${fieldType.label}`);
-        menuItem.addEventListener('command', async () => {
-          await this.handleFieldNormalizeAction(fieldType.id);
-        });
-        fieldSubmenu.appendChild(menuItem);
-      }
-
-      toolsMenu.appendChild(fieldSubmenu);
-
-      console.log('Registered field normalization menu items: Publisher, Location, Journal');
+      console.log('Registered field normalization menu item: Normalize Field…');
     } catch (error) {
       console.error('Error registering field menu items:', error);
     }
