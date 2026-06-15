@@ -202,7 +202,25 @@ class LibraryContextManager {
         };
       }
 
-      // No collection selected - check if items are selected
+      // No collection selected - the user may have highlighted a library root row
+      // (e.g. the group library label) in the left pane. getSelectedLibraryID()
+      // resolves to that library even when no collection or item is selected, so
+      // we honour it instead of silently defaulting to the personal library.
+      if (typeof zoteroPane.getSelectedLibraryID === 'function') {
+        const selectedLibraryID = zoteroPane.getSelectedLibraryID();
+        if (selectedLibraryID !== null && selectedLibraryID !== undefined) {
+          const library = Zotero.Libraries.get(selectedLibraryID);
+          if (library) {
+            return {
+              libraryID: selectedLibraryID,
+              libraryType: library.libraryType,
+              libraryName: library.name
+            };
+          }
+        }
+      }
+
+      // No library row resolved - check if items are selected
       const selectedItems = zoteroPane.getSelectedItems();
 
       if (selectedItems && selectedItems.length > 0) {

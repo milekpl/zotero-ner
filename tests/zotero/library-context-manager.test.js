@@ -176,6 +176,40 @@ describe('LibraryContextManager', () => {
       });
     });
 
+    test('should detect group library when its root row is selected (no collection)', async () => {
+      // User highlights the group library label in the left pane. No collection
+      // and no items are selected, but getSelectedLibraryID() reports the group.
+      const mockPane = {
+        getSelectedCollection: jest.fn().mockReturnValue(null),
+        getSelectedLibraryID: jest.fn().mockReturnValue(2),
+        getSelectedItems: jest.fn().mockReturnValue([])
+      };
+
+      global.Zotero = {
+        Libraries: {
+          userLibraryID: 1,
+          get: jest.fn().mockImplementation((libID) => {
+            if (libID === 2) {
+              return { libraryID: 2, libraryType: 'group', name: 'Research Team' };
+            }
+            return { libraryID: 1, libraryType: 'user', name: 'My Library' };
+          })
+        }
+      };
+      global.ZoteroPane = mockPane;
+
+      const LCM = require('../../src/zotero/library-context-manager.js');
+      const mgr = new LCM();
+
+      const context = await mgr.getCurrentLibraryContext();
+
+      expect(context).toEqual({
+        libraryID: 2,
+        libraryType: 'group',
+        libraryName: 'Research Team'
+      });
+    });
+
     test('should detect collection selection with library context', async () => {
       const mockCollection = {
         key: 'ABC123',
