@@ -78,11 +78,11 @@ jobs:
 
       - name: Download Zotero
         run: |
-          wget -q https://www.zotero.org/download/client/dl?platform=linux-x86_64 -O zotero.tar.bz2
-          tar xjf zotero.tar.bz2
+          curl -fsSL "https://www.zotero.org/download/client/dl?platform=linux-x86_64" -o zotero.tar.xz
+          tar xJf zotero.tar.xz
           mkdir -p $HOME/.zotero
           mv Zotero_linux-x86_64 $HOME/.zotero/zotero
-          rm zotero.tar.bz2
+          rm zotero.tar.xz
           echo "ZOTERO_PATH=$HOME/.zotero/zotero/zotero" >> $GITHUB_ENV
 
       - name: Run Zotero Integration Tests (headless)
