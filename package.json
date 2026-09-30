@@ -1,6 +1,6 @@
 {
   "name": "zotero-name-normalizer",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Zotero author name normalizer — detect and fix author name variants",
   "main": "index.js",
   "scripts": {
@@ -52,7 +52,7 @@
     "version": "1.0.0",
     "zotero": {
       "strictMinVersion": "7.0",
-      "strictMaxVersion": "8.*"
+      "strictMaxVersion": "10.*"
     },
     "test": {
       "entries": "tests/zotero-framework/test/tests",
