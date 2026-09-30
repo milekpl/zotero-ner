@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm install
+
+      - name: Verify tag matches package.json and manifest.json
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          MAN="$(node -p "require('./manifest.json').version")"
+          echo "tag=$TAG package.json=$PKG manifest.json=$MAN"
+          [ "$TAG" = "$PKG" ] || { echo "::error::tag v$TAG != package.json $PKG"; exit 1; }
+          [ "$TAG" = "$MAN" ] || { echo "::error::tag v$TAG != manifest.json $MAN"; exit 1; }
+
+      - name: Build and publish GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx zotero-plugin release
+
+      - name: Commit update.json to main
+        run: |
+          set -euo pipefail
+          if [ ! -f build/update.json ]; then
+            echo "No build/update.json (prerelease) - skipping"
+            exit 0
+          fi
+          cp build/update.json update.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          if git diff --cached --quiet; then
+            echo "update.json unchanged"
+          else
+            git commit -m "chore(publish): update update.json for ${GITHUB_REF_NAME}"
+            git push origin HEAD:main
+          fi

@@ -16,12 +16,15 @@
 npm install
 ```
 
-2. Configure the Zotero scaffold by creating `~/.zotero-plugin`:
+2. Point the scaffold at your Zotero binary by creating `.env` (git-ignored):
 ```bash
-zoteroBinPath=/usr/local/bin/zotero
-profilePath=/home/username/.zotero/zotero/PROFILE_NAME
-dataDir=/home/username/.zotero/zotero/PROFILE_NAME/zotero
+ZOTERO_PLUGIN_ZOTERO_BIN_PATH=/Applications/Zotero.app/Contents/MacOS/zotero
 ```
+
+The scaffold reads `ZOTERO_PLUGIN_*` environment variables (dotenv is loaded from
+the project root); it does not read a `~/.zotero-plugin` file. Optional:
+`ZOTERO_PLUGIN_PROFILE_PATH` to use your real library instead of the throwaway
+profile under `.scaffold/`.
 
 3. Start development:
 ```bash
@@ -38,6 +41,34 @@ npm run build
 ```
 
 The built extension is in `build/addon/`.
+
+## Release
+
+Releases are driven by a tag push; CI builds and publishes, so there is no
+manual upload step.
+
+1. Cut the release locally — this bumps `package.json` and `manifest.json`,
+   commits, tags, and pushes:
+```bash
+npm run release
+```
+
+2. Pushing the `v*` tag triggers `.github/workflows/release.yml`, which builds
+   the XPI, creates the GitHub Release for the tag with the XPI attached, and
+   commits the regenerated `update.json` back to `main`.
+
+`update_url` in `manifest.json` points at `main/update.json`, so installed
+copies pick up the new version from that commit.
+
+If CI cannot publish (e.g. it is unavailable), do it by hand:
+```bash
+npm run build
+npx zotero-plugin release   # with GITHUB_TOKEN set
+cp build/update.json update.json
+```
+then create the Release for the tag on GitHub and attach
+`build/<xpi>.xpi`. The XPI attached **must** be the one whose hash is in
+`update.json`.
 
 ## Architecture
 

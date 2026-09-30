@@ -108,5 +108,10 @@ if (ZoteroNameNormalizerRef) {
     bumpp: {
       files: ["package.json", "manifest.json"],
     },
+    github: {
+      // update_url points at raw main/update.json, which the release workflow
+      // commits itself, so skip the scaffold's rolling "release" manifest.
+      updater: false,
+    },
   },
 });

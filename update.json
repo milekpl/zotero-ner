@@ -5,7 +5,7 @@
         {
           "version": "1.5.1",
           "update_link": "https://github.com/milekpl/zotero-ner/releases/download/v1.5.1/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi",
-          "update_hash": "sha512:3dae7202804c6ed5a7d4dc4df4fe7270626efc550c3a0e8ad72e371eb8fc3e48745fda11149a5540aec094572fdcdadda7a325570ab81eac9930255e019c9177",
+          "update_hash": "sha512:81be57a8e8075e0c1c615bd438170a5be206aa07db1be2e73c3a5fb26fd3975718ee81d07c06f0a6f6418c7844a21c8710bc9b4384cecadfbc0e61d821a35fe0",
           "applications": {
             "zotero": {
               "strict_min_version": "6.999",

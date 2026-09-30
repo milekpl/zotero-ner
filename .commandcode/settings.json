@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node -e \"for (const f of ['update.json','manifest.json','package.json']) { JSON.parse(require('fs').readFileSync(f,'utf8')); console.log('OK', f); }\")",
+      "Shell(npm:*)",
+      "Shell(echo \"NODE_ENV=$NODE_ENV\"; npm config get omit; npm config get production; echo \"--- .npmrc files ---\"; cat .npmrc 2>/dev/null; cat ~/.npmrc 2>/dev/null; echo \"--- npm ls depth 0 ---\"; npm ls --depth=0 2>&1 | head -40)",
+      "Shell(npx --no-install zotero-plugin --version 2 >& 1)",
+      "Shell(grep -rn \"NODE_ENV\" ~/.zshrc ~/.zprofile ~/.bashrc ~/.bash_profile ~/.profile 2>/dev/null; echo \"--- exit $? ---\")",
+      "Shell(launchctl:*)",
+      "Shell(zsh -lic echo \"login-shell NODE_ENV=[$NODE_ENV]\" 2 > /dev/null)",
+      "Shell(grep -rn \"NODE_ENV\" ~/.zshenv /etc/zshenv /etc/zshrc /etc/zprofile ~/.config/zsh 2>/dev/null; echo \"--- sourced files ---\"; zsh -ic 'zcurses 2>/dev/null; source ~/.zshrc 2>/dev/null'; grep -rn \"NODE_ENV\" ~/.oh-my-zsh/custom 2>/dev/null | head)",
+      "Shell(git check-ignore -v build content/scripts/zotero-ner-bundled.js 2>&1; echo \"--- tracked? ---\"; git ls-files content/scripts/ | head)",
+      "Shell(git:*)",
+      "Shell(pgrep:*)",
+      "Shell(echo:*)",
+      "Shell(echo \"local main: $(git rev-parse main)\"; echo \"remote main: $(git ls-remote origin refs/heads/main | cut -f1)\"; echo \"=== tag type ===\"; git cat-file -t v1.5.1; git cat-file -t v1.5.0; echo \"=== tag targets ===\"; git rev-parse v1.5.1^{commit} 2>&1; echo \"=== push config ===\"; git config --get-regexp 'push\\.' ; echo \"=== hooks ===\"; ls .git/hooks | grep -v sample)",
+      "Shell(XPI=$(ls build/*.xpi); COMPUTED=$(openssl dgst -sha512 \"$XPI\" | awk '{print $NF}'); DECLARED=$(node -p \"JSON.parse(require('fs').readFileSync('update.json','utf8')).addons['zotero-name-normalizer@marcinmilkowski.pl'].updates[0].update_hash.replace('sha512:','')\"); echo \"declared: $DECLARED\"; echo \"computed: $COMPUTED\"; [ \"$COMPUTED\" = \"$DECLARED\" ] && echo \"MATCH\" || echo \"MISMATCH\")",
+      "Shell(echo \"HEAD after: $(git rev-parse --short HEAD)\"; echo \"tags after: $(git tag -l 'v1.5*' | tr '\\n' ' ')\"; echo \"clean? (excluding known build/dev churn)\"; git status --short; echo \"=== release artifacts ===\"; ls build/*.xpi build/update.json)",
+      "Shell(node /bumpp-test/check.mjs 2 >& 1)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
