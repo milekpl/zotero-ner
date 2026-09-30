@@ -16,7 +16,11 @@
       "Shell(echo \"local main: $(git rev-parse main)\"; echo \"remote main: $(git ls-remote origin refs/heads/main | cut -f1)\"; echo \"=== tag type ===\"; git cat-file -t v1.5.1; git cat-file -t v1.5.0; echo \"=== tag targets ===\"; git rev-parse v1.5.1^{commit} 2>&1; echo \"=== push config ===\"; git config --get-regexp 'push\\.' ; echo \"=== hooks ===\"; ls .git/hooks | grep -v sample)",
       "Shell(XPI=$(ls build/*.xpi); COMPUTED=$(openssl dgst -sha512 \"$XPI\" | awk '{print $NF}'); DECLARED=$(node -p \"JSON.parse(require('fs').readFileSync('update.json','utf8')).addons['zotero-name-normalizer@marcinmilkowski.pl'].updates[0].update_hash.replace('sha512:','')\"); echo \"declared: $DECLARED\"; echo \"computed: $COMPUTED\"; [ \"$COMPUTED\" = \"$DECLARED\" ] && echo \"MATCH\" || echo \"MISMATCH\")",
       "Shell(echo \"HEAD after: $(git rev-parse --short HEAD)\"; echo \"tags after: $(git tag -l 'v1.5*' | tr '\\n' ' ')\"; echo \"clean? (excluding known build/dev churn)\"; git status --short; echo \"=== release artifacts ===\"; ls build/*.xpi build/update.json)",
-      "Shell(node /bumpp-test/check.mjs 2 >& 1)"
+      "Shell(node /bumpp-test/check.mjs 2 >& 1)",
+      "Shell(curl -s https://api.github.com/repos/milekpl/zotero-ner/releases/tags/v1.5.1)",
+      "Shell(node -e let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.message)return console.log('message:',j.message);console.log('tag:',j.tag_name,'| draft:',j.draft,'| prerelease:',j.prerelease);console.log('assets:',(j.assets||[]).map(a=>a.name+' ('+a.size+'B, state='+a.state+')').join(', ')||'(none)');}))",
+      "Shell(curl -sIL -o /dev/null -w status=%{http_code} size=%{size_download}\\n https://github.com/milekpl/zotero-ner/releases/download/v1.5.1/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi)",
+      "Shell(echo \"=== git state ===\"; git log --oneline -3; git status --short; echo \"=== local update.json hash/version ===\"; node -p \"const u=JSON.parse(require('fs').readFileSync('update.json','utf8')).addons['zotero-name-normalizer@marcinmilkowski.pl'].updates[0]; u.version+' '+u.update_hash+'\\n'+u.update_link\"; echo \"=== local build xpi ===\"; ls -l build/*.xpi 2>/dev/null; openssl dgst -sha512 build/*.xpi 2>/dev/null | awk '{print $NF}')"
     ],
     "deny": [],
     "defaultMode": "default"
