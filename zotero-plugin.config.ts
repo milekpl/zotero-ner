@@ -103,4 +103,10 @@ if (ZoteroNameNormalizerRef) {
     watch: false,
     headless: !!process.env.CI,
   },
+
+  release: {
+    bumpp: {
+      files: ["package.json", "manifest.json"],
+    },
+  },
 });

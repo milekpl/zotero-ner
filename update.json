@@ -3,13 +3,13 @@
     "zotero-name-normalizer@marcinmilkowski.pl": {
       "updates": [
         {
-          "version": "1.5.0",
-          "update_link": "https://github.com/milekpl/zotero-ner/releases/download/v1.5.0/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi",
-          "update_hash": "sha512:71cdd01d1540c8ba7b103bcfb22c47f2cc6c597650e81cd837eede9671fe5698a9421fb6590a9bad9aabd5eab060fed3f15ec21b3ee1c2f75832b4bd87468d3e",
+          "version": "1.5.1",
+          "update_link": "https://github.com/milekpl/zotero-ner/releases/download/v1.5.1/zotero-author-name-normalizer-detect-and-fix-author-name-variants.xpi",
+          "update_hash": "sha512:3dae7202804c6ed5a7d4dc4df4fe7270626efc550c3a0e8ad72e371eb8fc3e48745fda11149a5540aec094572fdcdadda7a325570ab81eac9930255e019c9177",
           "applications": {
             "zotero": {
               "strict_min_version": "6.999",
-              "strict_max_version": "9.0.*"
+              "strict_max_version": "10.*"
             }
           }
         }
